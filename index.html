@@ -1433,7 +1433,7 @@ let clientes     = DB.get('clientes');
 let fornecedores = DB.get('fornecedores');
 
 // ── SYNC CONFIG ───────────────────────────────────────────────
-let SYNC_URL    = localStorage.getItem('ts_sync_url') || '';
+let SYNC_URL    = localStorage.getItem('ts_sync_url') || 'https://script.google.com/macros/s/AKfycbxO7mWGUXxWJzU50WCdKckSpdasbYHjfy-pHT0qYz9CorboG4IMatzypSf4VdV_XY8T/exec';
 let syncTimer   = null;
 let syncing     = false;
 let lastSync    = localStorage.getItem('ts_last_sync') || '';
