@@ -3422,42 +3422,42 @@ function enviarReciboWhatsApp(id) {
   const dataEnt  = p.dataEntrega
     ? new Date(p.dataEntrega + 'T12:00').toLocaleDateString('pt-BR')
     : '—';
-  const sep = '🎀・・・・・・・・・🎀';
+  const sep = '━━━━━━━━━━━━━━━━━━━━';
 
   // Monta lista de itens
   let itensTxt = '';
   if (p.itens && p.itens.length) {
     p.itens.forEach(function(it) {
       const sub = it.qtd > 1 ? ' (' + it.qtd + 'x)' : '';
-      itensTxt += '  🎈 ' + it.nome + sub + '\n';
+      itensTxt += '• ' + it.nome + sub + '\n';
     });
   } else if (p.produto) {
-    itensTxt = '  🎈 ' + p.produto + '\n';
+    itensTxt = '• ' + p.produto + '\n';
   } else {
-    itensTxt = '  —\n';
+    itensTxt = '—\n';
   }
 
   const linhas = [
-    '🎈✨ *CONFIRMAÇÃO DE PEDIDO* ✨🎈',
+    '🎈 *CONFIRMAÇÃO DE PEDIDO*',
     '_Tia Sú — Balões & Personalizados_',
     sep,
     '👤 *Cliente:* ' + (p.cliente || '—'),
     p.whats ? ('📱 *WhatsApp:* ' + p.whats) : '',
-    '📅 *Entrega:* ' + dataEnt,
+    '📅 *Data entrega:* ' + dataEnt,
     sep,
-    '🛍️ *ITENS DO PEDIDO*',
+    '🛍️ *ITENS DO PEDIDO:*',
     itensTxt.trimEnd(),
     sep,
-    '💰 *VALORES*',
-    '  💵 Total:   ' + fmtR(p.valor),
-    '  ✅ Sinal:   ' + fmtR(p.sinal),
-    '  🔸 Restante: ' + fmtR(restante),
-    '  💳 Forma:   ' + (p.pgto || 'PIX'),
+    '💰 *VALORES:*',
+    '  Total:  ' + fmtR(p.valor),
+    '  Sinal:  ' + fmtR(p.sinal),
+    '  Resta:  ' + fmtR(restante),
+    '  Forma:  ' + (p.pgto || 'PIX'),
     sep,
     p.obs ? ('📝 *Obs:* ' + p.obs) : '',
     p.obs ? sep : '',
-    '✨ _Transformando Momentos em Memórias_ ✨',
-    '🎈 _Tia Sú — Balões & Personalizados_ 🎈'
+    '✨ _Transformando Momentos em Memórias_',
+    '🎈 _Tia Sú — Balões & Personalizados_'
   ].filter(l => l !== '').join('\n');
 
   // Copia para área de transferência (emojis ficam corretos ao colar no WhatsApp Web)
