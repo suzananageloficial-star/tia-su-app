@@ -3287,7 +3287,8 @@ async function gerarImagemRecibo(id) {
   h += 50; h += 26*(p.whats?3:2); h += 36; h += 26*itensList.length;
   h += 36; h += 26*4;
   if (p.obs) { h += 36; h += Math.ceil((p.obs||'').length/44)*22; }
-  h = Math.max(h, 600)+40;
+  h += 40; // CNPJ + endereço no rodapé
+  h = Math.max(h, 620)+40;
 
   const cv = document.createElement('canvas');
   cv.width=W; cv.height=h;
@@ -3312,10 +3313,10 @@ async function gerarImagemRecibo(id) {
 
   // ── LOGO ──
   const logoEl = document.querySelector('.header-logo img') || document.querySelector('.nav-logo-wrap img') || document.querySelector('img[src^="data:image/png"]');
-  const LOGO_SIZE = 110;
+  const LOGO_SIZE = 140;
   const drawCard = () => {
     // ── CARD BRANCO ──
-    const cx=18, cy=190, cw=W-36, cr=18;
+    const cx=18, cy=165, cw=W-36, cr=18;
     function rr(x,y,w,hh,r){
       ctx.beginPath();
       ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
@@ -3375,8 +3376,10 @@ async function gerarImagemRecibo(id) {
     y+=10; divider();
     ctx.font='italic 11px Mali,cursive'; ctx.fillStyle='#888'; ctx.textAlign='center';
     ctx.fillText('✨ Transformando Momentos em Memórias',CX,y); y+=18;
-    ctx.font='bold 13px Mali,cursive'; ctx.fillStyle=PINK; ctx.textAlign='center';
-    ctx.fillText('🎈 Tia Sú — Balões & Personalizados',CX,y);
+    ctx.font='400 10px Nunito,sans-serif'; ctx.fillStyle='#aaa'; ctx.textAlign='center';
+    ctx.fillText('CNPJ: 62.375.825/0001-48',CX,y); y+=16;
+    ctx.font='400 10px Nunito,sans-serif'; ctx.fillStyle='#aaa'; ctx.textAlign='center';
+    ctx.fillText('Estrada Antônio José Santana, 659 - Agronomia - Porto Alegre',CX,y);
 
     // Exportar cortado na altura real
     const fc=document.createElement('canvas'); fc.width=W; fc.height=Math.min(y+30,h);
