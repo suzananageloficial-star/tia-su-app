@@ -3460,12 +3460,38 @@ function enviarReciboWhatsApp(id) {
     '🎈 _Tia Sú — Balões & Personalizados_ 🎈'
   ].filter(l => l !== '').join('\n');
 
-  const num = (p.whats || '').replace(/\D/g, '');
-  const url = num
-    ? 'https://wa.me/55' + num + '?text=' + encodeURIComponent(linhas)
-    : 'https://wa.me/?text=' + encodeURIComponent(linhas);
+  // Copia para área de transferência (emojis ficam corretos ao colar no WhatsApp Web)
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(linhas).then(function() {
+      toast('📋 Texto copiado! Cole no WhatsApp (Ctrl+V)');
+    }).catch(function() {
+      _mostrarTextoParaCopiar(linhas);
+    });
+  } else {
+    _mostrarTextoParaCopiar(linhas);
+  }
+}
 
-  window.open(url, '_blank');
+function _mostrarTextoParaCopiar(texto) {
+  // Fallback: mostra modal com o texto para copiar manualmente
+  var modal = document.getElementById('modal-copiar-whats');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-copiar-whats';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    modal.innerHTML = '<div style="background:#fff;border-radius:16px;padding:20px;max-width:480px;width:100%;max-height:80vh;display:flex;flex-direction:column;gap:12px">' +
+      '<div style="font-weight:700;font-size:15px;color:#4A1C1C">📋 Copie o texto abaixo</div>' +
+      '<textarea id="txt-copiar-whats" readonly style="flex:1;min-height:200px;border:1px solid #eee;border-radius:8px;padding:10px;font-size:13px;resize:none;font-family:inherit"></textarea>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button onclick="document.getElementById(\'txt-copiar-whats\').select();document.execCommand(\'copy\');toast(\'✅ Copiado!\')" style="flex:1;background:#25D366;color:#fff;border:none;border-radius:10px;padding:10px;font-weight:700;cursor:pointer">📋 Selecionar tudo e copiar</button>' +
+        '<button onclick="document.getElementById(\'modal-copiar-whats\').remove()" style="background:#eee;border:none;border-radius:10px;padding:10px;cursor:pointer">✕</button>' +
+      '</div>' +
+    '</div>';
+    document.body.appendChild(modal);
+    modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+  }
+  document.getElementById('txt-copiar-whats').value = texto;
+  modal.style.display = 'flex';
 }
 
 function gerarRecibo(id) {
@@ -4080,42 +4106,4 @@ if (SYNC_URL) {
       <div class="form-group">
         <label class="form-label">Categoria</label>
         <select class="form-select" id="c-cat">
-          <option value="Material Criação">Material Criação (balões, tintas, cola...)</option>
-          <option value="Embalagem">Embalagem (caixas, fitas, celofane...)</option>
-          <option value="Sublimação">Sublimação (canecas, camisetas, transfer...)</option>
-          <option value="Ferramentas">Ferramentas e equipamentos</option>
-          <option value="Arquivos/Cursos">Arquivos e cursos digitais</option>
-          <option value="Marketing">Marketing e anúncios</option>
-          <option value="Taxas/Envio">Taxas e envio</option>
-          <option value="Outros Custos">Outros</option>
-        </select>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Descrição / Observação</label>
-        <textarea class="form-input" id="c-desc" rows="2" placeholder="Ex: Fitas cetim vários tamanhos, 50un balões látex..."></textarea>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-          <input type="checkbox" id="c-atualiza-estoque" onchange="toggleEstoqueCompra()" style="width:18px;height:18px;accent-color:var(--pink)">
-          Atualizar estoque com esta compra
-        </label>
-      </div>
-
-      <div id="c-estoque-section" style="display:none">
-        <div class="section-title" style="margin:12px 0 8px">Itens para estoque</div>
-        <div id="c-itens-lista" style="display:flex;flex-direction:column;gap:8px"></div>
-        <button class="btn" style="width:100%;margin-top:8px;background:var(--gray-bg);color:var(--gray-d)" onclick="addItemCompra()">+ Adicionar item</button>
-      </div>
-
-    </div>
-    <div class="modal-footer" style="gap:8px">
-      <button class="btn btn-outline" onclick="closeModal('modal-compras')" style="flex:1">Cancelar</button>
-      <button class="btn btn-pink" onclick="salvarCompra()" style="flex:2">💾 Registrar Compra</button>
-    </div>
-  </div>
-</div>
-
-</body>
-</html>
+          <option value="Material Criação">Material Criação (balões, tintas
