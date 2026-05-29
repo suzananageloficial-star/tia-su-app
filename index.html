@@ -322,8 +322,9 @@ html, body {
   border-radius: 24px 24px 0 0;
   width: 100%; max-width: 480px;
   max-height: 92dvh;
-  overflow-y: auto;
-  padding: 0 0 calc(16px + var(--safe-bottom));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   animation: slideUp 0.3s cubic-bezier(0.34,1.56,0.64,1);
 }
 .modal-handle {
@@ -339,7 +340,7 @@ html, body {
   padding: 4px 16px 12px;
   border-bottom: 1px solid var(--gray);
 }
-.modal-body { padding: 14px 16px; }
+.modal-body { padding: 14px 16px; flex: 1; overflow-y: auto; }
 
 /* ── FORM ── */
 .form-group { margin-bottom: 12px; }
@@ -365,10 +366,12 @@ html, body {
 }
 .form-textarea { resize: none; min-height: 70px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.form-actions {
+.form-actions, .modal-footer {
   display: flex; gap: 8px;
-  padding: 0 16px;
-  margin-top: 4px;
+  padding: 12px 16px calc(12px + var(--safe-bottom, 0px));
+  border-top: 1px solid var(--gray);
+  background: white;
+  flex-shrink: 0;
 }
 
 /* ── KANBAN ── */
@@ -498,11 +501,10 @@ html, body {
 
 .material-row {
   display: grid;
-  grid-template-columns: 1fr 72px 30px;
+  grid-template-columns: 1fr 72px 24px 28px;
   gap: 5px;
   align-items: center;
 }
-.material-row select,
 .material-row input {
   padding: 7px 8px;
   border: 1.5px solid var(--gray);
@@ -512,9 +514,12 @@ html, body {
   color: var(--brown);
   background: var(--gray-l);
   width: 100%;
-  -webkit-appearance: none;
 }
-.material-row input { text-align: center; }
+.material-row .mat-qtd { text-align: center; }
+.mat-badge {
+  font-size: 14px; display:flex; align-items:center; justify-content:center;
+  cursor: default;
+}
 .material-del {
   width: 26px; height: 26px;
   border-radius: 50%;
@@ -552,6 +557,19 @@ html, body {
   margin-top: 8px;
 }
 
+.match-item {
+  border: 1.5px solid var(--gray);
+  border-radius: var(--radius-xs);
+  padding: 8px 10px;
+  cursor: pointer;
+  background: var(--white);
+  transition: border-color 0.15s, background 0.15s;
+  margin-bottom: 6px;
+}
+.match-item:active, .match-item:hover { border-color: var(--cyan); background: var(--cyan-l); }
+.match-selected { border-color: var(--cyan) !important; background: var(--cyan-l) !important; }
+.match-col { flex:1; overflow-y:auto; max-height: 55dvh; }
+.match-col-title { font-size:11px; font-weight:700; color:var(--gray-d); text-transform:uppercase; letter-spacing:.4px; margin-bottom:6px; }
 .baixa-item-row {
   display: grid;
   grid-template-columns: 1fr 80px 32px;
@@ -693,6 +711,7 @@ html, body {
     max-width: 640px;
     max-height: 88dvh;
     width: 100%;
+    overflow: hidden;
   }
 
   /* Kanban — scroll horizontal sem afetar outras telas */
@@ -828,6 +847,7 @@ html, body {
       <div class="page-header">
         <div class="page-title">📦 Estoque</div>
         <div class="page-sub" id="estoque-sub">Controle de materiais</div>
+        <button onclick="reconciliarPedidos()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--cyan);color:var(--cyan-d);margin-top:4px">🔄 Reconciliar pedidos</button>
       </div>
       <div id="estoque-alertas"></div>
       <div class="section-title">Itens em estoque</div>
@@ -1207,12 +1227,18 @@ html, body {
           <button type="button" onclick="adicionarMaterialPedido()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;border:1px dashed var(--cyan);color:var(--cyan-d)">+ Adicionar</button>
         </div>
         <div id="p-materiais-lista" style="display:flex;flex-direction:column;gap:6px"></div>
-        <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">Os itens serão baixados do estoque ao marcar o pedido como Entregue.</div>
+        <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">🟡 Pendente = ainda não comprado | 🟢 Coberto = já no estoque. Pode adicionar mesmo sem ter em estoque.</div>
       </div>
     </div>
-    <div class="form-actions">
-      <button class="btn btn-outline" onclick="closeModal('modal-pedido')">Fechar</button>
-      <button class="btn btn-pink" style="flex:1" onclick="salvarPedido()">Salvar pedido</button>
+    <div class="form-actions" style="flex-direction:column;gap:6px">
+      <div style="display:flex;gap:8px;width:100%">
+        <button class="btn btn-outline" onclick="closeModal('modal-pedido')" style="flex:1">Fechar</button>
+        <button class="btn btn-pink" style="flex:2" onclick="salvarPedido()">💾 Salvar pedido</button>
+      </div>
+      <div id="btn-whats-group" style="display:none;gap:8px;width:100%;flex-wrap:wrap">
+        <button class="btn" style="flex:1;min-width:120px;background:#dcfce7;color:#15803d;border:none;font-weight:700" onclick="enviarReciboWhatsApp(document.getElementById('p-id').value)">💬 WhatsApp texto</button>
+        <button class="btn" style="flex:1;min-width:120px;background:#e0f2fe;color:#0369a1;border:none;font-weight:700" onclick="gerarImagemRecibo(document.getElementById('p-id').value)">🖼️ Enviar imagem</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1563,6 +1589,7 @@ function resetModal(id) {
   if(id==='modal-pedido') {
     document.getElementById('modal-pedido-title').textContent='🎈 Novo Pedido';
     document.getElementById('btn-excluir-pedido').style.display = 'none';
+    document.getElementById('btn-whats-group').style.display = 'none';
     setTimeout(()=>{
       const itens = document.getElementById('p-itens-lista');
       if(itens) itens.innerHTML = '';
@@ -1691,7 +1718,8 @@ function renderPedidos() {
             <div class="li-value" onclick="editarPedido('${p.id}')">${fmt(p.valor)}</div>
             ${restante>0?`<div style="font-size:10px;color:var(--orange);font-weight:600">Falta ${fmt(restante)}</div>`:`<div style="font-size:10px;color:var(--green);font-weight:600">✅ Quitado</div>`}
             <button onclick="event.stopPropagation();gerarRecibo('${p.id}')" style="font-size:10px;background:var(--pink-l);color:var(--pink);border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700">🧾 Recibo</button>
-            <button onclick="event.stopPropagation();enviarReciboWhatsApp('${p.id}')" style="font-size:10px;background:#dcfce7;color:#15803d;border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700">📲 WhatsApp</button>
+            <button onclick="event.stopPropagation();enviarReciboWhatsApp('${p.id}')" style="font-size:10px;background:#dcfce7;color:#15803d;border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700">💬 WhatsApp</button>
+            <button onclick="event.stopPropagation();gerarImagemRecibo('${p.id}')" style="font-size:10px;background:#e0f2fe;color:#0369a1;border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700">🖼️ Imagem</button>
             ${p.status==='Cancelado'?`<button onclick="excluirPedidoPermanente('${p.id}')" style="font-size:10px;background:var(--red-l);color:var(--red);border:none;border-radius:10px;padding:2px 8px;cursor:pointer;font-weight:700">🗑️ Excluir</button>`:''}
           </div>
         </div>`;
@@ -1910,8 +1938,9 @@ function editarPedido(id) {
     }
     renderMateriaisPedido(p.materiais||[]);
   }, 50);
-  // Mostra botão excluir apenas ao editar
+  // Mostra botão excluir e WhatsApp apenas ao editar
   document.getElementById('btn-excluir-pedido').style.display = 'inline-flex';
+  document.getElementById('btn-whats-group').style.display = 'flex';
   openModal('modal-pedido', false);
 }
 
@@ -2241,20 +2270,22 @@ function renderCatalogo() {
 
 
 // ── MATERIAIS NO PEDIDO ──────────────────────────────────────
-function adicionarMaterialPedido(itemId='', qtd=1) {
+function adicionarMaterialPedido(nome='', qtd=1, status='pendente', matId='') {
   const lista = document.getElementById('p-materiais-lista');
   if (!lista) return;
   const rowId = 'mrow-' + uid();
-  const opts = estoque.length
-    ? estoque.map(e => `<option value="${e.id}" ${e.id===itemId?'selected':''}>${e.nome} (${e.qtd} ${e.un||'un'})</option>`).join('')
-    : '<option value="">Nenhum item no estoque</option>';
+  const id    = matId || uid();
+  const icon  = status === 'coberto' ? '🟢' : '🟡';
 
   const row = document.createElement('div');
   row.className = 'material-row';
   row.id = rowId;
+  row.dataset.matId = id;
+  row.dataset.status = status;
   row.innerHTML = `
-    <select class="mat-select">${opts}</select>
+    <input type="text" class="mat-nome" value="${nome}" placeholder="Nome do material" autocomplete="off">
     <input type="number" class="mat-qtd" value="${qtd}" min="0.1" step="0.1" placeholder="Qtd">
+    <span class="mat-badge" title="${status}">${icon}</span>
     <button class="material-del" onclick="document.getElementById('${rowId}').remove()">✕</button>
   `;
   lista.appendChild(row);
@@ -2264,9 +2295,15 @@ function coletarMateriaisPedido() {
   const rows = document.querySelectorAll('#p-materiais-lista .material-row');
   const mats = [];
   rows.forEach(row => {
-    const itemId = row.querySelector('.mat-select')?.value;
-    const qtd    = parseFloat(row.querySelector('.mat-qtd')?.value) || 0;
-    if (itemId && qtd > 0) mats.push({ itemId, qtd });
+    const nome = row.querySelector('.mat-nome')?.value.trim() || '';
+    const qtd  = parseFloat(row.querySelector('.mat-qtd')?.value) || 0;
+    if (nome && qtd > 0) mats.push({
+      id:     row.dataset.matId || uid(),
+      nome,
+      qtd,
+      status: row.dataset.status || 'pendente',
+      itemId: row.dataset.itemId || null
+    });
   });
   return mats;
 }
@@ -2276,8 +2313,133 @@ function renderMateriaisPedido(materiais) {
   if (!lista) return;
   lista.innerHTML = '';
   if (materiais && materiais.length > 0) {
-    materiais.forEach(m => adicionarMaterialPedido(m.itemId, m.qtd));
+    // suporte ao formato antigo {itemId, qtd}
+    materiais.forEach(m => {
+      const nome   = m.nome || (estoque.find(e=>e.id===m.itemId)||{}).nome || '';
+      const status = m.status || 'pendente';
+      adicionarMaterialPedido(nome, m.qtd, status, m.id);
+    });
   }
+}
+
+// ── MATCHING MANUAL: materiais x compras ──────────────────────
+let _matchItensCompra = [];
+
+function verificarMateriaisPendentes(itensComprados) {
+  // itensComprados = [{nome, qtd, itemId}] vindos de salvarItensEstoqueFin
+  const pedidosPendentes = pedidos.filter(p =>
+    p.status !== 'Cancelado' &&
+    (p.materiais || []).some(m => m.status !== 'coberto')
+  );
+  if (pedidosPendentes.length === 0 || itensComprados.length === 0) return;
+  _matchItensCompra = itensComprados;
+  setTimeout(() => abrirModalMatch(pedidosPendentes), 400);
+}
+
+function abrirModalMatch(pedidosPendentes) {
+  const esq = document.getElementById('match-reservados');
+  const dir = document.getElementById('match-comprados');
+  if (!esq || !dir) return;
+
+  // Coluna esquerda: materiais pendentes
+  esq.innerHTML = pedidosPendentes.map(p => {
+    const mats = (p.materiais || []).filter(m => m.status !== 'coberto');
+    return mats.map(m => `
+      <div class="match-item" data-ped-id="${p.id}" data-mat-id="${m.id}" id="mi-${m.id}">
+        <div style="font-size:11px;color:var(--gray-d);margin-bottom:2px">${p.cliente} — ${p.produto||''}</div>
+        <div style="font-weight:600;font-size:13px">🟡 ${m.nome} × ${m.qtd}</div>
+        <div class="match-vinculo" id="mv-${m.id}" style="font-size:10px;color:var(--cyan-d);margin-top:2px;display:none"></div>
+      </div>
+    `).join('');
+  }).join('');
+
+  // Coluna direita: itens comprados
+  dir.innerHTML = _matchItensCompra.map((it, idx) => `
+    <div class="match-item match-compra" data-idx="${idx}" onclick="selecionarCompraItem(${idx})" id="ci-${idx}">
+      <div style="font-weight:600;font-size:13px">🛒 ${it.nome} × ${it.qtd}</div>
+    </div>
+  `).join('');
+
+  // Clique nos pendentes
+  document.querySelectorAll('.match-item[data-mat-id]').forEach(el => {
+    el.onclick = () => vincularMaterial(el.dataset.pedId, el.dataset.matId);
+  });
+
+  openModal('modal-match', false);
+}
+
+let _selectedCompraIdx = null;
+
+function selecionarCompraItem(idx) {
+  _selectedCompraIdx = idx;
+  document.querySelectorAll('.match-compra').forEach(el => el.classList.remove('match-selected'));
+  const el = document.getElementById('ci-' + idx);
+  if (el) el.classList.add('match-selected');
+  toast('👆 Agora toque no material do pedido que esse item cobre');
+}
+
+function vincularMaterial(pedId, matId) {
+  if (_selectedCompraIdx === null) {
+    toast('⚠️ Primeiro toque num item comprado (coluna direita)');
+    return;
+  }
+  const compraItem = _matchItensCompra[_selectedCompraIdx];
+  if (!compraItem) return;
+
+  // Atualiza o pedido
+  const p = pedidos.find(x => x.id === pedId);
+  if (!p) return;
+  const m = (p.materiais || []).find(x => x.id === matId);
+  if (!m) return;
+
+  m.status = 'coberto';
+  m.itemId = compraItem.itemId || null;
+
+  // Visual feedback
+  const miEl = document.getElementById('mi-' + matId);
+  if (miEl) {
+    miEl.querySelector('.match-vinculo').style.display = 'block';
+    miEl.querySelector('.match-vinculo').textContent = '✅ Vinculado: ' + compraItem.nome;
+    miEl.querySelector('div:nth-child(2)').textContent = '🟢 ' + m.nome + ' × ' + m.qtd;
+    miEl.style.opacity = '0.6';
+  }
+  const ciEl = document.getElementById('ci-' + _selectedCompraIdx);
+  if (ciEl) ciEl.style.opacity = '0.5';
+
+  _selectedCompraIdx = null;
+  document.querySelectorAll('.match-compra').forEach(el => el.classList.remove('match-selected'));
+  save();
+}
+
+function fecharMatch() {
+  closeModal('modal-match');
+  _matchItensCompra = [];
+  _selectedCompraIdx = null;
+}
+
+// ── RECONCILIAR: estoque atual x materiais pendentes ──────────
+function reconciliarPedidos() {
+  let cobertos = 0;
+  pedidos.forEach(p => {
+    (p.materiais || []).forEach(m => {
+      if (m.status === 'coberto') return;
+      // Tenta achar no estoque por nome similar
+      const nomeLow = m.nome.toLowerCase();
+      const est = estoque.find(e =>
+        e.nome.toLowerCase().includes(nomeLow.slice(0,5)) ||
+        nomeLow.includes(e.nome.toLowerCase().slice(0,5))
+      );
+      if (est && est.qtd >= m.qtd) {
+        m.status = 'coberto';
+        m.itemId = est.id;
+        cobertos++;
+      }
+    });
+  });
+  save();
+  if (cobertos > 0) toast('✅ ' + cobertos + ' material(is) reconciliado(s) automaticamente!');
+  else toast('🔍 Nenhum material novo pôde ser reconciliado automaticamente.');
+  renderEstoque();
 }
 
 
@@ -2423,6 +2585,14 @@ function confirmarEstoqueFin() {
   closeModal('modal-estoque-fin');
   navigate('estoque');
   toast('📦 Estoque atualizado! ' + log.join(' | '));
+  // Verifica se há materiais pendentes em pedidos para matching
+  verificarMateriaisPendentes(log.map((l, i) => {
+    const el = document.querySelectorAll('#estoque-fin-lista .estoque-fin-row')[i];
+    const itemId = el ? el.querySelector('.efin-select')?.value : null;
+    const nome   = l;
+    const qtd    = el ? parseFloat(el.querySelector('.efin-qtd')?.value)||1 : 1;
+    return { nome, qtd, itemId };
+  }).filter(x => x.itemId));
 }
 
 
@@ -3097,50 +3267,203 @@ function renderClientes() {
 // ══════════════════════════════════════════════════════════════
 // RECIBO
 // ══════════════════════════════════════════════════════════════
+async function gerarImagemRecibo(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p) { toast('Pedido não encontrado'); return; }
+  toast('⏳ Gerando imagem...');
+  try { await document.fonts.load('700 16px "Mali"'); await document.fonts.load('700 12px "Nunito"'); } catch(e) {}
+
+  const W = 480;
+  const PINK='#FF1F78', CYAN='#00BCD4', YELLOW='#F5C000', BROWN='#4A1C1C';
+  const fmtR = v => 'R$ '+((+(v||0)).toFixed(2).replace('.',','));
+  const fmtD = d => d ? new Date(d+'T12:00').toLocaleDateString('pt-BR') : '—';
+  const restante = (p.valor||0)-(p.sinal||0);
+  const itensList = [];
+  if (p.itens&&p.itens.length) p.itens.forEach(it=>itensList.push('• '+it.nome+(it.qtd>1?' ('+it.qtd+'x)':'')));
+  else itensList.push('• '+(p.produto||'—'));
+
+  // Altura dinâmica
+  let h = 230;
+  h += 50; h += 26*(p.whats?3:2); h += 36; h += 26*itensList.length;
+  h += 36; h += 26*4;
+  if (p.obs) { h += 36; h += Math.ceil((p.obs||'').length/44)*22; }
+  h = Math.max(h, 600)+40;
+
+  const cv = document.createElement('canvas');
+  cv.width=W; cv.height=h;
+  const ctx=cv.getContext('2d');
+
+  // ── FUNDO GRADIENTE (cyan → branco → rosa) ──
+  const bg=ctx.createLinearGradient(0,0,W,h);
+  bg.addColorStop(0,'#6FD8F4'); bg.addColorStop(0.42,'#FFFFFF'); bg.addColorStop(1,'#FFB3D9');
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,h);
+
+  // Corações bokeh (semicírculos brancos semitransparentes)
+  const hpos=[[28,35,9],[72,18,6],[135,52,5],[370,22,7],[435,12,10],[458,55,5],
+    [18,115,6],[48,175,4],[418,95,8],[455,135,5],[38,h-65,6],[95,h-42,8],
+    [375,h-75,5],[438,h-28,7],[458,h-85,6],[200,h-30,4],[320,h-20,5]];
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  hpos.forEach(([x,y,r])=>{
+    ctx.save(); ctx.translate(x,y); ctx.scale(r/9,r/9);
+    ctx.beginPath();
+    ctx.moveTo(0,-4); ctx.bezierCurveTo(4,-9,9,-2,0,5); ctx.bezierCurveTo(-9,-2,-4,-9,0,-4);
+    ctx.fill(); ctx.restore();
+  });
+
+  // ── LOGO ──
+  const logoEl = document.querySelector('.header-logo img') || document.querySelector('.nav-logo-wrap img') || document.querySelector('img[src^="data:image/png"]');
+  const LOGO_SIZE = 110;
+  const drawCard = () => {
+    // ── CARD BRANCO ──
+    const cx=18, cy=190, cw=W-36, cr=18;
+    function rr(x,y,w,hh,r){
+      ctx.beginPath();
+      ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+      ctx.lineTo(x+w,y+hh-r); ctx.arcTo(x+w,y+hh,x+w-r,y+hh,r);
+      ctx.lineTo(x+r,y+hh); ctx.arcTo(x,y+hh,x,y+hh-r,r);
+      ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
+    }
+    ctx.fillStyle='rgba(255,255,255,0.91)';
+    rr(cx,cy,cw,h-cy-16,cr); ctx.fill();
+
+    // Faixa topo do card
+    const sg=ctx.createLinearGradient(cx,0,cx+cw,0);
+    sg.addColorStop(0,CYAN); sg.addColorStop(0.5,PINK); sg.addColorStop(1,YELLOW);
+    ctx.fillStyle=sg; rr(cx,cy,cw,5,[cr,cr,0,0]); ctx.fill();
+
+    // ── CONTEÚDO ──
+    let y=cy+28;
+    const LX=cx+18, RX=cx+cw-18, CX=cx+cw/2;
+
+    ctx.font='bold 13px Nunito,sans-serif'; ctx.fillStyle=BROWN; ctx.textAlign='center';
+    ctx.fillText('CONFIRMAÇÃO DE PEDIDO',CX,y); y+=14;
+
+    const dg=ctx.createLinearGradient(LX,0,RX,0);
+    dg.addColorStop(0,CYAN); dg.addColorStop(0.5,PINK); dg.addColorStop(1,YELLOW);
+    ctx.strokeStyle=dg; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(LX,y); ctx.lineTo(RX,y); ctx.stroke(); y+=14;
+
+    function row(lbl,val,lc,vc){
+      ctx.font='400 12px Nunito,sans-serif'; ctx.fillStyle=lc||'#888'; ctx.textAlign='left'; ctx.fillText(lbl,LX,y);
+      ctx.font='700 12px Nunito,sans-serif'; ctx.fillStyle=vc||BROWN; ctx.textAlign='right'; ctx.fillText(val,RX,y); y+=26;
+    }
+    function divider(col){
+      ctx.strokeStyle=col||'#E8E8E8'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(LX,y); ctx.lineTo(RX,y); ctx.stroke(); y+=14;
+    }
+    function section(t,col){
+      ctx.font='bold 11px Nunito,sans-serif'; ctx.fillStyle=col||PINK; ctx.textAlign='left'; ctx.fillText(t,LX,y); y+=20;
+    }
+
+    row('👤 Cliente', p.cliente||'—');
+    if(p.whats) row('📱 WhatsApp', p.whats);
+    row('📅 Entrega', fmtD(p.dataEntrega));
+    divider(); section('🛍️ ITENS DO PEDIDO', CYAN);
+    itensList.forEach(txt=>{ ctx.font='400 12px Nunito,sans-serif'; ctx.fillStyle=BROWN; ctx.textAlign='left'; ctx.fillText(txt,LX+6,y); y+=24; });
+    divider(); section('💰 VALORES', YELLOW);
+    row('Total', fmtR(p.valor), '#888', PINK);
+    row('Sinal pago', fmtR(p.sinal));
+    row('Restante', fmtR(restante),'#888', restante>0?'#E67E22':'#27AE60');
+    row('Pagamento', p.pgto||'PIX');
+    if(p.obs){
+      divider(); section('📝 OBSERVAÇÃO', BROWN);
+      const mw=RX-LX-6; ctx.font='400 12px Nunito,sans-serif'; ctx.fillStyle=BROWN; ctx.textAlign='left';
+      const words=(p.obs||'').split(' '); let line='';
+      words.forEach(w=>{ const t=(line?line+' ':'')+w; if(ctx.measureText(t).width>mw&&line){ctx.fillText(line,LX+6,y);y+=20;line=w;}else{line=t;} });
+      if(line){ctx.fillText(line,LX+6,y);y+=20;}
+    }
+    y+=10; divider();
+    ctx.font='italic 11px Mali,cursive'; ctx.fillStyle='#888'; ctx.textAlign='center';
+    ctx.fillText('✨ Transformando Momentos em Memórias',CX,y); y+=18;
+    ctx.font='bold 13px Mali,cursive'; ctx.fillStyle=PINK; ctx.textAlign='center';
+    ctx.fillText('🎈 Tia Sú — Balões & Personalizados',CX,y);
+
+    // Exportar cortado na altura real
+    const fc=document.createElement('canvas'); fc.width=W; fc.height=Math.min(y+30,h);
+    fc.getContext('2d').drawImage(cv,0,0);
+    fc.toBlob(async blob=>{
+      const nome=(p.cliente||'Pedido').replace(/[^a-zA-ZÀ-ÿ0-9]/g,'_');
+      const fn='Recibo_TiaSu_'+nome+'.png';
+      const file=new File([blob],fn,{type:'image/png'});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        try{ await navigator.share({files:[file],title:'Confirmação — Tia Sú',text:'Segue a confirmação do seu pedido! 🎈'}); toast('✅ Imagem compartilhada!');
+        }catch(e){ if(e.name!=='AbortError') _downloadBlob(blob,fn); }
+      } else { _downloadBlob(blob,fn); toast('📥 Imagem salva! Envie pelo WhatsApp.'); }
+    },'image/png');
+  };
+
+  if(logoEl&&logoEl.complete&&logoEl.naturalWidth>0){
+    try{ ctx.drawImage(logoEl,(W-LOGO_SIZE)/2,22,LOGO_SIZE,LOGO_SIZE); }catch(e){}
+    drawCard();
+  } else if(logoEl){
+    logoEl.onload=()=>{ try{ctx.drawImage(logoEl,(W-LOGO_SIZE)/2,22,LOGO_SIZE,LOGO_SIZE);}catch(e){} drawCard(); };
+    logoEl.onerror=()=>drawCard();
+  } else {
+    // Fallback texto
+    ctx.font='bold 40px Mali,cursive'; ctx.fillStyle=PINK; ctx.textAlign='center'; ctx.fillText('Tia Sú',W/2,90);
+    ctx.font='400 13px Nunito,sans-serif'; ctx.fillStyle=CYAN; ctx.fillText('Balões & Personalizados',W/2,115);
+    drawCard();
+  }
+}
+
+function _downloadBlob(blob,name){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+
 function enviarReciboWhatsApp(id) {
   const p = pedidos.find(x => x.id === id);
   if (!p) return;
 
+  const fmtR = v => 'R$ ' + (v||0).toFixed(2).replace('.', ',');
   const restante = (p.valor || 0) - (p.sinal || 0);
   const dataEnt  = p.dataEntrega
     ? new Date(p.dataEntrega + 'T12:00').toLocaleDateString('pt-BR')
     : '—';
+  const sep = '━━━━━━━━━━━━━━━━━━━━';
 
-  // Monta itens se houver
-  let itensTexto = '';
+  // Monta lista de itens
+  let itensTxt = '';
   if (p.itens && p.itens.length) {
-    itensTexto = '\n📋 *Itens:*\n';
     p.itens.forEach(function(it) {
-      itensTexto += '  • ' + it.nome + ' x' + it.qtd + ' — R$ ' + (it.qtd * it.preco).toFixed(2).replace('.', ',') + '\n';
+      const sub = it.qtd > 1 ? ' (' + it.qtd + 'x)' : '';
+      itensTxt += '  • ' + it.nome + sub + '\n';
     });
+  } else if (p.produto) {
+    itensTxt = '  • ' + p.produto + '\n';
+  } else {
+    itensTxt = '  —\n';
   }
 
-  const msg = [
-    '🎈 *Tia Sú — Balões & Personalizados*',
-    '🧾 *RECIBO DE PEDIDO*',
-    '',
-    '👤 Cliente: ' + (p.cliente || '—'),
-    '📦 Pedido: '  + (p.produto  || '—'),
-    itensTexto,
-    '📅 Entrega: ' + dataEnt,
-    '💳 Pagamento: ' + (p.pgto || 'PIX'),
-    p.obs ? ('📝 Obs: ' + p.obs) : '',
-    '',
-    '━━━━━━━━━━━━━━━━',
-    '💰 *Valor total: R$ ' + (p.valor || 0).toFixed(2).replace('.', ',') + '*',
-    (p.sinal > 0 ? '✅ Sinal pago: R$ ' + p.sinal.toFixed(2).replace('.', ',') : ''),
-    (restante > 0
-      ? '⏳ Restante a pagar: *R$ ' + restante.toFixed(2).replace('.', ',') + '*'
-      : '✅ *Pagamento quitado!*'),
-    '',
-    'Obrigada pela sua confiança! 🎈',
-    '_Tia Sú Balões & Personalizados_'
-  ].filter(Boolean).join('\n');
+  const linhas = [
+    '🎈 *CONFIRMAÇÃO DE PEDIDO*',
+    '_Tia Sú — Balões & Personalizados_',
+    sep,
+    '👤 *Cliente:* ' + (p.cliente || '—'),
+    p.whats ? ('📱 *WhatsApp:* ' + p.whats) : '',
+    '📅 *Data entrega:* ' + dataEnt,
+    sep,
+    '🛍️ *ITENS DO PEDIDO:*',
+    itensTxt.trimEnd(),
+    sep,
+    '💰 *VALORES:*',
+    '  Total:  ' + fmtR(p.valor),
+    '  Sinal:  ' + fmtR(p.sinal),
+    '  Resta:  ' + fmtR(restante),
+    '  Forma:  ' + (p.pgto || 'PIX'),
+    sep,
+    p.obs ? ('📝 *Obs:* ' + p.obs) : '',
+    p.obs ? sep : '',
+    '✨ _Transformando Momentos em Memórias_',
+    '🎈 _Tia Sú — Balões & Personalizados_'
+  ].filter(l => l !== '').join('\n');
 
   const num = (p.whats || '').replace(/\D/g, '');
   const url = num
-    ? 'https://wa.me/55' + num + '?text=' + encodeURIComponent(msg)
-    : 'https://wa.me/?text=' + encodeURIComponent(msg);
+    ? 'https://wa.me/55' + num + '?text=' + encodeURIComponent(linhas)
+    : 'https://wa.me/?text=' + encodeURIComponent(linhas);
 
   window.open(url, '_blank');
 }
@@ -3287,7 +3610,7 @@ function gerarRecibo(id) {
 // ══════════════════════════════════════════════════════════════
 // LEITURA DE NF COM IA
 // ══════════════════════════════════════════════════════════════
-function getApiKey() { return localStorage.getItem('ts_anthropic_key') || ''; }
+function getApiKey() { return (localStorage.getItem('ts_anthropic_key') || '').trim(); }
 
 function salvarApiKey() {
   const key = document.getElementById('apikey-input').value.trim();
@@ -3297,6 +3620,32 @@ function salvarApiKey() {
   toast('✅ Chave salva! Agora tire a foto da NF.');
   // Reabre o modal de compras
   setTimeout(() => openModal('modal-compras', false), 200);
+}
+
+async function testarApiKey() {
+  const input = document.getElementById('apikey-input');
+  const resultEl = document.getElementById('apikey-test-result');
+  const key = input.value.trim();
+  if (!key) { resultEl.style.display='block'; resultEl.style.background='#fff3cd'; resultEl.style.color='#856404'; resultEl.textContent='⚠️ Cole a chave antes de testar.'; return; }
+  resultEl.style.display='block'; resultEl.style.background='#e8f4fd'; resultEl.style.color='#0c5460'; resultEl.textContent='⏳ Testando...';
+  try {
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST',
+      headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-calls':'true'},
+      body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:10,messages:[{role:'user',content:'ping'}]})
+    });
+    if (r.ok) {
+      resultEl.style.background='#d4edda'; resultEl.style.color='#155724';
+      resultEl.textContent='✅ Chave válida! Conexão funcionando.';
+    } else {
+      const err = await r.json();
+      resultEl.style.background='#f8d7da'; resultEl.style.color='#721c24';
+      resultEl.textContent='❌ ' + (err.error?.message || 'Chave inválida ou sem crédito (status ' + r.status + ')');
+    }
+  } catch(e) {
+    resultEl.style.background='#f8d7da'; resultEl.style.color='#721c24';
+    resultEl.textContent='❌ Erro de conexão: ' + e.message;
+  }
 }
 
 function mostrarConfigApiKey() {
@@ -3396,10 +3745,12 @@ async function processarFotoNF(event) {
 
     } catch(e) {
       console.error(e);
-      msgEl.textContent = '❌ Erro: ' + (e.message || 'Tente novamente');
+      const errMsg = e.message || 'Erro desconhecido';
+      msgEl.innerHTML = '❌ <b>Erro:</b> ' + errMsg + '<br><small style="opacity:0.7">Clique aqui pra fechar</small>';
       msgEl.style.color = 'var(--red)';
-      setTimeout(() => { statusEl.style.display = 'none'; msgEl.style.color = 'var(--pink)'; }, 4000);
-      toast('❌ Erro ao ler NF. Preencha manualmente.');
+      msgEl.style.cursor = 'pointer';
+      msgEl.onclick = () => { statusEl.style.display = 'none'; msgEl.style.color = 'var(--pink)'; msgEl.onclick = null; msgEl.style.cursor = ''; };
+      toast('❌ Erro ao ler NF — veja mensagem acima');
     }
   };
   reader.readAsDataURL(file);
@@ -3566,6 +3917,31 @@ if (SYNC_URL) {
 
 
 
+<!-- MODAL MATCH MATERIAIS -->
+<div class="modal-overlay" id="modal-match">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔗 Vincular Materiais</div>
+    <div style="font-size:11px;color:var(--gray-d);padding:0 16px 8px;line-height:1.4">
+      <b>1.</b> Toque num item comprado (🛒) à direita<br>
+      <b>2.</b> Toque no material do pedido (🟡) à esquerda para vincular
+    </div>
+    <div class="modal-body" style="display:flex;gap:12px;padding:8px 16px 16px">
+      <div class="match-col">
+        <div class="match-col-title">📋 Preciso nos pedidos</div>
+        <div id="match-reservados"></div>
+      </div>
+      <div class="match-col">
+        <div class="match-col-title">🛒 Acabei de comprar</div>
+        <div id="match-comprados"></div>
+      </div>
+    </div>
+    <div style="padding:0 16px 16px;display:flex;gap:8px">
+      <button class="btn btn-outline" style="flex:1" onclick="fecharMatch()">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL FORNECEDOR -->
 <div class="modal-overlay" id="modal-fornecedor">
   <div class="modal">
@@ -3657,10 +4033,14 @@ if (SYNC_URL) {
         <input class="form-input" id="apikey-input" type="password" placeholder="sk-ant-api03-..." autocomplete="off">
       </div>
       <p style="font-size:11px;color:var(--gray-d)">🔒 Salva só neste dispositivo. Nunca enviada a nenhum servidor nosso.</p>
+      <div id="apikey-test-result" style="display:none;margin-top:10px;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600"></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn" onclick="closeModal('modal-apikey')" style="flex:1">Cancelar</button>
-      <button class="btn btn-pink" onclick="salvarApiKey()" style="flex:2">💾 Salvar chave</button>
+    <div class="modal-footer" style="flex-direction:column;gap:8px">
+      <button class="btn btn-outline" onclick="testarApiKey()" style="width:100%">🔌 Testar conexão</button>
+      <div style="display:flex;gap:8px;width:100%">
+        <button class="btn" onclick="closeModal('modal-apikey')" style="flex:1">Cancelar</button>
+        <button class="btn btn-pink" onclick="salvarApiKey()" style="flex:2">💾 Salvar chave</button>
+      </div>
     </div>
   </div>
 </div>
@@ -3689,17 +4069,6 @@ if (SYNC_URL) {
         </button>
         <div id="c-ia-status" style="display:none;text-align:center;padding:10px;color:var(--pink);font-size:13px">
           <span id="c-ia-msg">🤖 Lendo NF...</span>
-        </div>
-      </div>
-
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Data *</label>
-          <input class="form-input" id="c-data" type="date">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Valor Total (R$) *</label>
-          <input class="form-input" id="c-valor" type="number" placeholder="0,00" step="0.01">
         </div>
       </div>
 
@@ -3741,4 +4110,12 @@ if (SYNC_URL) {
       </div>
 
     </div>
-    <div class="moda
+    <div class="modal-footer" style="gap:8px">
+      <button class="btn btn-outline" onclick="closeModal('modal-compras')" style="flex:1">Cancelar</button>
+      <button class="btn btn-pink" onclick="salvarCompra()" style="flex:2">💾 Registrar Compra</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
