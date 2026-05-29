@@ -3385,12 +3385,13 @@ async function gerarImagemRecibo(id) {
       const nome=(p.cliente||'Pedido').replace(/[^a-zA-ZÀ-ÿ0-9]/g,'_');
       const fn='Recibo_TiaSu_'+nome+'.png';
       const file=new File([blob],fn,{type:'image/png'});
-      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-        // Mobile: compartilha direto
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      if(isMobile && navigator.share && navigator.canShare && navigator.canShare({files:[file]})){
+        // Celular: compartilha direto pelo menu nativo (WhatsApp, etc.)
         try{ await navigator.share({files:[file],title:'Confirmação — Tia Sú',text:'Segue a confirmação do seu pedido! 🎈'}); toast('✅ Imagem compartilhada!');
         }catch(e){ if(e.name!=='AbortError') _downloadBlob(blob,fn); }
       } else {
-        // Desktop: copia imagem para área de transferência → colar com Ctrl+V no WhatsApp Web
+        // Computador: copia imagem para área de transferência → colar com Ctrl+V no WhatsApp Web
         try {
           await navigator.clipboard.write([new ClipboardItem({'image/png': blob})]);
           _mostrarModalImagemCopiada(canvas.toDataURL('image/png'));
