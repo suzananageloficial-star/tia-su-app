@@ -482,6 +482,38 @@ html, body {
   letter-spacing: 0.8px; padding: 12px 16px 4px;
 }
 
+/* ── GRADIENT HEADER ── */
+.grad-header {
+  background: linear-gradient(135deg, var(--pink) 0%, var(--pink-d) 100%);
+  padding: 20px 16px 16px;
+  position: sticky; top: 0; z-index: 5;
+}
+
+/* ── SUMMARY PILLS ── */
+.sp { flex:0 0 auto; background:rgba(255,255,255,0.22); border-radius:14px; padding:8px 14px; text-align:center; min-width:64px; }
+.sp.sp-alert { background:rgba(255,255,255,0.95); }
+.sp-num { font-size:20px; font-weight:800; color:white; line-height:1.1; }
+.sp-num.n-alert { color:var(--red); }
+.sp-num.n-warn { color:var(--orange); }
+.sp-lbl { font-size:10px; color:rgba(255,255,255,0.85); font-weight:600; margin-top:2px; }
+.sp-lbl.n-alert { color:var(--red); }
+
+/* ── URGENCY ── */
+.list-item.urgente { border-left:3px solid var(--red); background:linear-gradient(to right,#fff5f5 0%,white 60%); }
+.urgente-badge { background:var(--red); color:white; font-size:9px; font-weight:800; padding:2px 6px; border-radius:10px; vertical-align:middle; margin-left:4px; }
+
+/* ── AVATAR ── */
+.li-avatar { width:40px; height:40px; border-radius:50%; background:var(--pink-l); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; color:var(--pink); flex-shrink:0; cursor:pointer; transition:transform 0.15s; }
+.li-avatar:active { transform:scale(0.9); }
+.li-avatar.av-urgente { background:var(--red-l); color:var(--red); border:2px solid var(--red); }
+
+/* ── FILTER BAR ── */
+.filter-bar { padding:10px 16px; display:flex; gap:6px; overflow-x:auto; background:white; border-bottom:1px solid var(--gray); scrollbar-width:none; }
+.filter-bar::-webkit-scrollbar { display:none; }
+.filter-pill { flex:0 0 auto; padding:5px 14px; border-radius:20px; border:1.5px solid var(--gray); background:white; font-size:12px; font-weight:600; color:var(--gray-d); cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+.filter-pill.active { background:var(--pink); color:white; border-color:var(--pink); }
+.filter-pill:active { transform:scale(0.95); }
+
 /* ── TOAST ── */
 .toast {
   position: fixed;
