@@ -951,7 +951,10 @@ html, body {
         <div class="page-title">👥 Clientes</div>
         <div class="page-sub" id="clientes-sub">Seus contatos</div>
       </div>
-      <div class="section-title">Contatos salvos</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px 4px">
+        <div class="section-title" style="padding:12px 12px 4px 12px">Contatos salvos</div>
+        <button onclick="sincronizarTodosClientes()" style="font-size:11px;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:10px;padding:5px 12px;cursor:pointer;font-weight:700">🔄 Sincronizar</button>
+      </div>
       <div class="card"><div id="clientes-list"></div></div>
       <div style="height:80px"></div>
     </div>
@@ -1641,7 +1644,7 @@ function renderScreen(s) {
   if (s==='preco')      { renderCatalogo(); setTimeout(()=>setNivel(_nivel),50); }
   if (s==='compras')    renderCompras();
   if (s==='analise')    renderAnalise();
-  if (s==='clientes')   renderClientes();
+  if (s==='clientes')   { sincronizarTodosClientes(); }
   if (s==='fornecedores') renderFornecedores();
   if (s==='relatorios')   renderRelatorios();
 }
@@ -2044,6 +2047,9 @@ function salvarPedido() {
   if(id) { const i=pedidos.findIndex(p=>p.id===id); if(i>=0) pedidos[i]=obj; }
   else pedidos.unshift(obj);
 
+  // Sincroniza cliente na lista de contatos
+  sincronizarCliente(obj);
+
   try {
     save();
   } catch(e) {
@@ -2127,7 +2133,14 @@ function receberCompleto() {
   const id = document.getElementById('p-id').value;
   const p = pedidos.find(x => x.id === id);
   if (!p) return;
-  const restante = (p.valor||0) - (p.sinal||0); // calcula ANTES de atualizar sinal
+  const restante = (p.valor||0) - (p.sinal||0);
+  // Impede registro duplicado
+  if (restante <= 0.01) {
+    toast('✅ Pagamento já registrado completo!');
+    return;
+  }
+  // Confirmação antes de lançar
+  if (!confirm(`Confirmar recebimento de ${fmt(restante)} da ${p.cliente}?\n\nIsso vai lançar no Financeiro e marcar o pedido como Entregue.`)) return;
   p.sinal = p.valor;
   p.status = 'Entregue';
   // Cria lançamento no financeiro para o valor restante recebido
@@ -3825,6 +3838,58 @@ function resetDados() {
     setTimeout(() => syncToCloud(), 500);
     toast('☁️ Enviando dados zerados pro Sheets...');
   }
+}
+
+// Sincroniza um pedido → garante que o cliente existe na lista
+function sincronizarCliente(p) {
+  if (!p || !p.cliente) return;
+  const key = p.cliente.toLowerCase().trim();
+  const existe = clientes.find(c => {
+    const n = typeof c === 'string' ? c : (c.nome || '');
+    return n.toLowerCase().trim() === key;
+  });
+  if (!existe) {
+    clientes.push({ id: uid(), nome: p.cliente.trim(), whats: p.whats || '', totalPedidos: 1, ultimoPedido: p.dataEntrega || '' });
+  } else {
+    if (typeof existe === 'object') {
+      if (p.whats && !existe.whats) existe.whats = p.whats;
+      // Recalcula totais direto dos pedidos
+      const ped = pedidos.filter(x => (x.cliente||'').toLowerCase().trim() === key);
+      existe.totalPedidos = ped.length;
+      const datas = ped.map(x => x.dataEntrega || '').filter(Boolean).sort();
+      if (datas.length) existe.ultimoPedido = datas[datas.length - 1];
+    }
+  }
+  DB.set('clientes', clientes);
+}
+
+// Reconstrói toda a lista de clientes a partir dos pedidos existentes
+function sincronizarTodosClientes() {
+  const mapa = {};
+  pedidos.forEach(p => {
+    if (!p.cliente) return;
+    const key = p.cliente.toLowerCase().trim();
+    if (!mapa[key]) mapa[key] = { id: uid(), nome: p.cliente.trim(), whats: p.whats || '', totalPedidos: 0, ultimoPedido: '' };
+    mapa[key].totalPedidos++;
+    if (p.whats && !mapa[key].whats) mapa[key].whats = p.whats;
+    if ((p.dataEntrega || '') > mapa[key].ultimoPedido) mapa[key].ultimoPedido = p.dataEntrega || '';
+  });
+  // Mescla preservando WhatsApp já salvo
+  Object.values(mapa).forEach(nc => {
+    const existe = clientes.find(c => {
+      const n = typeof c === 'string' ? c : (c.nome || '');
+      return n.toLowerCase().trim() === nc.nome.toLowerCase().trim();
+    });
+    if (!existe) clientes.push(nc);
+    else if (typeof existe === 'object') {
+      existe.totalPedidos = nc.totalPedidos;
+      existe.ultimoPedido = nc.ultimoPedido;
+      if (nc.whats && !existe.whats) existe.whats = nc.whats;
+    }
+  });
+  DB.set('clientes', clientes);
+  renderClientes();
+  toast('✅ ' + Object.keys(mapa).length + ' cliente(s) sincronizado(s)!');
 }
 
 function renderClientes() {
