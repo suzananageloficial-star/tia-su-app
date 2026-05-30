@@ -2133,31 +2133,27 @@ function enviarLembreteWhatsApp(id) {
   const fmtR = v => 'R$ ' + (v||0).toFixed(2).replace('.', ',');
   const produto = p.produto || (p.itens && p.itens.length ? p.itens.map(i=>i.nome).join(', ') : 'seu pedido');
   const pgto = p.pgto || 'PIX';
-  const lines = [
-    `Oi ${p.cliente||''}! 🎈`,
-    ``,
-    `Passando para confirmar seu pedido:`,
-    `📦 *${produto}*`,
-    `📅 Entrega: *${dataEnt}*`,
+  var partes = [
+    'Oi ' + (p.cliente||'') + '! 🎈',
+    '',
+    'Passando para confirmar seu pedido:',
+    '\u{1F4E6} *' + produto + '*',
+    '\u{1F4C5} Entrega: *' + dataEnt + '*',
     restante > 0.01
-      ? `💰 Valor restante: *${fmtR(restante)}* (${pgto})`
-      : `✅ Pagamento: *Quitado*`,
-    p.obs ? `📝 _${p.obs}_` : '',
-    ``,
-    `Confirma? 😊`,
-    ``,
-    `_Tia Sú — Balões & Personalizados_ 🎈`,
-  ].filter(l => l !== '' || lines).join('
-').replace(/
-{3,}/g, '
-
-');
+      ? ('\u{1F4B0} Valor restante: *' + fmtR(restante) + '* (' + pgto + ')')
+      : '✅ Pagamento: *Quitado*',
+    p.obs ? ('\u{1F4DD} _' + p.obs + '_') : null,
+    '',
+    'Confirma? \u{1F60A}',
+    '',
+    '_Tia Sú — Balões & Personalizados_ \u{1F388}',
+  ].filter(function(l){ return l !== null; }).join('\n');
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(lines).then(() => {
-      toast('📋 Lembrete copiado! Cole no WhatsApp (Ctrl+V)');
-    }).catch(() => _mostrarTextoParaCopiar(lines));
+    navigator.clipboard.writeText(partes).then(function() {
+      toast('\u{1F4CB} Lembrete copiado! Cole no WhatsApp (Ctrl+V)');
+    }).catch(function() { _mostrarTextoParaCopiar(partes); });
   } else {
-    _mostrarTextoParaCopiar(lines);
+    _mostrarTextoParaCopiar(partes);
   }
 }
 
