@@ -132,9 +132,14 @@ html, body {
   flex-shrink: 0;
   box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
   z-index: 10;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.bottom-nav::-webkit-scrollbar { display: none; }
 .nav-item {
-  flex: 1;
+  flex: 0 0 auto;
+  min-width: 58px;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   padding: 8px 4px;
@@ -785,13 +790,20 @@ html, body {
   <div id="content">
     <!-- DASHBOARD -->
     <div id="screen-dashboard" class="screen active">
-      <div class="page-header">
-        <div class="page-title">📊 Dashboard</div>
-        <div class="page-sub" id="dash-date"></div>
+      <div class="grad-header">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-family:var(--font-brand);font-size:22px;font-weight:700;color:white">🎈 Tia Sú</div>
+            <div id="dash-date" style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:2px"></div>
+          </div>
+        </div>
+        <div id="dash-summary" style="display:flex;gap:8px;margin-top:14px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px"></div>
       </div>
       <div class="kpi-grid" id="kpi-grid"></div>
       <div class="section-title">Pedidos Recentes</div>
       <div class="card"><div id="dash-pedidos-list"></div></div>
+      <div class="section-title">📅 Próximas Entregas</div>
+      <div class="card"><div id="dash-proximas-list"></div></div>
       <div class="section-title">Últimas Movimentações</div>
       <div class="card"><div id="dash-fin-list"></div></div>
       <div style="margin-top:20px;padding:0 4px">
@@ -805,16 +817,19 @@ html, body {
 
     <!-- PEDIDOS -->
     <div id="screen-pedidos" class="screen">
-      <div class="page-header">
-        <div class="page-title">📋 Pedidos</div>
-        <div class="page-sub" id="pedidos-count"></div>
+      <div class="grad-header" style="padding-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-family:var(--font-brand);font-size:22px;font-weight:700;color:white">📋 Pedidos</div>
+          <div id="pedidos-count" style="font-size:12px;color:rgba(255,255,255,0.85);font-weight:600;background:rgba(255,255,255,0.2);padding:4px 10px;border-radius:12px"></div>
+        </div>
       </div>
-      <div style="padding: 8px 16px; display:flex; gap:6px; overflow-x:auto;">
-        <button class="btn btn-ghost btn-sm" onclick="filtrarPedidos('todos')" id="f-todos" style="white-space:nowrap">Todos</button>
-        <button class="btn btn-ghost btn-sm" onclick="filtrarPedidos('Novo')" id="f-novo" style="white-space:nowrap">🆕 Novo</button>
-        <button class="btn btn-ghost btn-sm" onclick="filtrarPedidos('Em andamento')" id="f-and" style="white-space:nowrap">⚙️ Em andamento</button>
-        <button class="btn btn-ghost btn-sm" onclick="filtrarPedidos('Pronto')" id="f-pronto" style="white-space:nowrap">✅ Pronto</button>
-        <button class="btn btn-ghost btn-sm" onclick="filtrarPedidos('Entregue')" id="f-ent" style="white-space:nowrap">🚀 Entregue</button>
+      <div class="filter-bar">
+        <button class="filter-pill active" onclick="filtrarPedidos('todos')" id="f-todos">Todos</button>
+        <button class="filter-pill" onclick="filtrarPedidos('Novo')" id="f-novo">Novo</button>
+        <button class="filter-pill" onclick="filtrarPedidos('Em andamento')" id="f-and">Em andamento</button>
+        <button class="filter-pill" onclick="filtrarPedidos('Pronto')" id="f-pronto">Pronto</button>
+        <button class="filter-pill" onclick="filtrarPedidos('Entregue')" id="f-ent">Entregue</button>
+        <button class="filter-pill" onclick="filtrarPedidos('a-receber')" id="f-a-receber">💰 A Receber</button>
       </div>
       <div class="card"><div id="pedidos-list"></div></div>
       <div style="height:80px"></div>
@@ -938,12 +953,23 @@ html, body {
       <div style="height:80px"></div>
     </div>
 
+    <!-- RELATÓRIOS -->
+    <div id="screen-relatorios" class="screen">
+      <div class="page-header">
+        <div class="page-title">📊 Relatórios</div>
+        <div class="page-sub">Visão financeira por período</div>
+      </div>
+      <div id="relatorios-body"></div>
+      <div style="height:80px"></div>
+    </div>
+
     <!-- PRECIFICAÇÃO -->
     <div id="screen-preco" class="screen">
       <div class="page-header">
         <div class="page-title">🧮 Precificação</div>
         <div class="page-sub">Calcule o preço ideal do seu produto</div>
       </div>
+      <button onclick="openModal('modal-calculadora',false)" style="width:100%;padding:12px;background:var(--pink-l);color:var(--pink);border:1.5px solid var(--pink);border-radius:14px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:12px">🧮 Calculadora rápida</button>
       <div class="card">
         <div class="card-body">
 
@@ -1116,6 +1142,10 @@ html, body {
       <span class="nav-icon">🧮</span>
       <span class="nav-label">Preço</span>
     </button>
+    <button class="nav-item" onclick="navigate('relatorios')" id="nav-relatorios">
+      <span class="nav-icon">📊</span>
+      <span class="nav-label">Relat.</span>
+    </button>
   </nav>
 </div>
 
@@ -1137,6 +1167,7 @@ html, body {
         <label class="form-label">Cliente *</label>
         <input class="form-input" id="p-cliente" placeholder="Nome do cliente">
       </div>
+      <div id="cliente-historico" style="display:none;background:#f8f8f8;border-radius:8px;padding:8px 12px;margin-bottom:8px"></div>
       <div class="form-group">
         <label class="form-label">WhatsApp</label>
         <input class="form-input" id="p-whats" placeholder="(51) 9xxxx-xxxx" type="tel">
@@ -1181,7 +1212,7 @@ html, body {
           <div class="form-row" style="margin:0">
             <div class="form-group">
               <label class="form-label">Valor total (R$)</label>
-              <input class="form-input" id="p-valor-manual" type="number" placeholder="0,00" oninput="recalcularTotalManual()" step="0.01">
+              <input class="form-input" id="p-valor-manual" type="number" placeholder="0,00" oninput="recalcularTotalManual();calcularLucro();" step="0.01">
             </div>
             <div class="form-group">
               <label class="form-label">Sinal pago (R$)</label>
@@ -1220,6 +1251,16 @@ html, body {
         <textarea class="form-textarea" id="p-obs" placeholder="Cores, temas, endereço de entrega..."></textarea>
       </div>
 
+      <!-- CUSTO E LUCRO -->
+      <div class="field-group" style="margin-bottom:8px">
+        <label class="form-label">CUSTO DOS MATERIAIS (R$)</label>
+        <input type="number" id="p-custo" class="form-input" placeholder="0,00" step="0.01" min="0" oninput="calcularLucro()">
+      </div>
+      <div style="background:var(--pink-l);border-radius:12px;padding:10px 14px;margin-bottom:8px">
+        <span style="font-size:11px;color:var(--brown);font-weight:700">LUCRO ESTIMADO</span>
+        <div id="p-lucro-display" style="font-size:18px;font-weight:700;color:var(--green)">R$ 0,00</div>
+      </div>
+
       <!-- MATERIAIS DO PEDIDO -->
       <div style="margin-top:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -1235,6 +1276,7 @@ html, body {
         <button class="btn btn-outline" onclick="closeModal('modal-pedido')" style="flex:1">Fechar</button>
         <button class="btn btn-pink" style="flex:2" onclick="salvarPedido()">💾 Salvar pedido</button>
       </div>
+      <button class="btn btn-green" id="btn-recebido-completo" style="display:none;width:100%;background:var(--green);color:white;border:none;font-weight:700;margin-bottom:6px" onclick="receberCompleto()">✅ Recebido completo</button>
       <div id="btn-whats-group" style="display:none;gap:8px;width:100%;flex-wrap:wrap">
         <button class="btn" style="flex:1;min-width:120px;background:#dcfce7;color:#15803d;border:none;font-weight:700" onclick="enviarReciboWhatsApp(document.getElementById('p-id').value)">💬 WhatsApp texto</button>
         <button class="btn" style="flex:1;min-width:120px;background:#e0f2fe;color:#0369a1;border:none;font-weight:700" onclick="gerarImagemRecibo(document.getElementById('p-id').value)">🖼️ Enviar imagem</button>
@@ -1561,6 +1603,7 @@ function renderScreen(s) {
   if (s==='analise')    renderAnalise();
   if (s==='clientes')   renderClientes();
   if (s==='fornecedores') renderFornecedores();
+  if (s==='relatorios')   renderRelatorios();
 }
 
 // ── FAB ───────────────────────────────────────────────────────
@@ -1590,6 +1633,9 @@ function resetModal(id) {
     document.getElementById('modal-pedido-title').textContent='🎈 Novo Pedido';
     document.getElementById('btn-excluir-pedido').style.display = 'none';
     document.getElementById('btn-whats-group').style.display = 'none';
+    document.getElementById('btn-recebido-completo').style.display = 'none';
+    const histEl = document.getElementById('cliente-historico');
+    if (histEl) histEl.style.display = 'none';
     setTimeout(()=>{
       const itens = document.getElementById('p-itens-lista');
       if(itens) itens.innerHTML = '';
@@ -1648,6 +1694,22 @@ function renderDashboard() {
   const saldo    = getSaldoInicial() + receita - gasto;
   const abertos  = pedidos.filter(p=>p.status!=='Entregue'&&p.status!=='Cancelado').length;
 
+  // Summary pills no header
+  const agora2 = new Date();
+  const urgentes2 = pedidos.filter(p => {
+    if (p.status==='Entregue'||p.status==='Cancelado'||!p.dataEntrega) return false;
+    return (new Date(p.dataEntrega+'T12:00') - agora2) < 48*3600*1000;
+  }).length;
+  const entreguesMes = pedidos.filter(p => p.status==='Entregue').length;
+  const aReceber2 = pedidos.filter(p => ((p.valor||0)-(p.sinal||0)) > 0.01 && p.status!=='Cancelado').length;
+  const dashSum = document.getElementById('dash-summary');
+  if (dashSum) dashSum.innerHTML = [
+    `<div class="sp"><div class="sp-num">${pedidos.filter(p=>p.status!=='Cancelado').length}</div><div class="sp-lbl">Pedidos</div></div>`,
+    urgentes2>0 ? `<div class="sp sp-alert"><div class="sp-num n-alert">${urgentes2}</div><div class="sp-lbl n-alert">Urgentes</div></div>` : '',
+    `<div class="sp"><div class="sp-num">${entreguesMes}</div><div class="sp-lbl">Entregues</div></div>`,
+    aReceber2>0 ? `<div class="sp"><div class="sp-num n-warn">${aReceber2}</div><div class="sp-lbl">A Receber</div></div>` : '',
+  ].join('');
+
   document.getElementById('kpi-grid').innerHTML = `
     <div class="kpi cyan" data-icon="💰"><div class="kpi-label">Receita mês</div><div class="kpi-value">${fmt(receita)}</div><div class="kpi-sub">mês atual</div></div>
     <div class="kpi pink" data-icon="💸"><div class="kpi-label">Gastos mês</div><div class="kpi-value">${fmt(gasto)}</div><div class="kpi-sub">mês atual</div></div>
@@ -1667,6 +1729,34 @@ function renderDashboard() {
         <div class="li-right">${statusBadge(p.status)}</div>
       </div>`).join('')
     : empty('🎈','Nenhum pedido ainda','Toque em + para adicionar');
+
+  // Próximas entregas (7 dias)
+  const hoje7 = new Date(); hoje7.setHours(0,0,0,0);
+  const em7dias = new Date(hoje7); em7dias.setDate(em7dias.getDate()+7);
+  const proximas = pedidos
+    .filter(p => p.dataEntrega && p.status !== 'Entregue' && p.status !== 'Cancelado')
+    .map(p => ({...p, dt: new Date(p.dataEntrega+'T12:00')}))
+    .filter(p => p.dt >= hoje7 && p.dt <= em7dias)
+    .sort((a,b) => a.dt-b.dt);
+
+  let proximasHTML = '';
+  if (proximas.length === 0) {
+    proximasHTML = '<p style="color:#888;font-size:13px;text-align:center;padding:12px">Nenhuma entrega nos próximos 7 dias 🎉</p>';
+  } else {
+    proximas.forEach(p => {
+      const diasRestantes = Math.ceil((p.dt - hoje7) / 86400000);
+      const cor = diasRestantes === 0 ? '#EF4444' : diasRestantes <= 2 ? '#F59E0B' : '#22C55E';
+      const label = diasRestantes === 0 ? 'HOJE' : diasRestantes === 1 ? 'AMANHÃ' : `em ${diasRestantes} dias`;
+      proximasHTML += `<div onclick="editarPedido('${p.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;cursor:pointer">
+        <div>
+          <div style="font-weight:700;font-size:13px;color:var(--brown)">${p.cliente||'—'}</div>
+          <div style="font-size:11px;color:#888">${p.itens&&p.itens.length?p.itens[0].nome:(p.produto||'—')}</div>
+        </div>
+        <span style="background:${cor}22;color:${cor};border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;white-space:nowrap">${label}</span>
+      </div>`;
+    });
+  }
+  document.getElementById('dash-proximas-list').innerHTML = proximasHTML;
 
   const recenteFin = [...financeiro].reverse().slice(0,4);
   document.getElementById('dash-fin-list').innerHTML = recenteFin.length
@@ -1692,34 +1782,54 @@ function renderDashboard() {
 let filtroAtivo = 'todos';
 function filtrarPedidos(f) {
   filtroAtivo = f;
-  document.querySelectorAll('[id^="f-"]').forEach(b => b.style.background='');
-  const btn = document.getElementById('f-'+f.split(' ')[0].toLowerCase());
-  if(btn) btn.style.background='var(--pink)'; if(btn) btn.style.color='white';
+  document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
+  const btnId = f==='a-receber' ? 'f-a-receber' : 'f-'+f.split(' ')[0].toLowerCase();
+  const btn = document.getElementById(btnId);
+  if(btn) btn.classList.add('active');
   renderPedidos();
 }
 
 function renderPedidos() {
-  const lista = filtroAtivo==='todos' ? pedidos : pedidos.filter(p=>p.status===filtroAtivo);
+  let lista;
+  if (filtroAtivo==='todos') {
+    lista = pedidos;
+  } else if (filtroAtivo==='a-receber') {
+    lista = pedidos.filter(p => ((p.valor||0)-(p.sinal||0)) > 0.01 && p.status!=='Cancelado');
+  } else {
+    lista = pedidos.filter(p=>p.status===filtroAtivo);
+  }
   document.getElementById('pedidos-count').textContent = `${lista.length} pedido${lista.length!==1?'s':''}`;
+  const _agora = new Date();
   document.getElementById('pedidos-list').innerHTML = lista.length
     ? lista.map(p => {
         const restante = (p.valor||0)-(p.sinal||0);
+        const ini = (p.cliente||'?').split(' ').filter(w=>w).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+        const dtEnt = p.dataEntrega ? new Date(p.dataEntrega+'T12:00') : null;
+        const ativo = p.status!=='Entregue' && p.status!=='Cancelado';
+        const atrasado = ativo && dtEnt && dtEnt < _agora;
+        const urgente  = ativo && !atrasado && dtEnt && (dtEnt - _agora) < 48*3600*1000;
+        const alertCls = (atrasado||urgente) ? ' urgente' : '';
+        const avCls    = (atrasado||urgente) ? ' av-urgente' : '';
+        const badge    = atrasado ? '<span class="urgente-badge">ATRASADO</span>' : urgente ? '<span class="urgente-badge">URGENTE</span>' : '';
         return `
-        <div class="list-item">
-          <div class="li-icon" style="background:${p.status==='Cancelado'?'var(--red-l)':'var(--pink-l)'}" onclick="editarPedido('${p.id}')">
-            ${p.status==='Cancelado'?'❌':'🎈'}
-          </div>
+        <div class="list-item${alertCls}">
+          <div class="li-avatar${avCls}" onclick="editarPedido('${p.id}')">${p.status==='Cancelado'?'✕':ini}</div>
           <div class="li-info" onclick="editarPedido('${p.id}')">
-            <div class="li-title">${p.cliente}</div>
-            <div class="li-sub">${p.produto||'—'} · Entrega: ${fmtDate(p.dataEntrega)}</div>
-            <div style="margin-top:3px">${statusBadge(p.status)}</div>
+            <div class="li-title">${p.cliente}${badge}</div>
+            <div class="li-sub">${p.produto||'—'}</div>
+            <div style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+              ${statusBadge(p.status)}<span style="font-size:10px;color:var(--gray-d)">· ${fmtDate(p.dataEntrega)}</span>
+            </div>
           </div>
           <div class="li-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
             <div class="li-value" onclick="editarPedido('${p.id}')">${fmt(p.valor)}</div>
-            ${restante>0?`<div style="font-size:10px;color:var(--orange);font-weight:600">Falta ${fmt(restante)}</div>`:`<div style="font-size:10px;color:var(--green);font-weight:600">✅ Quitado</div>`}
-            <button onclick="event.stopPropagation();gerarRecibo('${p.id}')" style="font-size:10px;background:var(--pink-l);color:var(--pink);border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700">🧾 Recibo</button>
-            <button onclick="event.stopPropagation();enviarReciboWhatsApp('${p.id}')" style="font-size:10px;background:#dcfce7;color:#15803d;border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700">💬 WhatsApp</button>
-            <button onclick="event.stopPropagation();gerarImagemRecibo('${p.id}')" style="font-size:10px;background:#e0f2fe;color:#0369a1;border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700">🖼️ Imagem</button>
+            ${restante>0.01?`<div style="font-size:10px;color:var(--orange);font-weight:600">Falta ${fmt(restante)}</div>`:`<div style="font-size:10px;color:var(--green);font-weight:600">✅ Quitado</div>`}
+            ${p.custo?`<span style="font-size:10px;color:${((p.valor||0)-(p.custo||0))>=0?'var(--green)':'var(--red)'};font-weight:700">💰 ${fmt((p.valor||0)-(p.custo||0))}</span>`:''}
+            <div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end;margin-top:2px">
+              <button onclick="event.stopPropagation();gerarImagemRecibo('${p.id}')" style="font-size:10px;background:var(--pink-l);color:var(--pink);border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700">🖼️ Recibo</button>
+              <button onclick="event.stopPropagation();enviarLembreteWhatsApp('${p.id}')" style="font-size:10px;background:#dcfce7;color:#15803d;border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700">💬 Lembrete</button>
+              <button onclick="event.stopPropagation();duplicarPedido('${p.id}')" style="font-size:10px;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700">📋 Duplic.</button>
+            </div>
             ${p.status==='Cancelado'?`<button onclick="excluirPedidoPermanente('${p.id}')" style="font-size:10px;background:var(--red-l);color:var(--red);border:none;border-radius:10px;padding:2px 8px;cursor:pointer;font-weight:700">🗑️ Excluir</button>`:''}
           </div>
         </div>`;
@@ -1813,6 +1923,17 @@ function recalcularTotalManual() {
   if (valorHid) valorHid.value = man;
 }
 
+function calcularLucro() {
+  const valor = parseFloat(document.getElementById('p-valor')?.value) || parseFloat(document.getElementById('p-valor-manual')?.value) || 0;
+  const custo = parseFloat(document.getElementById('p-custo')?.value) || 0;
+  const lucro = valor - custo;
+  const el = document.getElementById('p-lucro-display');
+  if (el) {
+    el.textContent = 'R$ ' + lucro.toFixed(2).replace('.',',');
+    el.style.color = lucro >= 0 ? 'var(--green)' : '#EF4444';
+  }
+}
+
 function coletarItensPedido() {
   const rows = document.querySelectorAll('#p-itens-lista .item-pedido-row');
   const itens = [];
@@ -1857,6 +1978,7 @@ function salvarPedido() {
     obs:        document.getElementById('p-obs').value,
     itens:      itensColetados,
     materiais:  coletarMateriaisPedido(),
+    custo:      parseFloat(document.getElementById('p-custo')?.value) || 0,
     criadoEm:   id ? (pedidos.find(p=>p.id===id)||{}).criadoEm : new Date().toISOString(),
   };
 
@@ -1869,6 +1991,10 @@ function salvarPedido() {
       data: today(), pgto: obj.pgto,
     });
     toast(`💰 Sinal de ${fmt(obj.sinal)} lançado no Financeiro!`);
+  }
+  // Auto-status: sinal recebido → muda Novo para Em andamento
+  if (obj.sinal > 0 && obj.status === 'Novo') {
+    obj.status = 'Em andamento';
   }
   // Se mudou para Entregue → abre modal de baixa de estoque
   const anterior = pedidos.find(p=>p.id===id);
@@ -1894,18 +2020,9 @@ function salvarPedido() {
       toast('⚠️ Pedido entregue, mas sem itens no estoque para baixar.');
       renderScreen(currentScreen);
     } else {
-      // Sem estoque cadastrado, só lança financeiro direto
-      const rest = (obj.valor||0) - (obj.sinal||0);
-      if(rest>0) {
-        financeiro.unshift({
-          id: uid(), tipo:'Receita', cat:'Receita Vendas',
-          valor: rest,
-          desc: `Pagto final — ${obj.produto} | ${obj.cliente}`,
-          data: today(), pgto: obj.pgto||'PIX',
-        });
-      }
+      // Pedido entregue — pagamento registrado manualmente via "Recebido completo" ou Financeiro
       save();
-      toast('✅ Pedido entregue!' + (rest>0 ? ` ${fmt(rest)} lançado no Financeiro.` : ''));
+      toast('✅ Pedido marcado como Entregue! Use "Recebido completo" para registrar o pagamento.');
       renderScreen(currentScreen);
     }
   } else {
@@ -1927,6 +2044,25 @@ function editarPedido(id) {
   document.getElementById('p-status').value   = p.status||'Novo';
   document.getElementById('p-pgto').value     = p.pgto||'PIX';
   document.getElementById('p-obs').value      = p.obs||'';
+  document.getElementById('p-custo').value    = p.custo||'';
+  setTimeout(calcularLucro, 60);
+  // Histórico do cliente
+  const nomeCliente = p.cliente || '';
+  const elHist = document.getElementById('cliente-historico');
+  if (elHist) {
+    if (nomeCliente) {
+      const historico = pedidos.filter(x => x.id !== p.id && (x.cliente||'').toLowerCase() === nomeCliente.toLowerCase());
+      const totalGasto = historico.reduce((s,x) => s+(x.valor||0), 0);
+      if (historico.length > 0) {
+        elHist.style.display = 'block';
+        elHist.innerHTML = `<span style="font-size:11px;color:#888">👤 ${nomeCliente} já fez <b>${historico.length}</b> pedido(s) — total: <b style="color:var(--pink)">R$ ${totalGasto.toFixed(2).replace('.',',')}</b></span>`;
+      } else {
+        elHist.style.display = 'none';
+      }
+    } else {
+      elHist.style.display = 'none';
+    }
+  }
   // Carrega itens do pedido
   setTimeout(() => {
     popularItensPedido(p.itens||[]);
@@ -1941,7 +2077,104 @@ function editarPedido(id) {
   // Mostra botão excluir e WhatsApp apenas ao editar
   document.getElementById('btn-excluir-pedido').style.display = 'inline-flex';
   document.getElementById('btn-whats-group').style.display = 'flex';
+  document.getElementById('btn-recebido-completo').style.display = 'block';
   openModal('modal-pedido', false);
+}
+
+
+function receberCompleto() {
+  const id = document.getElementById('p-id').value;
+  const p = pedidos.find(x => x.id === id);
+  if (!p) return;
+  const restante = (p.valor||0) - (p.sinal||0); // calcula ANTES de atualizar sinal
+  p.sinal = p.valor;
+  p.status = 'Entregue';
+  // Cria lançamento no financeiro para o valor restante recebido
+  if (restante > 0.01) {
+    financeiro.unshift({
+      id: uid(), tipo:'Receita', cat:'Receita Vendas',
+      valor: restante,
+      desc: `Pagto final — ${p.produto||'Pedido'} | ${p.cliente}`,
+      data: today(), pgto: p.pgto || 'PIX',
+    });
+  }
+  save(); // era salvarDados() — função inexistente (bug corrigido)
+  // Atualiza campos na tela
+  document.getElementById('p-sinal').value = p.valor;
+  document.getElementById('p-status').value = 'Entregue';
+  const el = document.getElementById('p-restante');
+  if (el) el.textContent = 'R$ 0,00';
+  toast('✅ Recebido! ' + (restante > 0.01 ? fmt(restante) + ' lançado no Financeiro.' : 'Pagamento já estava registrado.'));
+  renderPedidos();
+}
+
+
+function duplicarPedido(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p) return;
+  const novo = Object.assign({}, p, {
+    id: uid(),
+    status: 'Novo',
+    sinal: 0,
+    dataEntrega: '',
+    criadoEm: new Date().toISOString(),
+  });
+  pedidos.unshift(novo);
+  save();
+  renderPedidos();
+  toast('📋 Pedido duplicado! Abra para definir a nova data de entrega.');
+}
+
+function enviarLembreteWhatsApp(id) {
+  const p = pedidos.find(x => x.id === id);
+  if (!p) return;
+  const dataEnt = p.dataEntrega ? new Date(p.dataEntrega+'T12:00').toLocaleDateString('pt-BR') : '—';
+  const restante = (p.valor||0) - (p.sinal||0);
+  const fmtR = v => 'R$ ' + (v||0).toFixed(2).replace('.', ',');
+  const produto = p.produto || (p.itens && p.itens.length ? p.itens.map(i=>i.nome).join(', ') : 'seu pedido');
+  const pgto = p.pgto || 'PIX';
+  const lines = [
+    `Oi ${p.cliente||''}! 🎈`,
+    ``,
+    `Passando para confirmar seu pedido:`,
+    `📦 *${produto}*`,
+    `📅 Entrega: *${dataEnt}*`,
+    restante > 0.01
+      ? `💰 Valor restante: *${fmtR(restante)}* (${pgto})`
+      : `✅ Pagamento: *Quitado*`,
+    p.obs ? `📝 _${p.obs}_` : '',
+    ``,
+    `Confirma? 😊`,
+    ``,
+    `_Tia Sú — Balões & Personalizados_ 🎈`,
+  ].filter(l => l !== '' || lines).join('
+').replace(/
+{3,}/g, '
+
+');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(lines).then(() => {
+      toast('📋 Lembrete copiado! Cole no WhatsApp (Ctrl+V)');
+    }).catch(() => _mostrarTextoParaCopiar(lines));
+  } else {
+    _mostrarTextoParaCopiar(lines);
+  }
+}
+
+function calcPrecoRapido() {
+  const custo = parseFloat(document.getElementById('calc-custo')?.value) || 0;
+  const horas = parseFloat(document.getElementById('calc-horas')?.value) || 0;
+  const valorHora = parseFloat(document.getElementById('calc-valor-hora')?.value) || 0;
+  const margem = parseFloat(document.getElementById('calc-margem')?.value) || 30;
+  const custoMO = horas * valorHora;
+  const custoTotal = custo + custoMO;
+  const preco = custoTotal > 0 ? custoTotal / (1 - margem/100) : 0;
+  const res = document.getElementById('calc-resultado');
+  const brk = document.getElementById('calc-breakdown');
+  if (res) res.textContent = 'R$ ' + preco.toFixed(2).replace('.',',');
+  if (brk) brk.innerHTML = custoTotal > 0
+    ? `Material: R$ ${custo.toFixed(2).replace('.',',')} + Mão de obra: R$ ${custoMO.toFixed(2).replace('.',',')} = Custo total: R$ ${custoTotal.toFixed(2).replace('.',',')}`
+    : '';
 }
 
 // ── KANBAN ────────────────────────────────────────────────────
@@ -2752,17 +2985,6 @@ function confirmarBaixaEstoque() {
   const idx = pedidos.findIndex(x => x.id === p.id);
   if (idx >= 0) pedidos[idx] = p;
 
-  // Lança restante no financeiro
-  const rest = (p.valor||0) - (p.sinal||0);
-  if (rest > 0) {
-    financeiro.unshift({
-      id: uid(), tipo: 'Receita', cat: 'Receita Vendas',
-      valor: rest,
-      desc: `Pagto final — ${p.produto} | ${p.cliente}`,
-      data: today(), pgto: p.pgto || 'PIX',
-    });
-  }
-
   save();
   closeModal('modal-baixa');
   pendingEntregue = null;
@@ -2770,9 +2992,9 @@ function confirmarBaixaEstoque() {
 
   // Toast com resumo
   if (log.length > 0) {
-    toast(`✅ Entregue! ${log.length} item(ns) baixado(s) do estoque.`);
+    toast(`✅ Entregue! ${log.length} item(ns) baixado(s) do estoque. Use "Recebido completo" para registrar o pagamento.`);
   } else {
-    toast('✅ Pedido marcado como Entregue!');
+    toast('✅ Pedido marcado como Entregue! Use "Recebido completo" para registrar o pagamento.');
   }
 
   // Alerta se ficou abaixo do mínimo
@@ -3007,6 +3229,121 @@ function filtrarPorPeriodo(arr, campoData) {
 
 function destroyChart(id) {
   if (_charts[id]) { try { _charts[id].destroy(); } catch(e) {} delete _charts[id]; }
+}
+
+
+function renderRelatorios() {
+  const body = document.getElementById('relatorios-body');
+  if (!body) return;
+
+  // Agrupa pedidos por mês
+  const meses = {};
+  pedidos.forEach(p => {
+    if (!p.dataEntrega && !p.criadoEm) return;
+    const dataStr = p.dataEntrega || p.criadoEm.slice(0,10);
+    const data = new Date(dataStr + 'T12:00');
+    const key = data.getFullYear() + '-' + String(data.getMonth()+1).padStart(2,'0');
+    if (!meses[key]) meses[key] = {faturamento:0, custos:0, qtd:0, entregues:0};
+    meses[key].faturamento += p.valor||0;
+    meses[key].custos += p.custo||0;
+    meses[key].qtd++;
+    if (p.status==='Entregue') meses[key].entregues++;
+  });
+
+  const keys = Object.keys(meses).sort().reverse();
+  const fmtMes = k => {
+    const parts = k.split('-');
+    return new Date(parseInt(parts[0]), parseInt(parts[1])-1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+  };
+  const fmtR = v => 'R$ ' + (v||0).toFixed(2).replace('.',',');
+
+  let html = '';
+
+  // Resumo total
+  const totalFat = pedidos.reduce((s,p)=>s+(p.valor||0),0);
+  const totalCusto = pedidos.reduce((s,p)=>s+(p.custo||0),0);
+  const totalLucro = totalFat - totalCusto;
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px">'
+    + '<div style="background:var(--pink-l);border-radius:14px;padding:14px;text-align:center">'
+    + '<div style="font-size:10px;color:#888;font-weight:700">FATURAMENTO TOTAL</div>'
+    + '<div style="font-size:20px;font-weight:700;color:var(--pink)">' + fmtR(totalFat) + '</div></div>'
+    + '<div style="background:#f0fdf4;border-radius:14px;padding:14px;text-align:center">'
+    + '<div style="font-size:10px;color:#888;font-weight:700">LUCRO TOTAL</div>'
+    + '<div style="font-size:20px;font-weight:700;color:#22C55E">' + fmtR(totalLucro) + '</div></div>'
+    + '</div>';
+
+  // Por mês
+  keys.forEach(k => {
+    const m = meses[k];
+    const lucro = m.faturamento - m.custos;
+    const taxa = m.qtd > 0 ? Math.round(m.entregues/m.qtd*100) : 0;
+    html += '<div style="background:white;border-radius:16px;border:1px solid #f0f0f0;padding:16px;margin-bottom:12px">'
+      + '<div style="font-weight:700;font-size:14px;color:var(--brown);margin-bottom:12px;text-transform:capitalize">' + fmtMes(k) + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">'
+      + '<div style="text-align:center"><div style="font-size:9px;color:#888">FATURAMENTO</div><div style="font-size:15px;font-weight:700;color:var(--pink)">' + fmtR(m.faturamento) + '</div></div>'
+      + '<div style="text-align:center"><div style="font-size:9px;color:#888">CUSTO</div><div style="font-size:15px;font-weight:700;color:#F59E0B">' + fmtR(m.custos) + '</div></div>'
+      + '<div style="text-align:center"><div style="font-size:9px;color:#888">LUCRO</div><div style="font-size:15px;font-weight:700;color:' + (lucro>=0?'#22C55E':'#EF4444') + '">' + fmtR(lucro) + '</div></div>'
+      + '</div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:11px;color:#888;border-top:1px solid #f5f5f5;padding-top:8px">'
+      + '<span>📦 ' + m.qtd + ' pedido(s)</span>'
+      + '<span>✅ ' + m.entregues + ' entregue(s)</span>'
+      + (m.qtd>0 ? '<span>🎯 ' + taxa + '% taxa</span>' : '')
+      + '</div></div>';
+  });
+
+  if (keys.length === 0) {
+    html = '<p style="text-align:center;color:#888;padding:40px">Nenhum pedido com data cadastrada ainda.</p>';
+  }
+
+  // Botão exportar
+  html += '<button class="btn btn-pink" onclick="exportarRelatorio()" style="width:100%;margin-top:8px">📋 Copiar relatório (texto)</button>';
+
+  body.innerHTML = html;
+}
+
+function exportarRelatorio() {
+  const totalFat = pedidos.reduce((s,p)=>s+(p.valor||0),0);
+  const totalCusto = pedidos.reduce((s,p)=>s+(p.custo||0),0);
+  const totalLucro = totalFat - totalCusto;
+  const fmtR = v => 'R$ ' + (v||0).toFixed(2).replace('.',',');
+
+  let texto = '📊 RELATÓRIO TIA SÚ\n';
+  texto += '================================\n';
+  texto += 'Gerado em: ' + new Date().toLocaleDateString('pt-BR') + '\n';
+  texto += '================================\n\n';
+  texto += '💰 Faturamento total: ' + fmtR(totalFat) + '\n';
+  texto += '📦 Custo total: ' + fmtR(totalCusto) + '\n';
+  texto += '🟢 Lucro total: ' + fmtR(totalLucro) + '\n';
+  texto += '📋 Total de pedidos: ' + pedidos.length + '\n\n';
+
+  const meses = {};
+  pedidos.forEach(p => {
+    if (!p.dataEntrega && !p.criadoEm) return;
+    const dataStr = p.dataEntrega || p.criadoEm.slice(0,10);
+    const data = new Date(dataStr + 'T12:00');
+    const key = data.getFullYear() + '-' + String(data.getMonth()+1).padStart(2,'0');
+    if (!meses[key]) meses[key] = {fat:0, custo:0, qtd:0, entregues:0};
+    meses[key].fat += p.valor||0;
+    meses[key].custo += p.custo||0;
+    meses[key].qtd++;
+    if (p.status==='Entregue') meses[key].entregues++;
+  });
+
+  Object.keys(meses).sort().reverse().forEach(k => {
+    const m = meses[k];
+    const parts = k.split('-');
+    const nomeMes = new Date(parseInt(parts[0]), parseInt(parts[1])-1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+    texto += '--- ' + nomeMes.toUpperCase() + ' ---\n';
+    texto += '  Fat: ' + fmtR(m.fat) + ' | Custo: ' + fmtR(m.custo) + ' | Lucro: ' + fmtR(m.fat-m.custo) + '\n';
+    texto += '  Pedidos: ' + m.qtd + ' | Entregues: ' + m.entregues + '\n\n';
+  });
+
+  navigator.clipboard.writeText(texto).then(() => {
+    toast('📋 Relatório copiado!');
+  }).catch(() => {
+    // fallback: mostrar em alert
+    alert(texto);
+  });
 }
 
 function renderAnalise() {
@@ -3381,8 +3718,8 @@ async function gerarImagemRecibo(id) {
     ctx.font='400 10px Nunito,sans-serif'; ctx.fillStyle='#aaa'; ctx.textAlign='center';
     ctx.fillText('Estrada Antônio José Santana, 659 - Agronomia - Porto Alegre',CX,y);
 
-    // Exportar cortado na altura real
-    const fc=document.createElement('canvas'); fc.width=W; fc.height=Math.min(y+30,h);
+    // Exportar — y+120 garante que os cantos arredondados do card sempre aparecem
+    const fc=document.createElement('canvas'); fc.width=W; fc.height=Math.min(y+120,h);
     fc.getContext('2d').drawImage(cv,0,0);
     fc.toBlob(async blob=>{
       const nome=(p.cliente||'Pedido').replace(/[^a-zA-ZÀ-ÿ0-9]/g,'_');
@@ -3694,7 +4031,7 @@ async function testarApiKey() {
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method:'POST',
-      headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json','anthropic-dangerous-direct-browser-calls':'true'},
+      headers:{'x-api-key':key,'anthropic-version':'2023-06-01','content-type':'application/json'},
       body:JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:10,messages:[{role:'user',content:'ping'}]})
     });
     if (r.ok) {
@@ -3761,7 +4098,6 @@ async function processarFotoNF(event) {
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
           'content-type': 'application/json',
-          'anthropic-dangerous-direct-browser-calls': 'true'
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
@@ -4055,6 +4391,41 @@ if (SYNC_URL) {
 </div>
 
 <!-- MODAL RESET -->
+<!-- Modal Calculadora Rápida -->
+<div class="modal-overlay" id="modal-calculadora" style="z-index:300">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🧮 Calculadora Rápida</div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">CUSTO DOS MATERIAIS (R$)</label>
+        <input type="number" id="calc-custo" class="form-input" placeholder="0,00" step="0.01" oninput="calcPrecoRapido()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">HORAS DE TRABALHO</label>
+        <input type="number" id="calc-horas" class="form-input" placeholder="0" step="0.5" oninput="calcPrecoRapido()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">SEU VALOR/HORA (R$)</label>
+        <input type="number" id="calc-valor-hora" class="form-input" placeholder="ex: 25,00" step="0.01" oninput="calcPrecoRapido()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">MARGEM DE LUCRO DESEJADA (%)</label>
+        <input type="number" id="calc-margem" class="form-input" placeholder="ex: 30" step="1" value="30" oninput="calcPrecoRapido()">
+      </div>
+      <div style="background:var(--pink-l);border-radius:16px;padding:16px;text-align:center;margin-top:8px">
+        <div style="font-size:12px;color:#888;margin-bottom:4px">PREÇO SUGERIDO DE VENDA</div>
+        <div id="calc-resultado" style="font-size:32px;font-weight:700;color:var(--pink)">R$ 0,00</div>
+        <div id="calc-breakdown" style="font-size:11px;color:#888;margin-top:8px"></div>
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;gap:8px;padding:12px 16px">
+      <button class="btn" onclick="closeModal('modal-calculadora')" style="flex:1">Fechar</button>
+      <button class="btn btn-pink" onclick="navigate('preco')" style="flex:2">Ver calculadora completa</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-reset" style="z-index:300">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -4089,58 +4460,4 @@ if (SYNC_URL) {
         <strong>Como obter:</strong><br>
         1. Acesse <strong>platform.anthropic.com</strong><br>
         2. Crie conta e vá em <strong>API Keys → Create Key</strong><br>
-        3. Cole a chave abaixo (começa com <code>sk-ant-</code>)
-      </p>
-      <div class="form-group">
-        <label class="form-label">Sua chave de API</label>
-        <input class="form-input" id="apikey-input" type="password" placeholder="sk-ant-api03-..." autocomplete="off">
-      </div>
-      <p style="font-size:11px;color:var(--gray-d)">🔒 Salva só neste dispositivo. Nunca enviada a nenhum servidor nosso.</p>
-      <div id="apikey-test-result" style="display:none;margin-top:10px;padding:8px 12px;border-radius:8px;font-size:12px;font-weight:600"></div>
-    </div>
-    <div class="modal-footer" style="flex-direction:column;gap:8px">
-      <button class="btn btn-outline" onclick="testarApiKey()" style="width:100%">🔌 Testar conexão</button>
-      <div style="display:flex;gap:8px;width:100%">
-        <button class="btn" onclick="closeModal('modal-apikey')" style="flex:1">Cancelar</button>
-        <button class="btn btn-pink" onclick="salvarApiKey()" style="flex:2">💾 Salvar chave</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL COMPRAS -->
-<div class="modal-overlay" id="modal-compras">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <div class="modal-title" style="display:flex;justify-content:space-between;align-items:center">
-      <span>🛒 Registrar Compra</span>
-      <button onclick="mostrarConfigApiKey()" style="background:none;border:none;font-size:20px;cursor:pointer" title="Configurar chave de API">🔑</button>
-    </div>
-    <div class="modal-body">
-      <input type="hidden" id="c-id">
-
-      <!-- Foto da NF -->
-      <div class="form-group">
-        <label class="form-label">📸 Foto da NF / Cupom (opcional)</label>
-        <div id="c-foto-preview" style="display:none;margin-bottom:8px">
-          <img id="c-foto-img" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px" />
-          <button onclick="limparFotoCompra()" style="background:none;border:none;color:var(--red);font-size:12px;cursor:pointer;margin-top:4px">✕ Remover foto</button>
-        </div>
-        <input type="file" id="c-foto-input" accept="image/*" style="display:none" onchange="processarFotoNF(event)">
-        <button class="btn btn-pink" style="width:100%" onclick="document.getElementById('c-foto-input').click()">
-          📷 Foto/Arquivo NF — IA preenche automático
-        </button>
-        <div id="c-ia-status" style="display:none;text-align:center;padding:10px;color:var(--pink);font-size:13px">
-          <span id="c-ia-msg">🤖 Lendo NF...</span>
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Fornecedor *</label>
-        <input class="form-input" id="c-forn" placeholder="Ex: Distribuidora ABC, Loja Balloonz...">
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Categoria</label>
-        <select class="form-select" id="c-cat">
-          <option value="Material Criação">Material Criação (balões, tintas
+        3. Cole a chave abaixo (começa com <c
