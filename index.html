@@ -420,15 +420,21 @@ html, body {
 /* ── FINANCEIRO SUMMARY ── */
 .fin-summary {
   display: grid; grid-template-columns: 1fr 1fr 1fr;
-  gap: 8px; padding: 12px 16px 0;
+  gap: 6px; padding: 12px 12px 0;
 }
 .fin-kpi {
   border-radius: var(--radius-s);
-  padding: 10px;
+  padding: 8px 6px;
   text-align: center;
 }
-.fin-kpi-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; }
-.fin-kpi-value { font-size: 15px; font-weight: 800; margin-top: 2px; }
+.fin-kpi-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+.fin-kpi-value { font-size: 13px; font-weight: 800; margin-top: 2px; }
+@media (min-width: 400px) {
+  .fin-summary { padding: 12px 16px 0; gap: 8px; }
+  .fin-kpi { padding: 10px; }
+  .fin-kpi-label { font-size: 9px; letter-spacing: 0.4px; }
+  .fin-kpi-value { font-size: 15px; }
+}
 
 /* ── ESTOQUE ── */
 .estoque-alert {
@@ -1310,6 +1316,7 @@ html, body {
           <label class="form-label" style="margin:0">📦 Materiais usados</label>
           <button type="button" onclick="adicionarMaterialPedido()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;border:1px dashed var(--cyan);color:var(--cyan-d)">+ Adicionar</button>
         </div>
+        <datalist id="estoque-datalist"></datalist>
         <div id="p-materiais-lista" style="display:flex;flex-direction:column;gap:6px"></div>
         <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">🟡 Pendente = ainda não comprado | 🟢 Coberto = já no estoque. Pode adicionar mesmo sem ter em estoque.</div>
       </div>
@@ -1679,6 +1686,7 @@ function resetModal(id) {
     document.getElementById('btn-recebido-completo').style.display = 'none';
     const histEl = document.getElementById('cliente-historico');
     if (histEl) histEl.style.display = 'none';
+    popularDatalistEstoque(); // preenche autocomplete com itens do estoque
     setTimeout(()=>{
       const itens = document.getElementById('p-itens-lista');
       if(itens) itens.innerHTML = '';
@@ -2654,22 +2662,63 @@ function renderCatalogo() {
 
 
 // ── MATERIAIS NO PEDIDO ──────────────────────────────────────
+// Verifica se nome bate com algum item do estoque com quantidade suficiente
+function checarEstoqueNome(nome, qtd) {
+  if (!nome || !nome.trim() || !estoque.length) return 'pendente';
+  const nomeLow = nome.toLowerCase().trim();
+  const trecho  = nomeLow.slice(0, Math.max(4, Math.floor(nomeLow.length * 0.6)));
+  const est = estoque.find(e => {
+    const eLow = (e.nome || '').toLowerCase();
+    return eLow.includes(trecho) || nomeLow.includes(eLow.slice(0, Math.max(4, Math.floor(eLow.length * 0.6))));
+  });
+  return (est && (est.qtd || 0) >= (qtd || 1)) ? 'coberto' : 'pendente';
+}
+
+// Atualiza badge em tempo real quando o usuário digita nome ou quantidade
+function atualizarStatusMaterial(rowId) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  const nome   = row.querySelector('.mat-nome')?.value || '';
+  const qtd    = parseFloat(row.querySelector('.mat-qtd')?.value) || 1;
+  const status = checarEstoqueNome(nome, qtd);
+  row.dataset.status = status;
+  const badge = row.querySelector('.mat-badge');
+  if (badge) { badge.textContent = status === 'coberto' ? '🟢' : '🟡'; badge.title = status; }
+}
+
+// Popula datalist com nomes do estoque para autocomplete
+function popularDatalistEstoque() {
+  const dl = document.getElementById('estoque-datalist');
+  if (!dl) return;
+  dl.innerHTML = estoque.map(e => `<option value="${e.nome}">`).join('');
+}
+
 function adicionarMaterialPedido(nome='', qtd=1, status='pendente', matId='') {
   const lista = document.getElementById('p-materiais-lista');
   if (!lista) return;
+
+  // Popula datalist sempre que abrir
+  popularDatalistEstoque();
+
   const rowId = 'mrow-' + uid();
   const id    = matId || uid();
-  const icon  = status === 'coberto' ? '🟢' : '🟡';
+
+  // Se ainda não foi marcado como coberto, verifica agora contra o estoque
+  const statusFinal = status === 'coberto' ? 'coberto' : checarEstoqueNome(nome, qtd);
+  const icon = statusFinal === 'coberto' ? '🟢' : '🟡';
 
   const row = document.createElement('div');
   row.className = 'material-row';
   row.id = rowId;
   row.dataset.matId = id;
-  row.dataset.status = status;
+  row.dataset.status = statusFinal;
   row.innerHTML = `
-    <input type="text" class="mat-nome" value="${nome}" placeholder="Nome do material" autocomplete="off">
-    <input type="number" class="mat-qtd" value="${qtd}" min="0.1" step="0.1" placeholder="Qtd">
-    <span class="mat-badge" title="${status}">${icon}</span>
+    <input type="text" class="mat-nome" value="${nome}" placeholder="Nome do material"
+           list="estoque-datalist" autocomplete="off"
+           oninput="atualizarStatusMaterial('${rowId}')">
+    <input type="number" class="mat-qtd" value="${qtd}" min="0.1" step="0.1" placeholder="Qtd"
+           oninput="atualizarStatusMaterial('${rowId}')">
+    <span class="mat-badge" title="${statusFinal}">${icon}</span>
     <button class="material-del" onclick="document.getElementById('${rowId}').remove()">✕</button>
   `;
   lista.appendChild(row);
@@ -3204,12 +3253,27 @@ async function testarConexao() {
 
 // ── EXPORT / IMPORT ───────────────────────────────────────────
 function exportData() {
-  const data={pedidos,financeiro,estoque,catalogo,exportadoEm:new Date().toISOString()};
-  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const data={pedidos,financeiro,estoque,catalogo,clientes,exportadoEm:new Date().toISOString()};
+  const json=JSON.stringify(data,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const fn=`TiaSu_backup_${today()}.json`;
+
+  // Web Share API — funciona no celular (Android e iOS >= 15)
+  if (navigator.share && navigator.canShare && navigator.canShare({files:[new File([blob],fn,{type:'application/json'})]})) {
+    navigator.share({files:[new File([blob],fn,{type:'application/json'})],title:'Backup Tia Sú'})
+      .then(()=>toast('✅ Backup compartilhado!'))
+      .catch(()=>{}); // cancelado pelo usuário
+    return;
+  }
+
+  // Fallback desktop — download normal
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=`TiaSu_backup_${today()}.json`;
-  a.click(); toast('💾 Dados exportados!');
+  a.download=fn;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(a.href);},1000);
+  toast('💾 Dados exportados!');
 }
 
 function importData() { document.getElementById('import-input').click(); }
