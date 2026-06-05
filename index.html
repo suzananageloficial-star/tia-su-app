@@ -659,7 +659,11 @@ html, body {
 }
 
 /* ── TELA CHEIA NO COMPUTADOR ── */
+/* Sidebar footer: escondido no mobile */
+#sidebar-footer { display: none; }
 @media (min-width: 768px) {
+  #sidebar-footer { display: flex; }
+
   #app {
     max-width: 100%;
     width: 100%;
@@ -887,6 +891,7 @@ html, body {
         <div class="page-sub" id="fin-periodo">Mês atual</div>
       </div>
       <div class="fin-summary" id="fin-summary"></div>
+      <div id="fin-reconcil"></div>
       <div class="section-title">Lançamentos</div>
       <div class="card"><div id="fin-list"></div></div>
       <div style="height:80px"></div>
@@ -987,9 +992,13 @@ html, body {
       </div>
       <div id="compras-resumo" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px"></div>
       <div id="lista-compras-section" style="display:none">
-        <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
           <span>🟡 Precisa comprar</span>
-          <span id="lista-compras-count" style="font-size:11px;color:var(--gray-d);font-weight:600"></span>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span id="lista-compras-count" style="font-size:11px;color:var(--gray-d);font-weight:600"></span>
+            <button onclick="exportarListaPDF()" style="background:#E53935;color:white;border:none;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">📄 PDF</button>
+            <button onclick="exportarListaExcel()" style="background:#217346;color:white;border:none;border-radius:20px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">📊 Excel</button>
+          </div>
         </div>
         <div class="card" id="lista-compras-card" style="margin-bottom:16px"></div>
       </div>
@@ -1003,6 +1012,14 @@ html, body {
       <div class="page-header">
         <div class="page-title">📊 Relatórios</div>
         <div class="page-sub">Visão financeira por período</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+        <button onclick="exportarExcel()" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:#217346;color:white;border:none;border-radius:12px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;min-width:140px">
+          <span>📊</span><span>Exportar Excel<br><span style="font-weight:400;font-size:11px">todos os dados</span></span>
+        </button>
+        <button onclick="exportData()" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:#1565C0;color:white;border:none;border-radius:12px;padding:12px;font-size:13px;font-weight:700;cursor:pointer;min-width:140px">
+          <span>💾</span><span>Backup JSON<br><span style="font-weight:400;font-size:11px">cópia de segurança</span></span>
+        </button>
       </div>
       <div id="relatorios-body"></div>
       <div style="height:80px"></div>
@@ -1204,6 +1221,23 @@ html, body {
       <span class="nav-icon">📊</span>
       <span class="nav-label">Relat.</span>
     </button>
+
+    <!-- Rodapé da sidebar (desktop) -->
+    <div id="sidebar-footer" style="margin-top:auto;padding:10px 8px;border-top:1px solid var(--gray-l);display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px">
+        <span style="font-size:10px;color:var(--gray-d);font-weight:600">FERRAMENTAS</span>
+        <span id="sync-indicator-side" style="font-size:13px;cursor:pointer" onclick="syncFromCloud()" title="Sincronizar">—</span>
+      </div>
+      <button onclick="exportarExcel()" style="display:flex;align-items:center;gap:8px;background:var(--pink-l);color:var(--pink-d);border:none;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;width:100%;text-align:left">
+        <span>📊</span><span>Exportar Excel</span>
+      </button>
+      <button onclick="exportData()" style="display:flex;align-items:center;gap:8px;background:var(--gray-bg);color:var(--gray-d);border:none;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;width:100%;text-align:left">
+        <span>💾</span><span>Backup JSON</span>
+      </button>
+      <button onclick="openSyncConfig()" style="display:flex;align-items:center;gap:8px;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;width:100%;text-align:left">
+        <span>☁️</span><span>Configurar sync</span>
+      </button>
+    </div>
   </nav>
 </div>
 
@@ -1256,7 +1290,7 @@ html, body {
           </div>
           <div class="form-row" style="margin:0">
             <div class="form-group">
-              <label class="form-label">Sinal pago (R$)</label>
+              <label class="form-label">Valor pago (R$)</label>
               <input class="form-input" id="p-sinal" type="number" placeholder="0,00" oninput="recalcularTotal()" step="0.01">
             </div>
             <div class="form-group">
@@ -1273,7 +1307,7 @@ html, body {
               <input class="form-input" id="p-valor-manual" type="number" placeholder="0,00" oninput="recalcularTotalManual();calcularLucro();" step="0.01">
             </div>
             <div class="form-group">
-              <label class="form-label">Sinal pago (R$)</label>
+              <label class="form-label">Valor pago (R$)</label>
               <input class="form-input" id="p-sinal-manual" type="number" placeholder="0,00" step="0.01">
             </div>
           </div>
@@ -1683,7 +1717,7 @@ function renderScreen(s) {
   if (s==='dashboard')  renderDashboard();
   if (s==='pedidos')    renderPedidos();
   if (s==='kanban')     renderKanban();
-  if (s==='financeiro') renderFinanceiro();
+  if (s==='financeiro') { renderFinanceiro(); checarRecebimentos(); }
   if (s==='estoque')    renderEstoque();
   if (s==='preco')      { renderCatalogo(); setTimeout(()=>setNivel(_nivel),50); }
   if (s==='compras')    renderCompras();
@@ -1707,8 +1741,14 @@ function openFab() {
 // ── MODAL ─────────────────────────────────────────────────────
 function openModal(id, isNew) {
   if (isNew) resetModal(id);
-  document.getElementById(id).classList.add('open');
-  document.getElementById(id).onclick = e => { if(e.target===e.currentTarget) closeModal(id); };
+  const el = document.getElementById(id);
+  el.classList.add('open');
+  // modal-pedido é um formulário longo — NÃO fecha ao clicar no fundo (evita perda de dados)
+  if (id !== 'modal-pedido') {
+    el.onclick = e => { if(e.target===e.currentTarget) closeModal(id); };
+  } else {
+    el.onclick = null; // só fecha pelo botão Fechar
+  }
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
@@ -2071,8 +2111,12 @@ function salvarPedido() {
     criadoEm:   id ? (pedidos.find(p=>p.id===id)||{}).criadoEm : new Date().toISOString(),
   };
 
-  // Auto-lança sinal no financeiro se novo e com sinal
-  if(!id && obj.sinal > 0) {
+  // Busca estado anterior (para comparar sinal)
+  const anterior = pedidos.find(p=>p.id===id);
+
+  // Auto-lança no financeiro — 3 regras:
+  if (!id && obj.sinal > 0) {
+    // Regra 1: NOVO pedido com sinal pago → lança sinal
     financeiro.unshift({
       id: uid(), tipo:'Receita', cat:'Receita Vendas',
       valor: obj.sinal,
@@ -2080,13 +2124,27 @@ function salvarPedido() {
       data: today(), pgto: obj.pgto,
     });
     toast(`💰 Sinal de ${fmt(obj.sinal)} lançado no Financeiro!`);
+  } else if (id && anterior) {
+    // Regra 2: ATUALIZAÇÃO — se valor pago aumentou, lança a diferença
+    const _sinalAnterior = anterior.sinal || 0;
+    const _sinalNovo     = obj.sinal || 0;
+    const _diff = Math.round((_sinalNovo - _sinalAnterior) * 100) / 100;
+    if (_diff > 0.01) {
+      financeiro.unshift({
+        id: uid(), tipo:'Receita', cat:'Receita Vendas',
+        valor: _diff,
+        desc: 'Recebimento — ' + (obj.produto||'Pedido') + ' | ' + obj.cliente,
+        data: today(), pgto: obj.pgto || 'Pix',
+      });
+      toast(`💰 R$ ${_diff.toFixed(2).replace('.',',')} lançado no Financeiro!`);
+    }
   }
+
   // Auto-status: sinal recebido → muda Novo para Em andamento
   if (obj.sinal > 0 && obj.status === 'Novo') {
     obj.status = 'Em andamento';
   }
   // Se mudou para Entregue → abre modal de baixa de estoque
-  const anterior = pedidos.find(p=>p.id===id);
   const virarEntregue = id && obj.status==='Entregue' && anterior?.status!=='Entregue';
 
   if(id) { const i=pedidos.findIndex(p=>p.id===id); if(i>=0) pedidos[i]=obj; }
@@ -2106,16 +2164,31 @@ function salvarPedido() {
   closeModal('modal-pedido');
 
   if (virarEntregue) {
-    // Abre modal para selecionar itens do estoque
-    if (estoque.length > 0) {
-      setTimeout(() => abrirModalBaixa(obj), 250);
-    } else if (obj.materiais && obj.materiais.length > 0) {
-      toast('⚠️ Pedido entregue, mas sem itens no estoque para baixar.');
-      renderScreen(currentScreen);
-    } else {
-      // Pedido entregue — pagamento registrado manualmente via "Recebido completo" ou Financeiro
+    // Regra 3: ao marcar Entregue, lança restante caso sinal ainda não cubra o total
+    // (se o usuário atualizou o sinal, a Regra 2 já lançou a diferença acima)
+    const _sinalAtual    = obj.sinal || 0;
+    const _anteriorSinal = anterior?.sinal || 0;
+    const _restanteVira  = Math.round(((obj.valor||0) - _sinalAtual) * 100) / 100;
+    const _diffJaLancado = Math.round((_sinalAtual - _anteriorSinal) * 100) / 100;
+    // Só lança o restante se a Regra 2 não cobriu tudo
+    if (_restanteVira > 0.01 && _diffJaLancado <= 0.01) {
+      financeiro.unshift({
+        id: uid(), tipo:'Receita', cat:'Receita Vendas',
+        valor: _restanteVira,
+        desc: 'Recebimento — ' + (obj.produto||'Pedido') + ' | ' + obj.cliente,
+        data: obj.dataEntrega || today(), pgto: obj.pgto || 'Pix',
+      });
+      obj.sinal = obj.valor; // marca como quitado
       save();
-      toast('✅ Pedido marcado como Entregue! Use "Recebido completo" para registrar o pagamento.');
+      toast('✅ Entregue! R$ ' + _restanteVira.toFixed(2).replace('.',',') + ' lançado no Financeiro.');
+    } else {
+      save();
+      toast('✅ Pedido marcado como Entregue!');
+    }
+    // Abre modal para baixa de estoque
+    if (estoque.length > 0) {
+      setTimeout(() => abrirModalBaixa(obj), 400);
+    } else {
       renderScreen(currentScreen);
     }
   } else {
@@ -3580,7 +3653,15 @@ function renderRelatorios() {
       _relBtn('var(--cyan)',   '👥','Clientes',   'histórico completo',    'clientes') +
       _relBtn('var(--brown)',  '🏭','Fornecedores','cadastro e compras',   'fornecedores') +
     '</div>' +
-    '<button onclick="exportarRelatorio()" style="width:100%;padding:10px;background:white;color:var(--gray-d);border:1.5px solid var(--gray);border-radius:10px;font-size:12px;font-weight:600;cursor:pointer">📋 Copiar resumo em texto</button>';
+    '<button onclick="exportarRelatorio()" style="width:100%;padding:10px;background:white;color:var(--gray-d);border:1.5px solid var(--gray);border-radius:10px;font-size:12px;font-weight:600;cursor:pointer">📋 Copiar resumo em texto</button>'+
+    '<div style="margin-top:10px">'+
+    '<div style="font-size:11px;font-weight:700;color:var(--gray-d);margin-bottom:8px">RELATÓRIO COMPLETO</div>'+
+    '<div style="display:flex;gap:8px">'+
+    '<button onclick="exportarPedidosExcel()" style="flex:1;padding:14px 8px;background:#217346;color:white;border:none;border-radius:14px;cursor:pointer;text-align:center;font-size:13px;font-weight:800">📊 Excel</button>'+
+    '<button onclick="gerarPDFPedidosCompleto()" style="flex:1;padding:14px 8px;background:var(--pink);color:white;border:none;border-radius:14px;cursor:pointer;text-align:center;font-size:13px;font-weight:800">📄 PDF</button>'+
+    '</div>'+
+    '<div style="font-size:10px;color:var(--gray-d);margin-top:5px;text-align:center">Todos os pedidos com materiais e valores</div>'+
+    '</div>';
 
   filtrarRelatorio();
 }
@@ -3742,6 +3823,175 @@ function gerarPDF(tipo) {
   w.document.write(_pdfBase(titulos[tipo], periodos, html));
   w.document.close();
   setTimeout(()=>w.print(), 600);
+}
+
+
+
+function exportarPedidosExcel() {
+  if (typeof XLSX === 'undefined') { toast('⌛ Aguarde o carregamento...'); return; }
+  const wb = XLSX.utils.book_new();
+  const DT = d => d ? new Date((d.slice(0,10))+'T12:00').toLocaleDateString('pt-BR') : '';
+
+  // ── Aba 1: Resumo por pedido ──────────────────────────────
+  const resumoHeader = [
+    ['#','Cliente','WhatsApp','Produto','Data Entrega','Status',
+     'Valor (R$)','Valor Pago (R$)','Restante (R$)','Custo (R$)','Lucro (R$)','Forma Pgto','Obs']
+  ];
+  const sorted = [...pedidos].sort((a,b) => {
+    const da = new Date((a.dataEntrega||a.criadoEm||'').slice(0,10)+'T12:00');
+    const db = new Date((b.dataEntrega||b.criadoEm||'').slice(0,10)+'T12:00');
+    return db - da;
+  });
+  const resumoRows = sorted.map((p, i) => {
+    const val  = p.valor||0;
+    const pago = p.sinal||0;
+    const rest = Math.max(0, val - pago);
+    const cust = p.custo||0;
+    return [
+      i+1, p.cliente||'', p.whats||'', p.produto||'', DT(p.dataEntrega),
+      p.status||'', val, pago, rest, cust, val-cust, p.pgto||'', p.obs||''
+    ];
+  });
+  // Totals row
+  const totVal  = sorted.reduce((s,p)=>s+(p.valor||0),0);
+  const totPago = sorted.reduce((s,p)=>s+(p.sinal||0),0);
+  const totRest = sorted.reduce((s,p)=>s+Math.max(0,(p.valor||0)-(p.sinal||0)),0);
+  const totCust = sorted.reduce((s,p)=>s+(p.custo||0),0);
+  resumoRows.push(['','','','','','TOTAL',totVal,totPago,totRest,totCust,totVal-totCust,'','']);
+
+  const ws1 = XLSX.utils.aoa_to_sheet([...resumoHeader, ...resumoRows]);
+  ws1['!cols'] = [
+    {wch:4},{wch:18},{wch:14},{wch:22},{wch:12},{wch:14},
+    {wch:11},{wch:12},{wch:11},{wch:10},{wch:10},{wch:12},{wch:20}
+  ];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Pedidos');
+
+  // ── Aba 2: Materiais por pedido ────────────────────────────
+  const matHeader = [['Cliente','Produto','Data Entrega','Status Pedido','Material','Qtd','Situação']];
+  const matRows = [];
+  sorted.forEach(p => {
+    const mats = p.materiais || [];
+    if (mats.length === 0) {
+      matRows.push([p.cliente||'',p.produto||'',DT(p.dataEntrega),p.status||'','(sem materiais)','','']);
+    } else {
+      mats.forEach(m => {
+        matRows.push([
+          p.cliente||'', p.produto||'', DT(p.dataEntrega), p.status||'',
+          m.nome||'', m.qtd||'1', m.status==='coberto' ? 'Coberto' : 'Pendente'
+        ]);
+      });
+    }
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet([...matHeader, ...matRows]);
+  ws2['!cols'] = [{wch:18},{wch:22},{wch:12},{wch:14},{wch:22},{wch:6},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Materiais por Pedido');
+
+  // ── Aba 3: Por cliente ─────────────────────────────────────
+  const cliMap = {};
+  sorted.forEach(p => {
+    const k = (p.cliente||'').trim() || '(sem cliente)';
+    if (!cliMap[k]) cliMap[k] = { fat:0, pago:0, qtd:0, ent:0 };
+    cliMap[k].fat  += p.valor||0;
+    cliMap[k].pago += p.sinal||0;
+    cliMap[k].qtd  += 1;
+    if (p.status === 'Entregue') cliMap[k].ent += 1;
+  });
+  const cliRows = Object.entries(cliMap)
+    .sort((a,b)=>b[1].fat-a[1].fat)
+    .map(([nome, d], i) => [i+1, nome, d.qtd, d.ent, d.fat, d.pago, Math.max(0,d.fat-d.pago)]);
+  const ws3 = XLSX.utils.aoa_to_sheet([
+    ['#','Cliente','Pedidos','Entregues','Faturamento (R$)','Valor Pago (R$)','A Receber (R$)'],
+    ...cliRows
+  ]);
+  ws3['!cols'] = [{wch:4},{wch:22},{wch:9},{wch:11},{wch:16},{wch:15},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Por Cliente');
+
+  XLSX.writeFile(wb, 'TiaSu_Pedidos_' + today() + '.xlsx');
+  toast('📊 Excel exportado com 3 abas!');
+}
+
+function gerarPDFPedidosCompleto() {
+  const R   = v => 'R$ ' + (parseFloat(v)||0).toFixed(2).replace('.', ',');
+  const DT  = d => d ? new Date((d.slice(0,10)) + 'T12:00').toLocaleDateString('pt-BR') : '—';
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Status badge colors
+  const STATUS_COR = {
+    'Novo':'#0EA5E9','Em andamento':'#F59E0B','Pronto':'#8B5CF6',
+    'Saiu para entrega':'#14B8A6','Entregue':'#22C55E','Cancelado':'#EF4444'
+  };
+
+  const sorted = [...pedidos].sort((a,b) => {
+    const da = new Date((a.dataEntrega||a.criadoEm||'').slice(0,10)+'T12:00');
+    const db = new Date((b.dataEntrega||b.criadoEm||'').slice(0,10)+'T12:00');
+    return db - da;
+  });
+
+  const totFat  = sorted.reduce((s,p) => s+(p.valor||0), 0);
+  const totCust = sorted.reduce((s,p) => s+(p.custo||0), 0);
+  const totLuc  = totFat - totCust;
+  const entregues = sorted.filter(p => p.status==='Entregue').length;
+  const hoje = new Date().toLocaleDateString('pt-BR');
+
+  // Build rows: each pedido gets a header row + material rows
+  let rows = '';
+  sorted.forEach((p, i) => {
+    const cor  = STATUS_COR[p.status] || '#888';
+    const mats = p.materiais || [];
+    const lucro = (p.valor||0) - (p.custo||0);
+    const nMats = mats.length;
+
+    // Pedido header row (spans materiais)
+    const rowspan = nMats > 0 ? nMats : 1;
+    const firstMat = nMats > 0 ? mats[0] : null;
+    const matStatus = s => s==='coberto' ? '<span style="color:#22C55E">✅ coberto</span>' : '<span style="color:#F59E0B">🟡 pendente</span>';
+
+    rows += '<tr style="background:#fdf0f5">' +
+      '<td rowspan="'+rowspan+'" style="font-weight:700;font-size:12px;color:#FF1F78;white-space:nowrap">'+esc(p.cliente||'—')+'</td>' +
+      '<td rowspan="'+rowspan+'" style="font-weight:600;font-size:11px">'+esc(p.produto||'—')+'</td>' +
+      '<td rowspan="'+rowspan+'" style="white-space:nowrap;font-size:11px">'+DT(p.dataEntrega)+'</td>' +
+      '<td rowspan="'+rowspan+'" style="font-size:11px"><span style="background:'+cor+';color:white;border-radius:8px;padding:2px 7px;font-size:10px;font-weight:700">'+esc(p.status||'')+'</span></td>' +
+      '<td rowspan="'+rowspan+'" style="font-weight:700;color:#FF1F78;white-space:nowrap">'+R(p.valor)+'</td>' +
+      '<td rowspan="'+rowspan+'" style="color:'+(lucro>=0?'#22C55E':'#EF4444')+';font-weight:600;white-space:nowrap">'+(p.custo?R(lucro):'—')+'</td>' +
+      (firstMat ?
+        '<td style="font-size:11px;padding:5px 8px">'+esc(firstMat.nome||'—')+'</td>' +
+        '<td style="text-align:center;font-size:11px">'+esc(firstMat.qtd||'1')+'</td>' +
+        '<td style="font-size:10px">'+matStatus(firstMat.status)+'</td>'
+      : '<td colspan="3" style="color:#ccc;font-size:11px;text-align:center">sem materiais</td>') +
+    '</tr>';
+
+    // Remaining material rows
+    for (let mi = 1; mi < nMats; mi++) {
+      const m = mats[mi];
+      rows += '<tr>' +
+        '<td style="font-size:11px;padding:5px 8px">'+esc(m.nome||'—')+'</td>' +
+        '<td style="text-align:center;font-size:11px">'+esc(m.qtd||'1')+'</td>' +
+        '<td style="font-size:10px">'+matStatus(m.status)+'</td>' +
+      '</tr>';
+    }
+  });
+
+  const html2 =
+    '<div class="sec"><div class="kgrid">' +
+      '<div class="kbox" style="background:#fff0f5"><div class="l">Faturamento</div><div class="v" style="color:#FF1F78">'+R(totFat)+'</div></div>' +
+      '<div class="kbox" style="background:#f0fdf4"><div class="l">Lucro Total</div><div class="v" style="color:#22C55E">'+R(totLuc)+'</div></div>' +
+      '<div class="kbox" style="background:#f0f9ff"><div class="l">Total Pedidos</div><div class="v" style="color:#0EA5E9">'+sorted.length+'</div></div>' +
+      '<div class="kbox" style="background:#f0fdf4"><div class="l">Entregues</div><div class="v" style="color:#22C55E">'+entregues+'</div></div>' +
+      '<div class="kbox" style="background:#fffbf0"><div class="l">Em aberto</div><div class="v" style="color:#F59E0B">'+(sorted.length-entregues)+'</div></div>' +
+      '<div class="kbox" style="background:#fffbf0"><div class="l">Custo Total</div><div class="v" style="color:#F59E0B">'+R(totCust)+'</div></div>' +
+    '</div></div>' +
+    '<div class="sec"><div class="sec-t">Todos os Pedidos com Materiais ('+sorted.length+')</div>' +
+    '<table><colgroup><col style="width:120px"><col style="width:130px"><col style="width:75px"><col style="width:80px"><col style="width:75px"><col style="width:70px"><col style="width:120px"><col style="width:40px"><col style="width:70px"></colgroup>' +
+    '<tr><th>Cliente</th><th>Produto</th><th>Entrega</th><th>Status</th><th>Valor</th><th>Lucro</th><th>Material</th><th>Qtd</th><th>Situação</th></tr>' +
+    (rows || '<tr><td colspan="9" style="text-align:center;padding:20px;color:#aaa">Nenhum pedido cadastrado</td></tr>') +
+    '<tr class="tot"><td colspan="4">TOTAL ('+sorted.length+' pedidos · '+entregues+' entregues)</td><td>'+R(totFat)+'</td><td>'+R(totLuc)+'</td><td colspan="3"></td></tr>' +
+    '</table></div>';
+
+  const w = window.open('', '_blank');
+  if (!w) { toast('Libere popups no navegador para gerar PDF!'); return; }
+  w.document.write(_pdfBase('Relatório Completo de Pedidos', 'Histórico completo', html2));
+  w.document.close();
+  setTimeout(() => w.print(), 600);
 }
 
 function escape2(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -4173,7 +4423,7 @@ async function gerarImagemRecibo(id) {
     itensList.forEach(txt=>{ ctx.font='400 12px Nunito,sans-serif'; ctx.fillStyle=BROWN; ctx.textAlign='left'; ctx.fillText(txt,LX+6,y); y+=24; });
     divider(); section('💰 VALORES', YELLOW);
     row('Total', fmtR(p.valor), '#888', PINK);
-    row('Sinal pago', fmtR(p.sinal));
+    row('Valor pago', fmtR(p.sinal));
     row('Restante', fmtR(restante),'#888', restante>0?'#E67E22':'#27AE60');
     row('Pagamento', p.pgto||'PIX');
     if(p.obs){
@@ -4297,7 +4547,7 @@ function enviarReciboWhatsApp(id) {
     sep,
     '💰 *VALORES:*',
     '  Total:  ' + fmtR(p.valor),
-    '  Sinal:  ' + fmtR(p.sinal),
+    '  Valor pago:  ' + fmtR(p.sinal),
     '  Resta:  ' + fmtR(restante),
     '  Forma:  ' + (p.pgto || 'PIX'),
     sep,
@@ -4451,7 +4701,7 @@ function gerarRecibo(id) {
 
     ${(p.sinal||0) > 0 ? `
     <div class="linha" style="margin-top:10px">
-      <span class="linha-label">Sinal pago</span>
+      <span class="linha-label">Valor pago</span>
       <span class="linha-valor green">R$ ${(p.sinal||0).toFixed(2).replace('.',',')}</span>
     </div>` : ''}
 
@@ -4803,6 +5053,164 @@ function verCompra(id) {
   toast(c.forn + ' — ' + fmt(c.valor));
 }
 
+
+
+// ══════════════════════════════════════════════════════════════
+// RECONCILIAÇÃO FINANCEIRO ↔ PEDIDOS
+// ══════════════════════════════════════════════════════════════
+function checarRecebimentos() {
+  const pendentes = [];
+  pedidos.filter(p => p.status === 'Entregue' && (p.valor || 0) > 0.01).forEach(p => {
+    const clienteLow = (p.cliente || '').toLowerCase().trim();
+    const prodLow    = (p.produto  || '').toLowerCase().trim();
+    const trecho     = prodLow.slice(0, Math.max(4, Math.floor(prodLow.length * 0.6)));
+
+    const totalReg = financeiro
+      .filter(f => f.tipo === 'Receita' &&
+        ((f.desc || '').toLowerCase().includes(clienteLow) ||
+         (trecho && (f.desc || '').toLowerCase().includes(trecho))))
+      .reduce((s, f) => s + (f.valor || 0), 0);
+
+    const diff = Math.round(((p.valor || 0) - totalReg) * 100) / 100;
+    if (diff > 0.01) pendentes.push({ p, totalReg, diff });
+  });
+
+  const el = document.getElementById('fin-reconcil');
+  if (!el) return;
+
+  if (!pendentes.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `
+    <div style="background:#fff3cd;border:1.5px solid #ffc107;border-radius:14px;padding:14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:800;color:#856404;margin-bottom:10px">
+        ⚠️ ${pendentes.length} pedido(s) entregue(s) sem recebimento registrado
+      </div>
+      ${pendentes.map(item => `
+        <div style="background:white;border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;align-items:center;gap:10px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.p.cliente}</div>
+            <div style="font-size:11px;color:#666">${item.p.produto || ''} · Total: ${fmt(item.p.valor)}</div>
+            <div style="font-size:12px;color:#e53935;font-weight:700">Faltando: ${fmt(item.diff)}</div>
+          </div>
+          <button onclick="registrarRecebimento('${item.p.id}',${item.diff})"
+            style="background:#4CAF50;color:white;border:none;border-radius:20px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap">
+            + Registrar
+          </button>
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+function registrarRecebimento(pedidoId, valor) {
+  const p = pedidos.find(x => x.id === pedidoId);
+  if (!p) return;
+  if (!confirm('Registrar recebimento de ' + fmt(valor) + ' de ' + p.cliente + '?\n\nIsto vai adicionar um lançamento de Receita no Financeiro.')) return;
+
+  financeiro.unshift({
+    id:    uid(),
+    tipo:  'Receita',
+    cat:   'Receita Vendas',
+    valor: valor,
+    desc:  'Recebimento — ' + (p.produto || 'Pedido') + ' | ' + p.cliente,
+    data:  p.dataEntrega || today(),
+    pgto:  p.pgto || 'Pix',
+  });
+  save();
+  toast('✅ ' + fmt(valor) + ' registrado para ' + p.cliente + '!');
+  renderScreen('financeiro');
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// EXPORTAR LISTA DE COMPRAS — PDF e EXCEL
+// ══════════════════════════════════════════════════════════════
+function exportarListaPDF() {
+  if (!listaCompras.length) { toast('⚠️ Lista de compras está vazia!'); return; }
+
+  const linhas = listaCompras.map((item, i) => {
+    const refs = (item.pedidos || []).map(pid => {
+      const p = pedidos.find(x => x.id === pid);
+      return p ? (p.produto || p.cliente) : '';
+    }).filter(Boolean).join(', ');
+    return `<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:13px;color:#888">${i+1}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:14px;font-weight:700">${item.nome}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:14px;text-align:center;color:#FF1F78;font-weight:700">${item.qtdTotal}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;color:#666">${refs}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;text-align:center;font-size:20px">☐</td>
+    </tr>`;
+  }).join('');
+
+  const doc = `<!DOCTYPE html><html lang="pt-BR"><head>
+<meta charset="UTF-8">
+<title>Lista de Compras — Tia Sú</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: Arial, sans-serif; padding: 24px; color: #333; }
+  .header { display:flex; align-items:center; gap:16px; margin-bottom:20px; padding-bottom:16px; border-bottom:3px solid #FF1F78; }
+  .titulo { font-size:22px; font-weight:800; color:#FF1F78; }
+  .sub { font-size:12px; color:#888; margin-top:2px; }
+  table { width:100%; border-collapse:collapse; margin-top:4px; }
+  thead tr { background:#FF1F78; }
+  thead th { color:white; padding:10px 12px; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
+  tbody tr:nth-child(even) { background:#FFF0F7; }
+  tbody tr:hover { background:#FFE4EF; }
+  .footer { margin-top:24px; font-size:11px; color:#aaa; text-align:center; }
+  @media print {
+    body { padding:12px; }
+    .footer { position:fixed; bottom:8px; left:0; right:0; }
+  }
+</style>
+</head><body>
+<div class="header">
+  <div>
+    <div class="titulo">🛍️ Lista de Compras — Tia Sú</div>
+    <div class="sub">Gerado em ${new Date().toLocaleDateString('pt-BR', {weekday:'long',day:'2-digit',month:'long',year:'numeric'})} · ${listaCompras.length} item(ns)</div>
+  </div>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th style="width:30px">#</th>
+      <th>Material</th>
+      <th style="width:70px;text-align:center">Qtd</th>
+      <th>Pedido</th>
+      <th style="width:60px;text-align:center">Comprado</th>
+    </tr>
+  </thead>
+  <tbody>${linhas}</tbody>
+</table>
+<div class="footer">Tia Sú — Balões & Personalizados · gerado pelo app</div>
+</body></html>`;
+
+  const win = window.open('', '_blank', 'width=700,height=600');
+  if (!win) { toast('⚠️ Permita pop-ups para gerar o PDF!'); return; }
+  win.document.write(doc);
+  win.document.close();
+  setTimeout(() => { win.focus(); win.print(); }, 600);
+}
+
+function exportarListaExcel() {
+  if (typeof XLSX === 'undefined') { toast('⌛ Aguarde — carregando Excel...'); return; }
+  if (!listaCompras.length) { toast('⚠️ Lista de compras está vazia!'); return; }
+
+  const wb = XLSX.utils.book_new();
+  const rows = [['#', 'Material', 'Qtd Necessária', 'Pedido(s)', 'Comprado?']];
+  listaCompras.forEach((item, i) => {
+    const refs = (item.pedidos || []).map(pid => {
+      const p = pedidos.find(x => x.id === pid);
+      return p ? (p.produto || p.cliente) : '';
+    }).filter(Boolean).join(', ');
+    rows.push([i + 1, item.nome || '', item.qtdTotal || 0, refs, '']);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  // Larguras das colunas
+  ws['!cols'] = [{wch:4},{wch:30},{wch:12},{wch:30},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Lista de Compras');
+  XLSX.writeFile(wb, 'ListaCompras_TiaSu_' + today() + '.xlsx');
+  toast('📊 Lista exportada em Excel!');
+}
 
 // ══════════════════════════════════════════════════════════════
 // LISTA DE COMPRAS AUTOMÁTICA
