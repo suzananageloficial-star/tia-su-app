@@ -1200,6 +1200,10 @@ html, body {
       <span class="nav-icon">🗂️</span>
       <span class="nav-label">Kanban</span>
     </button>
+    <button class="nav-item nav-add" onclick="openFab()" id="nav-add" aria-label="Adicionar novo">
+      <span class="nav-icon nav-add-icon">+</span>
+      <span class="nav-label">Novo</span>
+    </button>
     <button class="nav-item" onclick="navigate('financeiro')" id="nav-financeiro">
       <span class="nav-icon">💰</span>
       <span class="nav-label">Financeiro</span>
@@ -1576,9 +1580,13 @@ html, body {
       </div>
       <div id="sync-status-box" style="display:none;padding:10px;border-radius:var(--radius-s);font-size:12px;margin-top:8px"></div>
       <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="testarConexao()">🔍 Testar</button>
+        <button class="btn btn-pink btn-sm" style="flex:1" onclick="enviarParaNuvemManual()">⬆️ Enviar p/ nuvem</button>
         <button class="btn btn-cyan btn-sm" style="flex:1" onclick="syncFromCloud()">⬇️ Baixar nuvem</button>
       </div>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="testarConexao()">🔍 Testar conexão</button>
+      </div>
+      <div style="font-size:10px;color:var(--gray-d);margin-top:8px;text-align:center;line-height:1.5">⬆️ <b>Enviar</b> = manda DESTE aparelho pra nuvem<br>⬇️ <b>Baixar</b> = traz a nuvem pra ESTE aparelho</div>
       <div style="font-size:10px;color:var(--gray-d);margin-top:10px;text-align:center" id="ultimo-sync-txt"></div>
 
       <!-- Backup local -->
@@ -5922,6 +5930,152 @@ async function syncToCloud() {
   syncing = false;
 }
 </script>
+
+
+<script>
+/* Botão ENVIAR PARA NUVEM (push manual com feedback) — Claude jun/2026 */
+async function enviarParaNuvemManual(){
+  if(!SYNC_URL){ toast('⚠️ Cole e salve a URL primeiro.'); return; }
+  const totalLocal = pedidos.length + financeiro.length + estoque.length;
+  if(totalLocal===0){ toast('⚠️ Este aparelho está vazio — nada pra enviar. (Envie do aparelho que tem os dados.)'); return; }
+  const box=document.getElementById('sync-status-box');
+  if(box){ box.style.display='block'; box.style.background='var(--cyan-l)'; box.style.color='var(--cyan-d)'; box.textContent='🔄 Enviando para a nuvem...'; }
+  if(typeof updateSyncStatus==='function') updateSyncStatus('syncing');
+  try{
+    const res=await fetch(SYNC_URL,{method:'POST',body:JSON.stringify({action:'save',data:{pedidos,financeiro,estoque,catalogo,clientes,fornecedores}})});
+    const json=await res.json();
+    if(json.status==='ok'){
+      lastSync=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      localStorage.setItem('ts_last_sync',lastSync);
+      if(typeof updateSyncStatus==='function') updateSyncStatus('ok');
+      const n=(json.data&&json.data.totais)?json.data.totais.pedidos:pedidos.length;
+      if(box){ box.style.background='var(--green-l)'; box.style.color='var(--green)'; box.textContent='✅ Enviado! '+n+' pedido(s) na nuvem.'; }
+      toast('✅ Enviado pra nuvem! '+n+' pedido(s).');
+    } else {
+      if(typeof updateSyncStatus==='function') updateSyncStatus('error');
+      if(box){ box.style.background='var(--red-l)'; box.style.color='var(--red)'; box.textContent='❌ '+(json.message||'A nuvem recusou. Reimplante o Apps Script (nova versão).'); }
+    }
+  }catch(e){
+    if(typeof updateSyncStatus==='function') updateSyncStatus('error');
+    if(box){ box.style.display='block'; box.style.background='var(--red-l)'; box.style.color='var(--red)'; box.textContent='❌ Não conectou. Confira a URL e a implantação.'; }
+  }
+}
+</script>
+
+
+<script>
+/* KANBAN 4 COLUNAS + FORNECEDORES BOTÃO SEMPRE VISÍVEL (Claude jun/2026) */
+
+/* ---- KANBAN: Pendentes (por entrega) · Em andamento · Pronto · Entregue ---- */
+var KCOLS_V2 = [
+  {keys:['Novo'],                     label:'⏳ Pendentes',     bg:'var(--cyan-l)',   fg:'var(--cyan-d)', border:'var(--cyan)',   sortEntrega:true},
+  {keys:['Em andamento'],             label:'⚙️ Em andamento',  bg:'var(--yellow-l)', fg:'var(--orange)', border:'var(--yellow)'},
+  {keys:['Pronto','Saiu para entrega'],label:'✅ Pronto',        bg:'var(--purple-l)', fg:'var(--purple)', border:'var(--purple)'},
+  {keys:['Entregue'],                 label:'🎉 Entregue',      bg:'var(--green-l)',  fg:'var(--green)',  border:'var(--green)'},
+];
+var KORDER_V2 = ['Novo','Em andamento','Pronto','Entregue'];
+
+function _kStatusNorm(s){ return s==='Saiu para entrega' ? 'Pronto' : s; }
+
+function avancarStatusKanban(pedidoId, ev){
+  if(ev) ev.stopPropagation();
+  var p = pedidos.find(function(x){return x.id===pedidoId;});
+  if(!p) return;
+  var idx = KORDER_V2.indexOf(_kStatusNorm(p.status));
+  if(idx<0) idx=0;
+  if(idx >= KORDER_V2.length-1){ toast('✅ Pedido já está no status final!'); return; }
+  p.status = KORDER_V2[idx+1];
+  save(); renderKanban();
+  toast('✅ '+p.cliente+' → '+p.status);
+}
+function voltarStatusKanban(pedidoId, ev){
+  if(ev) ev.stopPropagation();
+  var p = pedidos.find(function(x){return x.id===pedidoId;});
+  if(!p) return;
+  var idx = KORDER_V2.indexOf(_kStatusNorm(p.status));
+  if(idx<=0) return;
+  p.status = KORDER_V2[idx-1];
+  save(); renderKanban();
+  toast('↩️ '+p.cliente+' → '+p.status);
+}
+function renderKanban(){
+  var board=document.getElementById('kanban-board'); if(!board) return;
+  board.innerHTML = KCOLS_V2.map(function(col, colIdx){
+    var items = pedidos.filter(function(p){ return col.keys.indexOf(p.status)>=0 && p.status!=='Cancelado'; });
+    if(col.sortEntrega){
+      items = items.slice().sort(function(a,b){
+        var da=a.dataEntrega||'9999-12-31', db=b.dataEntrega||'9999-12-31';
+        return da<db?-1:(da>db?1:0);
+      });
+    }
+    var isLast = colIdx===KCOLS_V2.length-1;
+    var cards = items.length ? items.map(function(p){
+      var urgente = p.urgente ? 'border-left:3px solid var(--red);' : '';
+      return '<div class="kanban-card" style="border-color:'+col.border+';'+urgente+'cursor:pointer" onclick="editarPedido(\''+p.id+'\')">'+
+        '<div class="kanban-card-name">'+(p.urgente?'🔴 ':'')+(p.cliente||'')+'</div>'+
+        '<div class="kanban-card-product">'+(p.produto||'—')+'</div>'+
+        '<div class="kanban-card-date" style="color:'+col.fg+'">📅 '+fmtDate(p.dataEntrega)+' · '+fmt(p.valor)+'</div>'+
+        '<div style="display:flex;gap:4px;margin-top:6px;justify-content:flex-end">'+
+          (colIdx>0 ? '<button onclick="voltarStatusKanban(\''+p.id+'\',event)" style="font-size:10px;padding:2px 7px;border:1px solid '+col.border+';background:white;color:'+col.fg+';border-radius:8px;cursor:pointer">◀</button>' : '')+
+          (!isLast ? '<button onclick="avancarStatusKanban(\''+p.id+'\',event)" style="font-size:10px;padding:2px 8px;background:'+col.border+';color:white;border:none;border-radius:8px;cursor:pointer;font-weight:700">Avançar ▶</button>' : '')+
+        '</div>'+
+      '</div>';
+    }).join('') : '<div class="kanban-empty">Nenhum pedido aqui</div>';
+    return '<div class="kanban-col" style="border-color:'+col.border+'">'+
+      '<div class="kanban-col-header" style="background:'+col.bg+';color:'+col.fg+'">'+
+        '<span>'+col.label+'</span>'+
+        '<span style="background:white;border-radius:20px;padding:1px 7px;font-size:10px;color:'+col.fg+'">'+items.length+'</span>'+
+      '</div>'+
+      '<div class="kanban-col-body">'+cards+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+/* ---- FORNECEDORES: botão Importar SEMPRE visível ---- */
+function renderFornecedores(){
+  var sub=document.getElementById('forn-sub');
+  if(sub) sub.textContent=fornecedores.length+' fornecedor'+(fornecedores.length!==1?'es':'')+' cadastrado'+(fornecedores.length!==1?'s':'');
+  var list=document.getElementById('forn-list'); if(!list) return;
+  var nImp=(typeof _fornImportaveis==='function')?_fornImportaveis().length:0;
+  var btnImport='<button onclick="importarFornecedoresDoEstoque()" class="btn btn-pink" style="width:100%;margin-bottom:10px">📥 Importar fornecedores do estoque'+(nImp?(' ('+nImp+')'):'')+'</button>';
+  if(!fornecedores.length){
+    list.innerHTML = btnImport + empty('🏪','Nenhum fornecedor ainda','Toque no botão acima pra trazer os do estoque, ou no + pra cadastrar à mão');
+    return;
+  }
+  var sorted=[].concat(fornecedores).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
+  list.innerHTML = btnImport + sorted.map(function(f){ return ''+
+    '<div class="list-item" onclick="editarFornecedor(\''+f.id+'\')">'+
+      '<div style="width:40px;height:40px;background:var(--cyan-l);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏪</div>'+
+      '<div class="li-info">'+
+        '<div class="li-title">'+(f.nome||'')+'</div>'+
+        '<div class="li-sub">'+(f.cat||'—')+(f.prazo?(' · '+f.prazo):'')+'</div>'+
+        (f.obs?('<div class="li-sub" style="color:var(--gray-d)">'+f.obs.slice(0,50)+(f.obs.length>50?'…':'')+'</div>'):'')+
+      '</div>'+
+      '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">'+
+        (f.whats?('<a href="https://wa.me/55'+f.whats.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="background:var(--green);color:#fff;border:none;border-radius:12px;padding:4px 10px;font-size:11px;font-weight:700;text-decoration:none">💬</a>'):'')+
+        (f.site?('<a href="'+(f.site.indexOf('http')===0?f.site:('https://'+f.site))+'" target="_blank" onclick="event.stopPropagation()" style="background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:12px;padding:4px 10px;font-size:11px;font-weight:700;text-decoration:none">🔗</a>'):'')+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+</script>
+
+
+<style>
+/* Botão + como aba central (celular). No desktop volta a ser o FAB flutuante. */
+.nav-add-icon{
+  background:linear-gradient(135deg,var(--pink),#FF6B9D);
+  color:#fff;width:28px;height:28px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;line-height:1;margin-bottom:1px;
+}
+.nav-add .nav-label{color:var(--pink);font-weight:700;}
+.fab{display:none!important;}
+@media (min-width:768px){
+  .fab{display:flex!important;}
+  #nav-add{display:none!important;}
+}
+</style>
 
 </body>
 </html>
