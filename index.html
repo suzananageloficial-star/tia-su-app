@@ -6180,7 +6180,8 @@ function confirmarCompraItem(){
 @media (max-width:767px){
   html,body{height:100dvh;}
   #app{height:100dvh;min-height:100dvh;}
-  .bottom-nav{padding-bottom:max(env(safe-area-inset-bottom,0px),2px);}
+  .bottom-nav{padding-bottom:max(calc(env(safe-area-inset-bottom,0px) * 0.35), 4px) !important;}
+  .nav-item{padding-top:5px !important; padding-bottom:3px !important;}
 }
 </style>
 
