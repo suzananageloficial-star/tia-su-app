@@ -5823,5 +5823,105 @@ function adicionarItemPedido(nome, qtd, preco){
 }
 </script>
 
+
+<script>
+/* IMPORTAR FORNECEDORES DO ESTOQUE (Claude jun/2026)
+   Cria os cadastros a partir dos nomes no campo Fornecedor
+   dos itens do estoque. Override de renderFornecedores p/ mostrar
+   o botao quando houver fornecedores a importar. */
+function _fornImportaveis(){
+  const idsEst={}; (estoque||[]).forEach(function(e){ idsEst[e.id]=1; });
+  const jaTem={}; (fornecedores||[]).forEach(function(f){ jaTem[(f.nome||'').toLowerCase().trim()]=1; });
+  const map={};
+  (estoque||[]).forEach(function(e){
+    const f=(e.forn||'').trim();
+    if(!f) return;
+    if(idsEst[f]) return;                 // forn e um id, nao nome
+    const k=f.toLowerCase();
+    if(jaTem[k]) return;                  // ja cadastrado
+    if(!map[k]) map[k]={nome:f, itens:[]};
+    if(e.nome) map[k].itens.push(e.nome);
+  });
+  return Object.keys(map).map(function(k){ return map[k]; });
+}
+function importarFornecedoresDoEstoque(){
+  const novos=_fornImportaveis();
+  if(!novos.length){ toast('Nenhum fornecedor novo no estoque.'); return; }
+  novos.forEach(function(v){
+    fornecedores.unshift({
+      id:uid(), nome:v.nome, cat:'Insumos gerais', whats:'', prazo:'', site:'',
+      obs:(v.itens.length? ('Itens: '+v.itens.slice(0,6).join(', ')+(v.itens.length>6?'…':'')) : '')
+    });
+  });
+  if(typeof DB!=='undefined' && DB.set) DB.set('fornecedores', fornecedores);
+  if(typeof save==='function') try{ save(); }catch(e){}
+  renderFornecedores();
+  toast('✅ '+novos.length+' fornecedor(es) importado(s) do estoque!');
+}
+function renderFornecedores(){
+  const sub=document.getElementById('forn-sub');
+  if(sub) sub.textContent=fornecedores.length+' fornecedor'+(fornecedores.length!==1?'es':'')+' cadastrado'+(fornecedores.length!==1?'s':'');
+  const list=document.getElementById('forn-list'); if(!list) return;
+  const nImp=_fornImportaveis().length;
+  const btnImport = nImp ? ('<button onclick="importarFornecedoresDoEstoque()" class="btn btn-pink" style="width:100%;margin-bottom:10px">📥 Importar '+nImp+' fornecedor(es) do estoque</button>') : '';
+  if(!fornecedores.length){
+    list.innerHTML = btnImport + empty('🏭','Nenhum fornecedor ainda', nImp? 'Toque no botão acima pra trazer os do estoque, ou no + pra cadastrar à mão':'Toque em + para cadastrar');
+    return;
+  }
+  const sorted=[].concat(fornecedores).sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'');});
+  list.innerHTML = btnImport + sorted.map(function(f){ return ''+
+    '<div class="list-item" onclick="editarFornecedor(\''+f.id+'\')">'+
+      '<div style="width:40px;height:40px;background:var(--cyan-l);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏭</div>'+
+      '<div class="li-info">'+
+        '<div class="li-title">'+(f.nome||'')+'</div>'+
+        '<div class="li-sub">'+(f.cat||'—')+(f.prazo?(' · '+f.prazo):'')+'</div>'+
+        (f.obs?('<div class="li-sub" style="color:var(--gray-d)">'+f.obs.slice(0,50)+(f.obs.length>50?'…':'')+'</div>'):'')+
+      '</div>'+
+      '<div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">'+
+        (f.whats?('<a href="https://wa.me/55'+f.whats.replace(/\D/g,'')+'" target="_blank" onclick="event.stopPropagation()" style="background:var(--green);color:#fff;border:none;border-radius:12px;padding:4px 10px;font-size:11px;font-weight:700;text-decoration:none">💬</a>'):'')+
+        (f.site?('<a href="'+(f.site.indexOf('http')===0?f.site:('https://'+f.site))+'" target="_blank" onclick="event.stopPropagation()" style="background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:12px;padding:4px 10px;font-size:11px;font-weight:700;text-decoration:none">🔗</a>'):'')+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+</script>
+
+
+<style>
+/* Ferramentas (Exportar/Backup/Sync) só no desktop — no celular ficam na barra de cima */
+#sidebar-footer{display:none!important;}
+@media (min-width:768px){#sidebar-footer{display:flex!important;}}
+</style>
+<script>
+/* Proteção: nunca sobrescrever a nuvem com um app totalmente vazio
+   (evita que um aparelho recém-aberto apague os dados do outro) */
+async function syncToCloud() {
+  if (!SYNC_URL || syncing) return;
+  if ((pedidos.length + financeiro.length + estoque.length) === 0) { return; }
+  syncing = true;
+  updateSyncStatus('syncing');
+  try {
+    const res = await fetch(SYNC_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'save',
+        data: { pedidos, financeiro, estoque, catalogo, clientes, fornecedores }
+      })
+    });
+    const json = await res.json();
+    if (json.status === 'ok') {
+      lastSync = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+      localStorage.setItem('ts_last_sync', lastSync);
+      updateSyncStatus('ok');
+    } else {
+      updateSyncStatus('error');
+    }
+  } catch(e) {
+    updateSyncStatus('error');
+  }
+  syncing = false;
+}
+</script>
+
 </body>
 </html>
