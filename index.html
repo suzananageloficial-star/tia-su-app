@@ -1073,10 +1073,10 @@ html, body {
             </div>
             <datalist id="ficha-estoque-datalist"></datalist>
             <div style="display:grid;grid-template-columns:1fr 44px 70px 26px auto 22px;gap:5px;font-size:9px;color:var(--gray-d);margin-bottom:3px;padding:0 2px">
-              <span>ITEM</span><span style="text-align:center">QTD</span><span style="text-align:center">VALOR R$</span><span></span><span></span><span></span>
+              <span>ITEM</span><span style="text-align:center">QTD</span><span style="text-align:center">VALOR/UN</span><span></span><span></span><span></span>
             </div>
             <div id="ficha-itens-lista" style="display:flex;flex-direction:column;gap:6px"></div>
-            <div style="font-size:10px;color:var(--gray-d);margin-top:4px;font-style:italic">Itens do estoque já puxam o valor (dá pra editar). Marque 🎈 para balão. Embalagem entra como material.</div>
+            <div style="font-size:10px;color:var(--gray-d);margin-top:4px;font-style:italic">Valor é por UNIDADE (o total já multiplica pela quantidade). Itens do estoque puxam o valor sozinhos. Marque 🎈 para balão. Embalagem entra como material.</div>
           </div>
           <input type="hidden" id="pr-mat" value="0">
 
@@ -6396,6 +6396,75 @@ function salvarProduto(){
   if(!nome){toast('⚠️ Informe o nome do produto!');return;}
   var itens=coletarItensFicha();
   var mat=0; itens.forEach(function(it){ mat+=it.valor||0; }); mat=Math.round(mat*100)/100;
+  var n=CMV_NIVEIS[_nivelCMV]||CMV_NIVEIS.inter;
+  var preco=parseFloat((document.getElementById('cmv-preco')||{}).value);
+  if(!preco||preco<=0) preco = n.mat>0?Math.round(mat/(n.mat/100)*100)/100:0;
+  preco=Math.round(preco*100)/100;
+  var custo=(typeof window._cmvCusto==='number')?window._cmvCusto:mat;
+  var lucro=Math.round((preco-custo)*100)/100;
+  catalogo.push({
+    id:uid(), nome:nome, cat:document.getElementById('pr-cat').value,
+    nivel:_nivelCMV, custo:mat, matCusto:mat, preco:preco, materiais:itens,
+    mo:Math.round(preco*n.mo/100*100)/100, fix:Math.round(preco*n.fix/100*100)/100,
+    lucro:lucro, mg: preco>0?Math.round(lucro/preco*1000)/10:0
+  });
+  save(); renderCatalogo();
+  toast('✅ "'+nome+'" salvo · preço '+fmt(preco)+'!');
+  document.getElementById('ficha-itens-lista').innerHTML='';
+  document.getElementById('pr-nome').value='';
+  calcPreco();
+}
+</script>
+
+
+<script>
+/* CORREÇÃO: total = Σ(qtd × valor unitário) (Claude jun/2026) */
+function calcPreco(){
+  var mat=0;
+  document.querySelectorAll('#ficha-itens-lista .ficha-item-row').forEach(function(r){
+    var q=parseFloat((r.querySelector('.fi-qtd')||{}).value)||0;
+    var v=parseFloat((r.querySelector('.fi-valor')||{}).value)||0;
+    mat += q*v;
+  });
+  mat=Math.round(mat*100)/100;
+  var matEl=document.getElementById('pr-mat'); if(matEl) matEl.value=mat.toFixed(2);
+  var n=CMV_NIVEIS[_nivelCMV]||CMV_NIVEIS.inter;
+  var preco = n.mat>0 ? Math.round(mat/(n.mat/100)*100)/100 : 0;
+  var moV = Math.round(preco*n.mo/100*100)/100;
+  var fixV = Math.round(preco*n.fix/100*100)/100;
+  window._cmvCusto = Math.round((mat+moV+fixV)*100)/100;
+  var me=document.getElementById('cmv-materiais'); if(me) me.textContent=fmt(mat);
+  var bd=document.getElementById('cmv-breakdown');
+  if(bd) bd.innerHTML=
+    _cmvLinha('📦 Material ('+n.mat+'%)', mat)+
+    _cmvLinha('⏱️ Mão de obra ('+n.mo+'%)', moV)+
+    _cmvLinha('🏠 Custos fixos ('+n.fix+'%)', fixV);
+  var pe=document.getElementById('cmv-preco'); if(pe) pe.value = preco? preco.toFixed(2): '';
+  var ci=document.getElementById('cmv-info'); if(ci) ci.textContent='Material '+n.mat+'% · MO '+n.mo+'% · Fixos '+n.fix+'% · Lucro '+n.lucro+'% (sugerido)';
+  _cmvAtualizaMargem();
+}
+/* valor auto = preço UNITÁRIO do estoque (não multiplica) */
+function fiNomeChanged(rowId){
+  var row=document.getElementById(rowId); if(!row) return;
+  var nome=(row.querySelector('.fi-nome')||{}).value||'';
+  var it=_estoqueAchaPorNome(nome);
+  var un=row.querySelector('.fi-un'); if(un) un.textContent= it?(it.un||'un'):'';
+  if(it){
+    row.dataset.fromStock='1';
+    var v=row.querySelector('.fi-valor'); if(v) v.value=Math.round((parseFloat(it.preco)||0)*100)/100;
+  } else {
+    row.dataset.fromStock='0';
+  }
+  calcPreco();
+}
+/* mudar a quantidade NÃO altera o valor unitário, só recalcula o total */
+function fiQtdChanged(rowId){ calcPreco(); }
+
+function salvarProduto(){
+  var nome=document.getElementById('pr-nome').value.trim();
+  if(!nome){toast('⚠️ Informe o nome do produto!');return;}
+  var itens=coletarItensFicha();
+  var mat=0; itens.forEach(function(it){ mat += (it.qtd||0)*(it.valor||0); }); mat=Math.round(mat*100)/100;
   var n=CMV_NIVEIS[_nivelCMV]||CMV_NIVEIS.inter;
   var preco=parseFloat((document.getElementById('cmv-preco')||{}).value);
   if(!preco||preco<=0) preco = n.mat>0?Math.round(mat/(n.mat/100)*100)/100:0;
