@@ -132,24 +132,23 @@ html, body {
   flex-shrink: 0;
   box-shadow: 0 -4px 20px rgba(0,0,0,0.06);
   z-index: 10;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  flex-wrap: wrap;            /* 2 fileiras no celular, sem rolar */
   scrollbar-width: none;
 }
 .bottom-nav::-webkit-scrollbar { display: none; }
 .nav-item {
-  flex: 0 0 auto;
-  min-width: 58px;
+  flex: 0 0 16.6667%;        /* 6 por fileira -> 11 itens = 2 fileiras */
+  min-width: 0;
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  padding: 8px 4px;
+  padding: 7px 2px;
   border: none; background: none;
   cursor: pointer; color: var(--gray-d);
   font-family: var(--font-main);
   transition: all 0.2s; position: relative;
   gap: 3px;
 }
-.nav-item .nav-icon { font-size: 22px; transition: transform 0.2s; }
+.nav-item .nav-icon { font-size: 20px; transition: transform 0.2s; }
 .nav-item .nav-label { font-size: 9px; font-weight: 600; letter-spacing: 0.3px; }
 .nav-item.active { color: var(--pink); }
 .nav-item.active .nav-icon { transform: scale(1.15); }
@@ -691,6 +690,7 @@ html, body {
     object-fit: contain;
   }
   .bottom-nav {
+    flex-wrap: nowrap;         /* no desktop volta a ser sidebar de 1 coluna */
     flex-direction: column;
     width: 180px;
     min-width: 180px;
@@ -5746,6 +5746,80 @@ function renderMateriaisPedido(materiais){
     const nome=m.nome||((estoque.find(function(e){return e.id===m.itemId;})||{}).nome)||'';
     adicionarMaterialPedido(nome,m.qtd,m.status||'pendente',m.id,m.tipo||'normal',m.size||'',m.itemId||'');
   });
+}
+</script>
+
+
+<script>
+/* ITEM DO PEDIDO -> ESPELHO EM MATERIAIS (Claude jun/2026)
+   Quando o item vendido JA e um item do estoque (escolhido no
+   autocomplete), ele e copiado automaticamente para Materiais
+   com o itemId certo, pra dar baixa correta. */
+function _estoqueExato(nome){
+  if(!nome) return null;
+  const n=nome.toLowerCase().trim();
+  return estoque.find(function(e){return (e.nome||'').toLowerCase().trim()===n;})||null;
+}
+function _itemRowNome(row){ const i=row.querySelector('input[type=text]'); return i?i.value.trim():''; }
+function _removerMirror(row){
+  const matId=row.dataset.mirrorMat; if(!matId) return;
+  const mrow=document.querySelector('#p-materiais-lista .material-row[data-mat-id="'+matId+'"]');
+  if(mrow) mrow.remove();
+  row.dataset.mirrorMat='';
+}
+function _sincronizarQtdMirror(row){
+  const matId=row.dataset.mirrorMat; if(!matId) return;
+  const mrow=document.querySelector('#p-materiais-lista .material-row[data-mat-id="'+matId+'"]');
+  if(mrow){ const q=mrow.querySelector('.mat-qtd'); const iq=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1; if(q) q.value=iq; }
+}
+function _espelharMaterialDoItem(row){
+  const nome=_itemRowNome(row);
+  const it=_estoqueExato(nome);
+  const matId=row.dataset.mirrorMat||'';
+  if(!it){ if(matId) _removerMirror(row); return; }
+  const qtd=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
+  if(matId){
+    const mrow=document.querySelector('#p-materiais-lista .material-row[data-mat-id="'+matId+'"]');
+    if(mrow){
+      mrow.dataset.itemId=it.id; mrow.dataset.status='coberto';
+      const nm=mrow.querySelector('.mat-nome'); if(nm) nm.value=it.nome;
+      const q=mrow.querySelector('.mat-qtd'); if(q) q.value=qtd;
+      const bd=mrow.querySelector('.mat-badge'); if(bd) bd.textContent='🟢';
+      return;
+    }
+  }
+  const newId='mir-'+uid();
+  adicionarMaterialPedido(it.nome, qtd, 'coberto', newId, 'normal', '', it.id);
+  row.dataset.mirrorMat=newId;
+  if(typeof toast==='function') toast('📦 "'+it.nome+'" também entrou em Materiais (dá baixa no estoque).');
+}
+function adicionarItemPedido(nome, qtd, preco){
+  const lista=document.getElementById('p-itens-lista'); if(!lista) return;
+  if(typeof popularDatalistEstoque==='function') popularDatalistEstoque();
+  const rowId='pi-'+Date.now()+Math.random().toString(36).slice(2,6);
+  const row=document.createElement('div'); row.className='item-pedido-row'; row.id=rowId;
+
+  const nomeInput=document.createElement('input');
+  nomeInput.type='text'; nomeInput.placeholder='Descrição (ou item do estoque)';
+  nomeInput.value=nome||''; nomeInput.setAttribute('list','estoque-datalist'); nomeInput.setAttribute('autocomplete','off');
+  nomeInput.addEventListener('input', recalcularTotal);
+  nomeInput.addEventListener('change', function(){ _espelharMaterialDoItem(row); });
+
+  const qtdInput=document.createElement('input');
+  qtdInput.type='number'; qtdInput.className='pi-qtd'; qtdInput.min='1'; qtdInput.step='1'; qtdInput.value=qtd||1;
+  qtdInput.addEventListener('input', function(){ recalcularTotal(); _sincronizarQtdMirror(row); });
+
+  const precoInput=document.createElement('input');
+  precoInput.type='number'; precoInput.className='pi-preco'; precoInput.placeholder='0,00'; precoInput.step='0.01'; precoInput.value=preco||'';
+  precoInput.addEventListener('input', recalcularTotal);
+
+  const delBtn=document.createElement('button');
+  delBtn.className='material-del'; delBtn.type='button'; delBtn.textContent='✕';
+  delBtn.onclick=function(){ _removerMirror(row); row.remove(); recalcularTotal(); };
+
+  row.appendChild(nomeInput); row.appendChild(qtdInput); row.appendChild(precoInput); row.appendChild(delBtn);
+  lista.appendChild(row);
+  recalcularTotal();
 }
 </script>
 
