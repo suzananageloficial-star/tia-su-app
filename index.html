@@ -6485,5 +6485,84 @@ function salvarProduto(){
 }
 </script>
 
+
+<script>
+/* CATÁLOGO CLICÁVEL — abrir produto p/ editar (Claude jun/2026) */
+var _editandoProdutoId = null;
+
+function renderCatalogo(){
+  var el=document.getElementById('catalogo-list'); if(!el) return;
+  if(!catalogo.length){ el.innerHTML=empty('🏷️','Catálogo vazio','Calcule um preço acima e salve'); return; }
+  el.innerHTML=catalogo.map(function(p){
+    return '<div class="list-item" style="cursor:pointer" onclick="editarProdutoCatalogo(\''+p.id+'\')">'+
+      '<div class="li-icon" style="background:var(--yellow-l)">🏷️</div>'+
+      '<div class="li-info">'+
+        '<div class="li-title">'+(p.nome||'')+'</div>'+
+        '<div class="li-sub">'+(p.cat||'')+' · custo '+fmt(p.custo||p.matCusto||0)+' · margem '+(p.mg||0)+'% · ✏️ toque p/ editar</div>'+
+      '</div>'+
+      '<div class="li-right">'+
+        '<div class="li-value" style="color:var(--pink)">'+fmt(p.preco||0)+'</div>'+
+        '<button onclick="event.stopPropagation();if(confirm(\'Excluir &quot;'+(p.nome||'').replace(/\x27/g,"")+'&quot; do catálogo?\')){catalogo=catalogo.filter(function(x){return x.id!==\''+p.id+'\';});save();renderCatalogo();}" style="font-size:11px;color:var(--gray-d);background:none;border:none;cursor:pointer;padding:4px">✕</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function _atualizaBotaoSalvar(){
+  var btns=document.querySelectorAll('[onclick="salvarProduto()"]');
+  btns.forEach(function(b){ b.innerHTML = _editandoProdutoId ? '💾 Atualizar produto' : '💾 Salvar no catálogo'; });
+}
+
+function editarProdutoCatalogo(id){
+  var p=catalogo.find(function(x){return x.id===id;}); if(!p) return;
+  _editandoProdutoId=id;
+  document.getElementById('pr-nome').value=p.nome||'';
+  var catSel=document.getElementById('pr-cat');
+  if(catSel&&p.cat){ for(var i=0;i<catSel.options.length;i++){ if(catSel.options[i].value===p.cat||catSel.options[i].text===p.cat){ catSel.selectedIndex=i; break; } } }
+  setNivelCMV(p.nivel||'inter');
+  var lista=document.getElementById('ficha-itens-lista'); if(lista) lista.innerHTML='';
+  (p.materiais||[]).forEach(function(m){ adicionarItemFicha(m.nome, m.qtd, m.tipo==='balao', m.valor); });
+  calcPreco();
+  var pe=document.getElementById('cmv-preco'); if(pe&&p.preco){ pe.value=Number(p.preco).toFixed(2); _cmvAtualizaMargem(); }
+  _atualizaBotaoSalvar();
+  var c=document.getElementById('content'); if(c){ try{ c.scrollTo({top:0,behavior:'smooth'}); }catch(e){ c.scrollTop=0; } }
+  toast('✏️ Editando "'+(p.nome||'')+'". Ajuste e toque em Atualizar.');
+}
+
+function salvarProduto(){
+  var nome=document.getElementById('pr-nome').value.trim();
+  if(!nome){toast('⚠️ Informe o nome do produto!');return;}
+  var itens=coletarItensFicha();
+  var mat=0; itens.forEach(function(it){ mat += (it.qtd||0)*(it.valor||0); }); mat=Math.round(mat*100)/100;
+  var n=CMV_NIVEIS[_nivelCMV]||CMV_NIVEIS.inter;
+  var preco=parseFloat((document.getElementById('cmv-preco')||{}).value);
+  if(!preco||preco<=0) preco = n.mat>0?Math.round(mat/(n.mat/100)*100)/100:0;
+  preco=Math.round(preco*100)/100;
+  var custo=(typeof window._cmvCusto==='number')?window._cmvCusto:mat;
+  var lucro=Math.round((preco-custo)*100)/100;
+  var prod={
+    id: _editandoProdutoId || uid(),
+    nome:nome, cat:document.getElementById('pr-cat').value,
+    nivel:_nivelCMV, custo:mat, matCusto:mat, preco:preco, materiais:itens,
+    mo:Math.round(preco*n.mo/100*100)/100, fix:Math.round(preco*n.fix/100*100)/100,
+    lucro:lucro, mg: preco>0?Math.round(lucro/preco*1000)/10:0
+  };
+  if(_editandoProdutoId){
+    var idx=catalogo.findIndex(function(x){return x.id===_editandoProdutoId;});
+    if(idx>=0) catalogo[idx]=prod; else catalogo.push(prod);
+    toast('✅ "'+nome+'" atualizado · '+fmt(preco)+'!');
+  } else {
+    catalogo.push(prod);
+    toast('✅ "'+nome+'" salvo · '+fmt(preco)+'!');
+  }
+  _editandoProdutoId=null;
+  save(); renderCatalogo();
+  document.getElementById('ficha-itens-lista').innerHTML='';
+  document.getElementById('pr-nome').value='';
+  calcPreco();
+  _atualizaBotaoSalvar();
+}
+</script>
+
 </body>
 </html>
