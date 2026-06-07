@@ -1036,26 +1036,15 @@ html, body {
       <div class="card">
         <div class="card-body">
 
-          <!-- NÍVEL DE EXPERIÊNCIA -->
-          <div class="form-group">
-            <label class="form-label">Seu nível de experiência</label>
-            <div class="nivel-selector">
-              <button class="nivel-btn" id="nivel-btn-1" onclick="setNivel(1)">🌱 Iniciante</button>
-              <button class="nivel-btn active" id="nivel-btn-2" onclick="setNivel(2)">⭐ Intermediário</button>
-              <button class="nivel-btn" id="nivel-btn-3" onclick="setNivel(3)">🏆 Avançado</button>
-            </div>
-            <div id="nivel-info" style="font-size:10px;color:var(--gray-d);margin-bottom:4px">Hora de trabalho: <strong id="nivel-hora-txt" style="color:var(--pink)">R$ 35/h</strong> · <span id="nivel-desc-txt">Kits compostos, sublimação, decorações elaboradas</span></div>
-          </div>
-
           <!-- NOME + CATEGORIA -->
           <div class="form-row">
             <div class="form-group" style="flex:2">
               <label class="form-label">Nome do produto</label>
               <input class="form-input" id="pr-nome" placeholder="Ex: Kit aniversário">
             </div>
-            <div class="form-group" style="flex:2">
+            <div class="form-group" style="flex:1">
               <label class="form-label">Categoria</label>
-              <select class="form-select" id="pr-cat" onchange="atualizarMargem();calcPreco()">
+              <select class="form-select" id="pr-cat">
                 <option>Balões decorados</option><option>Kit presente</option>
                 <option>Personalizado impresso</option><option>Arranjo/buquê</option>
                 <option>Caneca sublimada</option><option>Camiseta sublimada</option>
@@ -1065,114 +1054,51 @@ html, body {
             </div>
           </div>
 
-          <!-- TIPO DE PRODUTO (sugestão mão de obra) -->
+          <!-- NÍVEL DE PRECIFICAÇÃO (percentuais validados) -->
           <div class="form-group">
-            <label class="form-label">Tipo de produto <span style="font-weight:400;color:var(--gray-d)">(para sugerir mão de obra)</span></label>
-            <div style="display:flex;gap:6px;align-items:center">
-              <select class="form-select" id="pr-tipo" style="flex:1" onchange="mostrarSugestaoMao()">
-                <option value="">— Selecione para sugestão —</option>
-                <option value="buque5">Buquê balões 5 un</option>
-                <option value="buque10">Buquê balões 10 un</option>
-                <option value="arranjo">Arranjo de mesa c/ balões</option>
-                <option value="painel">Painel orgânico (p/ m²)</option>
-                <option value="caneca">Caneca personalizada</option>
-                <option value="camiseta">Camiseta personalizada</option>
-                <option value="bolsa">Bolsa personalizada</option>
-                <option value="pantufa">Pantufa (par)</option>
-                <option value="kitbasico">Kit presente básico</option>
-                <option value="kitpremium">Kit presente premium</option>
-                <option value="convite">Convite digital</option>
-                <option value="lembranca">Lembrancinha (un)</option>
-                <option value="decoracao">Decoração completa de mesa</option>
-              </select>
-              <button class="btn btn-ghost btn-sm" onclick="aplicarMaoSugerida()" style="white-space:nowrap;padding:8px 10px">↓ Usar</button>
+            <label class="form-label">Nível de precificação</label>
+            <div class="nivel-selector">
+              <button type="button" class="nivel-btn" id="ncmv-basico" onclick="setNivelCMV('basico')">Básico</button>
+              <button type="button" class="nivel-btn active" id="ncmv-inter" onclick="setNivelCMV('inter')">Intermediário</button>
+              <button type="button" class="nivel-btn" id="ncmv-premium" onclick="setNivelCMV('premium')">Premium</button>
             </div>
-            <div class="mao-sugestao" id="mao-sugestao-txt"></div>
+            <div id="cmv-info" style="font-size:10px;color:var(--gray-d);margin-top:4px"></div>
           </div>
 
-          <!-- FICHA TÉCNICA: MATERIAIS DO PRODUTO -->
+          <!-- MATERIAIS (ficha técnica, com valor) -->
           <div class="form-group">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-              <label class="form-label" style="margin:0">🧾 Materiais do produto (ficha técnica)</label>
-              <button type="button" onclick="adicionarItemFicha()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;border:1px dashed var(--pink);color:var(--pink)">+ Adicionar material</button>
+              <label class="form-label" style="margin:0">🧾 Materiais (inclui embalagem)</label>
+              <button type="button" onclick="adicionarItemFicha()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;border:1px dashed var(--pink);color:var(--pink)">+ Material</button>
             </div>
             <datalist id="ficha-estoque-datalist"></datalist>
+            <div style="display:grid;grid-template-columns:1fr 44px 70px 26px auto 22px;gap:5px;font-size:9px;color:var(--gray-d);margin-bottom:3px;padding:0 2px">
+              <span>ITEM</span><span style="text-align:center">QTD</span><span style="text-align:center">VALOR R$</span><span></span><span></span><span></span>
+            </div>
             <div id="ficha-itens-lista" style="display:flex;flex-direction:column;gap:6px"></div>
-            <div style="font-size:10px;color:var(--gray-d);margin-top:4px;font-style:italic">Marque 🎈 balão para itens cuja cor você escolhe no pedido — na ficha fica só o tamanho (ex: Balão 5").</div>
+            <div style="font-size:10px;color:var(--gray-d);margin-top:4px;font-style:italic">Itens do estoque já puxam o valor (dá pra editar). Marque 🎈 para balão. Embalagem entra como material.</div>
           </div>
-          <!-- MATERIAIS -->
-          <div class="form-group">
-            <label class="form-label">Materiais (R$) <span style="font-weight:400;color:var(--gray-d)">(soma automática da ficha)</span></label>
-            <input class="form-input" id="pr-mat" type="number" placeholder="0,00" oninput="calcPreco()">
-          </div>
-
-          <!-- TEMPO + MÃO DE OBRA -->
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">⏱️ Tempo de execução</label>
-              <div style="display:flex;gap:6px;align-items:center">
-                <input class="form-input" id="pr-horas" type="number" placeholder="0" min="0" style="width:60px;text-align:center" oninput="calcMaoObra()">
-                <span style="font-size:11px;color:var(--gray-d);white-space:nowrap">h</span>
-                <input class="form-input" id="pr-min" type="number" placeholder="0" min="0" max="59" style="width:60px;text-align:center" oninput="calcMaoObra()">
-                <span style="font-size:11px;color:var(--gray-d);white-space:nowrap">min</span>
-              </div>
-              <div id="mao-calc-txt" style="font-size:10px;color:var(--cyan-d);margin-top:3px;font-weight:600"></div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Mão de obra (R$)</label>
-              <input class="form-input" id="pr-mao" type="number" placeholder="calculado pelo tempo" oninput="calcPreco()">
-              <div style="font-size:10px;color:var(--gray-d);margin-top:2px">Edite para ajustar manualmente</div>
-            </div>
-          </div>
-
-          <!-- EMBALAGEM + OUTROS -->
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Embalagem (R$)</label>
-              <input class="form-input" id="pr-emb" type="number" placeholder="0,00" oninput="calcPreco()">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Outros (R$)</label>
-              <input class="form-input" id="pr-out" type="number" placeholder="0,00" oninput="calcPreco()">
-              <span class="outros-fixo-link" onclick="abrirCustosFixos()">📊 Calcular custo fixo/pedido</span>
-            </div>
-          </div>
-
-          <!-- MARGEM + FRETE -->
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label">Margem de lucro (%)</label>
-              <input class="form-input" id="pr-margem" type="number" value="60" oninput="calcPreco()">
-              <div id="margem-info" style="font-size:10px;color:var(--gray-d);margin-top:2px">Sugerida pela categoria + nível</div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Frete (R$)</label>
-              <input class="form-input" id="pr-frete" type="number" placeholder="0,00" oninput="calcPreco()">
-            </div>
-          </div>
+          <input type="hidden" id="pr-mat" value="0">
 
         </div>
       </div>
 
-      <div class="preco-result" id="preco-result" style="display:none">
-        <div class="preco-result-label">Preço de venda sugerido</div>
-        <div class="preco-result-value" id="pr-final">R$ 0,00</div>
-        <div class="preco-result-details">
-          <div class="preco-detail">
-            <div class="preco-detail-label">Custo total</div>
-            <div class="preco-detail-value" id="pr-custo">—</div>
+      <!-- RESULTADO CMV -->
+      <div class="card" style="margin-top:10px">
+        <div class="card-body">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;color:var(--gray-d);font-weight:700">VALOR DOS MATERIAIS</span>
+            <span id="cmv-materiais" style="font-size:16px;font-weight:800;color:var(--brown)">R$ 0,00</span>
           </div>
-          <div class="preco-detail">
-            <div class="preco-detail-label">Lucro</div>
-            <div class="preco-detail-value" id="pr-lucro" style="color:var(--green)">—</div>
-          </div>
-          <div class="preco-detail">
-            <div class="preco-detail-label">Margem aplicada</div>
-            <div class="preco-detail-value" id="pr-mg-info" style="color:var(--cyan-d)">—</div>
-          </div>
-          <div class="preco-detail">
-            <div class="preco-detail-label">Hora de trabalho</div>
-            <div class="preco-detail-value" id="pr-hora-info" style="color:var(--brown)">—</div>
+          <div style="border-top:1px solid var(--gray-l);margin:8px 0"></div>
+          <div id="cmv-breakdown" style="display:flex;flex-direction:column;gap:5px;font-size:12px"></div>
+          <div style="background:var(--pink-l);border-radius:12px;padding:12px;margin-top:10px;text-align:center">
+            <div style="font-size:11px;color:var(--pink);font-weight:700">PREÇO DE VENDA <span style="font-weight:400">(edite se precisar)</span></div>
+            <div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:3px">
+              <span style="font-size:18px;font-weight:800;color:var(--pink)">R$</span>
+              <input id="cmv-preco" type="number" step="0.01" min="0" inputmode="decimal" oninput="_cmvAtualizaMargem()" style="font-size:26px;font-weight:800;color:var(--pink);border:none;background:transparent;width:128px;text-align:center;border-bottom:2px dashed var(--pink)">
+            </div>
+            <div id="cmv-margem" style="font-size:12px;color:var(--brown);font-weight:700;margin-top:6px">Lucro: R$ 0,00 · margem 0%</div>
           </div>
         </div>
       </div>
@@ -1744,7 +1670,7 @@ function renderScreen(s) {
   if (s==='kanban')     renderKanban();
   if (s==='financeiro') { renderFinanceiro(); checarRecebimentos(); }
   if (s==='estoque')    renderEstoque();
-  if (s==='preco')      { renderCatalogo(); popularFichaDatalist(); setTimeout(()=>setNivel(_nivel),50); }
+  if (s==='preco')      { renderCatalogo(); popularFichaDatalist(); setNivelCMV(_nivelCMV); calcPreco(); }
   if (s==='compras')    renderCompras();
   if (s==='analise')    renderAnalise();
   if (s==='clientes')   { sincronizarTodosClientes(); }
@@ -6273,6 +6199,220 @@ function adicionarItemFicha(nome,qtd,balao){
     '<label style="font-size:9px;color:var(--gray-d);display:flex;align-items:center;gap:3px;white-space:nowrap"><input type="checkbox" class="fi-balao" '+(balao?'checked':'')+' onchange="recalcFicha()">🎈</label>'+
     '<button type="button" onclick="document.getElementById(\''+rowId+'\').remove();recalcFicha()" style="background:none;border:none;color:var(--gray-d);cursor:pointer;font-size:14px">✕</button>';
   lista.appendChild(row);
+}
+</script>
+
+
+<script>
+/* PRECIFICAÇÃO CMV POR NÍVEL (Claude jun/2026) — validado pela Suzana */
+var CMV_NIVEIS = {
+  basico:  {mat:40, mo:25, fix:15, lucro:20, label:'Básico'},
+  inter:   {mat:35, mo:35, fix:15, lucro:15, label:'Intermediário'},
+  premium: {mat:30, mo:45, fix:15, lucro:10, label:'Premium'}
+};
+var _nivelCMV = 'inter';
+
+function setNivelCMV(nv){
+  if(!CMV_NIVEIS[nv]) return;
+  _nivelCMV = nv;
+  ['basico','inter','premium'].forEach(function(k){
+    var b=document.getElementById('ncmv-'+k); if(b) b.classList.toggle('active', k===nv);
+  });
+  calcPreco();
+}
+function _cmvLinha(lbl,val){
+  return '<div style="display:flex;justify-content:space-between"><span style="color:var(--gray-d)">'+lbl+'</span><b>'+fmt(val)+'</b></div>';
+}
+function calcPreco(){
+  var mat=0;
+  document.querySelectorAll('#ficha-itens-lista .ficha-item-row').forEach(function(r){
+    mat += parseFloat((r.querySelector('.fi-valor')||{}).value)||0;
+  });
+  mat = Math.round(mat*100)/100;
+  var matEl=document.getElementById('pr-mat'); if(matEl) matEl.value=mat.toFixed(2);
+  var n=CMV_NIVEIS[_nivelCMV]||CMV_NIVEIS.inter;
+  var preco = n.mat>0 ? mat/(n.mat/100) : 0;
+  var me=document.getElementById('cmv-materiais'); if(me) me.textContent=fmt(mat);
+  var pe=document.getElementById('cmv-preco'); if(pe) pe.textContent=fmt(preco);
+  var bd=document.getElementById('cmv-breakdown');
+  if(bd) bd.innerHTML=
+    _cmvLinha('📦 Material ('+n.mat+'%)', mat)+
+    _cmvLinha('⏱️ Mão de obra ('+n.mo+'%)', preco*n.mo/100)+
+    _cmvLinha('🏠 Custos fixos ('+n.fix+'%)', preco*n.fix/100)+
+    _cmvLinha('💚 Lucro ('+n.lucro+'%)', preco*n.lucro/100);
+  var ci=document.getElementById('cmv-info'); if(ci) ci.textContent='Material '+n.mat+'% · MO '+n.mo+'% · Fixos '+n.fix+'% · Lucro '+n.lucro+'%';
+}
+function recalcFicha(){ calcPreco(); }
+
+/* ficha com campo de valor */
+function fiNomeChanged(rowId){
+  var row=document.getElementById(rowId); if(!row) return;
+  var nome=(row.querySelector('.fi-nome')||{}).value||'';
+  var it=_estoqueAchaPorNome(nome);
+  var un=row.querySelector('.fi-un'); if(un) un.textContent= it?(it.un||'un'):'';
+  if(it){
+    row.dataset.fromStock='1';
+    var qtd=parseFloat((row.querySelector('.fi-qtd')||{}).value)||1;
+    var v=row.querySelector('.fi-valor'); if(v) v.value=Math.round((parseFloat(it.preco)||0)*qtd*100)/100;
+  } else {
+    row.dataset.fromStock='0';
+  }
+  calcPreco();
+}
+function fiQtdChanged(rowId){
+  var row=document.getElementById(rowId); if(!row) return;
+  if(row.dataset.fromStock==='1'){
+    var nome=(row.querySelector('.fi-nome')||{}).value||'';
+    var it=_estoqueAchaPorNome(nome);
+    var qtd=parseFloat((row.querySelector('.fi-qtd')||{}).value)||1;
+    var v=row.querySelector('.fi-valor'); if(v&&it) v.value=Math.round((parseFloat(it.preco)||0)*qtd*100)/100;
+  }
+  calcPreco();
+}
+function fiValorChanged(rowId){
+  var row=document.getElementById(rowId); if(row) row.dataset.fromStock='0';
+  calcPreco();
+}
+function adicionarItemFicha(nome,qtd,balao,valor){
+  nome=nome||''; qtd=qtd||1; balao=balao||false; valor=(valor!=null&&valor!=='')?valor:'';
+  var lista=document.getElementById('ficha-itens-lista'); if(!lista) return;
+  if(typeof popularFichaDatalist==='function') popularFichaDatalist();
+  var rowId='frow-'+uid();
+  var row=document.createElement('div'); row.className='ficha-item-row'; row.id=rowId;
+  row.style.cssText='display:grid;grid-template-columns:1fr 44px 70px 26px auto 22px;gap:5px;align-items:center';
+  if(_estoqueAchaPorNome(nome)) row.dataset.fromStock='1';
+  var unidade=(typeof _unidadeDoNome==='function')?_unidadeDoNome(nome):'';
+  row.innerHTML=
+    '<input type="text" class="fi-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Item" list="ficha-estoque-datalist" autocomplete="off" oninput="fiNomeChanged(\''+rowId+'\')" style="padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
+    '<input type="number" class="fi-qtd" value="'+qtd+'" min="0.1" step="0.1" oninput="fiQtdChanged(\''+rowId+'\')" style="text-align:center;padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
+    '<input type="number" class="fi-valor" value="'+valor+'" placeholder="0,00" step="0.01" min="0" oninput="fiValorChanged(\''+rowId+'\')" style="text-align:right;padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
+    '<span class="fi-un" style="font-size:9px;color:var(--gray-d);text-align:center;white-space:nowrap">'+unidade+'</span>'+
+    '<label style="font-size:9px;color:var(--gray-d);display:flex;align-items:center;gap:3px;white-space:nowrap"><input type="checkbox" class="fi-balao" '+(balao?'checked':'')+' onchange="calcPreco()">🎈</label>'+
+    '<button type="button" onclick="document.getElementById(\''+rowId+'\').remove();calcPreco()" style="background:none;border:none;color:var(--gray-d);cursor:pointer;font-size:14px">✕</button>';
+  lista.appendChild(row);
+}
+function coletarItensFicha(){
+  var rows=document.querySelectorAll('#ficha-itens-lista .ficha-item-row'); var out=[];
+  rows.forEach(function(r){
+    var nv=(r.querySelector('.fi-nome')||{}).value; var nm=nv?nv.trim():'';
+    var qtd=parseFloat((r.querySelector('.fi-qtd')||{}).value)||1;
+    var valor=parseFloat((r.querySelector('.fi-valor')||{}).value)||0;
+    var balao=(r.querySelector('.fi-balao')||{}).checked||false;
+    if(nm) out.push({nome:nm,qtd:qtd,valor:valor,tipo:balao?'balao':'normal',size:balao?nm:''});
+  });
+  return out;
+}
+function salvarProduto(){
+  var nome=document.getElementById('pr-nome').value.trim();
+  if(!nome){toast('⚠️ Informe o nome do produto!');return;}
+  var itens=coletarItensFicha();
+  var mat=0; itens.forEach(function(it){ mat+=it.valor||0; });
+  mat=Math.round(mat*100)/100;
+  var n=CMV_NIVEIS[_nivelCMV]||CMV_NIVEIS.inter;
+  var preco = n.mat>0 ? Math.round(mat/(n.mat/100)*100)/100 : 0;
+  catalogo.push({
+    id:uid(), nome:nome, cat:document.getElementById('pr-cat').value,
+    nivel:_nivelCMV, custo:mat, matCusto:mat, preco:preco, materiais:itens,
+    mg:n.lucro,
+    mo:Math.round(preco*n.mo/100*100)/100,
+    fix:Math.round(preco*n.fix/100*100)/100,
+    lucro:Math.round(preco*n.lucro/100*100)/100
+  });
+  save(); renderCatalogo();
+  toast('✅ "'+nome+'" salvo · preço '+fmt(preco)+'!');
+  document.getElementById('ficha-itens-lista').innerHTML='';
+  document.getElementById('pr-nome').value='';
+  calcPreco();
+}
+</script>
+
+
+<script>
+/* SERVIÇO SEM BAIXA + PREÇO EDITÁVEL COM MARGEM (Claude jun/2026) */
+function _ehServico(it){ return !!(it && /impress|servi[çc]o/i.test(it.cat||'')); }
+
+function sincronizarBaixaPedido(pedido, opt){
+  opt=opt||{};
+  if(!pedido) return {baixados:[],restaurados:[]};
+  var entregue = pedido.status==='Entregue';
+  var baixados=[], restaurados=[];
+  (pedido.materiais||[]).forEach(function(m){
+    var alvo = entregue ? (parseFloat(m.qtd)||0) : 0;
+    var jaBaixado = parseFloat(m.baixado)||0;
+    var delta = Math.round((alvo - jaBaixado)*1000)/1000;
+    if(Math.abs(delta)<0.0001) return;
+    var it=_resolverItemEstoque(m);
+    if(!it) return;
+    if(_ehServico(it)){ m.baixado=alvo; if(m.itemId==null||m.itemId===undefined) m.itemId=it.id; return; }
+    var antes=parseFloat(it.qtd)||0;
+    it.qtd = Math.max(0, Math.round((antes - delta)*1000)/1000);
+    m.baixado = alvo;
+    if(m.itemId==null||m.itemId===undefined) m.itemId=it.id;
+    if(delta>0) baixados.push(it.nome+': '+antes+'→'+it.qtd); else restaurados.push(it.nome+': '+antes+'→'+it.qtd);
+  });
+  if(!opt.silent){
+    if(baixados.length) toast('📦 Estoque baixado: '+baixados.length+' item(ns).');
+    else if(restaurados.length) toast('↩️ Estoque restaurado: '+restaurados.length+' item(ns).');
+  }
+  return {baixados:baixados, restaurados:restaurados};
+}
+
+/* preço editável + margem ao vivo */
+function calcPreco(){
+  var mat=0;
+  document.querySelectorAll('#ficha-itens-lista .ficha-item-row').forEach(function(r){
+    mat += parseFloat((r.querySelector('.fi-valor')||{}).value)||0;
+  });
+  mat=Math.round(mat*100)/100;
+  var matEl=document.getElementById('pr-mat'); if(matEl) matEl.value=mat.toFixed(2);
+  var n=CMV_NIVEIS[_nivelCMV]||CMV_NIVEIS.inter;
+  var preco = n.mat>0 ? Math.round(mat/(n.mat/100)*100)/100 : 0;
+  var moV = Math.round(preco*n.mo/100*100)/100;
+  var fixV = Math.round(preco*n.fix/100*100)/100;
+  window._cmvCusto = Math.round((mat+moV+fixV)*100)/100;
+  var me=document.getElementById('cmv-materiais'); if(me) me.textContent=fmt(mat);
+  var bd=document.getElementById('cmv-breakdown');
+  if(bd) bd.innerHTML=
+    _cmvLinha('📦 Material ('+n.mat+'%)', mat)+
+    _cmvLinha('⏱️ Mão de obra ('+n.mo+'%)', moV)+
+    _cmvLinha('🏠 Custos fixos ('+n.fix+'%)', fixV);
+  var pe=document.getElementById('cmv-preco'); if(pe) pe.value = preco? preco.toFixed(2): '';
+  var ci=document.getElementById('cmv-info'); if(ci) ci.textContent='Material '+n.mat+'% · MO '+n.mo+'% · Fixos '+n.fix+'% · Lucro '+n.lucro+'% (sugerido)';
+  _cmvAtualizaMargem();
+}
+function _cmvAtualizaMargem(){
+  var preco=parseFloat((document.getElementById('cmv-preco')||{}).value)||0;
+  var custo=window._cmvCusto||0;
+  var lucro=Math.round((preco-custo)*100)/100;
+  var margem= preco>0 ? Math.round(lucro/preco*1000)/10 : 0;
+  var el=document.getElementById('cmv-margem');
+  if(el){
+    var cor = lucro<0 ? 'var(--red)' : 'var(--green)';
+    el.innerHTML='Lucro: <span style="color:'+cor+'">'+fmt(lucro)+'</span> · margem <b style="color:'+cor+'">'+margem.toFixed(1).replace('.',',')+'%</b>';
+  }
+}
+function salvarProduto(){
+  var nome=document.getElementById('pr-nome').value.trim();
+  if(!nome){toast('⚠️ Informe o nome do produto!');return;}
+  var itens=coletarItensFicha();
+  var mat=0; itens.forEach(function(it){ mat+=it.valor||0; }); mat=Math.round(mat*100)/100;
+  var n=CMV_NIVEIS[_nivelCMV]||CMV_NIVEIS.inter;
+  var preco=parseFloat((document.getElementById('cmv-preco')||{}).value);
+  if(!preco||preco<=0) preco = n.mat>0?Math.round(mat/(n.mat/100)*100)/100:0;
+  preco=Math.round(preco*100)/100;
+  var custo=(typeof window._cmvCusto==='number')?window._cmvCusto:mat;
+  var lucro=Math.round((preco-custo)*100)/100;
+  catalogo.push({
+    id:uid(), nome:nome, cat:document.getElementById('pr-cat').value,
+    nivel:_nivelCMV, custo:mat, matCusto:mat, preco:preco, materiais:itens,
+    mo:Math.round(preco*n.mo/100*100)/100, fix:Math.round(preco*n.fix/100*100)/100,
+    lucro:lucro, mg: preco>0?Math.round(lucro/preco*1000)/10:0
+  });
+  save(); renderCatalogo();
+  toast('✅ "'+nome+'" salvo · preço '+fmt(preco)+'!');
+  document.getElementById('ficha-itens-lista').innerHTML='';
+  document.getElementById('pr-nome').value='';
+  calcPreco();
 }
 </script>
 
