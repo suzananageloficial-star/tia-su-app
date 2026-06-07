@@ -864,10 +864,10 @@ html, body {
       </div>
       <div class="filter-bar">
         <button class="filter-pill active" onclick="filtrarPedidos('todos')" id="f-todos">Todos</button>
-        <button class="filter-pill" onclick="filtrarPedidos('Novo')" id="f-novo">Novo</button>
-        <button class="filter-pill" onclick="filtrarPedidos('Em andamento')" id="f-and">Em andamento</button>
-        <button class="filter-pill" onclick="filtrarPedidos('Pronto')" id="f-pronto">Pronto</button>
-        <button class="filter-pill" onclick="filtrarPedidos('Entregue')" id="f-ent">Entregue</button>
+        <button class="filter-pill" onclick="filtrarPedidos('Novo')" id="f-novo">Pendentes</button>
+        <button class="filter-pill" onclick="filtrarPedidos('Em andamento')" id="f-em">Em produção</button>
+        <button class="filter-pill" onclick="filtrarPedidos('Pronto')" id="f-pronto">Prontos</button>
+        <button class="filter-pill" onclick="filtrarPedidos('Entregue')" id="f-entregue">Entregues</button>
         <button class="filter-pill" onclick="filtrarPedidos('a-receber')" id="f-a-receber">💰 A Receber</button>
       </div>
       <div class="card"><div id="pedidos-list"></div></div>
@@ -1954,6 +1954,9 @@ function renderPedidos() {
     lista = pedidos.filter(p => ((p.valor||0)-(p.sinal||0)) > 0.01 && p.status!=='Cancelado');
   } else {
     lista = pedidos.filter(p=>p.status===filtroAtivo);
+    if (filtroAtivo==='Novo') {
+      lista = lista.slice().sort(function(a,b){var da=a.dataEntrega||'9999-12-31',db=b.dataEntrega||'9999-12-31';return da<db?-1:(da>db?1:0);});
+    }
   }
   document.getElementById('pedidos-count').textContent = `${lista.length} pedido${lista.length!==1?'s':''}`;
   const _agora = new Date();
@@ -6179,11 +6182,99 @@ function confirmarCompraItem(){
 <style>
 @media (max-width:767px){
   html,body{height:100dvh;}
-  #app{height:100dvh;min-height:100dvh;}
+  #app{position:fixed; top:0; left:0; right:0; bottom:0; height:auto; min-height:0; max-width:none; margin:0; border-radius:0;}
   .bottom-nav{padding-bottom:max(calc(env(safe-area-inset-bottom,0px) * 0.35), 4px) !important;}
   .nav-item{padding-top:5px !important; padding-bottom:3px !important;}
 }
 </style>
+
+
+<style>
+/* coluna extra de unidade nas linhas de material do pedido */
+.material-row{ grid-template-columns: 1fr 50px 26px 22px 22px !important; }
+.material-row .mat-un{ font-size:10px; color:var(--gray-d); text-align:center; white-space:nowrap; }
+</style>
+<script>
+/* DICA DE UNIDADE NO PEDIDO E NA FICHA (Claude jun/2026) */
+function _unidadeDoNome(nome){ var it=_estoqueAchaPorNome(nome); return it?(it.un||'un'):''; }
+function _updMatUn(rowId){
+  var row=document.getElementById(rowId); if(!row) return;
+  var span=row.querySelector('.mat-un'); if(!span) return;
+  var sel=row.querySelector('.mat-sel');
+  if(sel){ var it=estoque.find(function(e){return e.id===sel.value;}); span.textContent=it?(it.un||'un'):''; return; }
+  var inp=row.querySelector('.mat-nome');
+  span.textContent=_unidadeDoNome(inp?inp.value:'');
+}
+function _updFichaUn(rowId){
+  var row=document.getElementById(rowId); if(!row) return;
+  var span=row.querySelector('.fi-un'); if(!span) return;
+  var inp=row.querySelector('.fi-nome');
+  span.textContent=_unidadeDoNome(inp?inp.value:'');
+}
+
+/* --- materiais do pedido: agora com unidade --- */
+function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId){
+  nome=nome||''; qtd=qtd||1; status=status||'pendente'; tipo=tipo||'normal'; size=size||''; itemId=itemId||'';
+  var lista=document.getElementById('p-materiais-lista'); if(!lista) return;
+  if(typeof popularDatalistEstoque==='function') popularDatalistEstoque();
+  var rowId='mrow-'+uid(); var id=matId||uid();
+  var row=document.createElement('div'); row.className='material-row'; row.id=rowId;
+  row.dataset.matId=id; row.dataset.tipo=tipo;
+  if(tipo==='balao'){
+    var sz=size||nome; row.dataset.balaoSize=sz;
+    var opts=estoque.filter(function(e){return _ehBalao(e.nome)&&matchSize(e.nome,sz);});
+    if(!opts.length) opts=estoque.filter(function(e){return _ehBalao(e.nome);});
+    var selId=itemId||''; row.dataset.itemId=selId;
+    row.dataset.status=selId?'coberto':'pendente';
+    var selItem=estoque.find(function(e){return e.id===selId;});
+    var optionsHtml='<option value="">🎈 escolher cor — '+sz+'</option>'+
+      opts.map(function(e){return '<option value="'+e.id+'" '+(selId===e.id?'selected':'')+'>'+e.nome+' · '+(e.qtd||0)+' em estoque</option>';}).join('');
+    row.innerHTML=
+      '<select class="mat-sel" onchange="_balaoSelecionado(\''+rowId+'\')" style="padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+optionsHtml+'</select>'+
+      '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" style="padding:8px;border:1px solid #eee;border-radius:8px;text-align:center;font-size:12px">'+
+      '<span class="mat-un">'+(selItem?(selItem.un||'un'):'')+'</span>'+
+      '<span class="mat-badge" title="balao">'+(selId?'🟢':'🎈')+'</span>'+
+      '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove()">✕</button>';
+  } else {
+    var statusFinal=status==='coberto'?'coberto':(typeof checarEstoqueNome==='function'?checarEstoqueNome(nome,qtd):'pendente');
+    row.dataset.status=statusFinal; if(itemId) row.dataset.itemId=itemId;
+    var icon=statusFinal==='coberto'?'🟢':'🟡';
+    row.innerHTML=
+      '<input type="text" class="mat-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Nome do material" list="estoque-datalist" autocomplete="off" oninput="atualizarStatusMaterial(\''+rowId+'\');_updMatUn(\''+rowId+'\')">'+
+      '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" placeholder="Qtd" oninput="atualizarStatusMaterial(\''+rowId+'\')">'+
+      '<span class="mat-un">'+_unidadeDoNome(nome)+'</span>'+
+      '<span class="mat-badge" title="'+statusFinal+'">'+icon+'</span>'+
+      '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove()">✕</button>';
+  }
+  lista.appendChild(row);
+}
+function _balaoSelecionado(rowId){
+  var row=document.getElementById(rowId); if(!row) return;
+  var sel=row.querySelector('.mat-sel'); var id=sel?sel.value:'';
+  row.dataset.itemId=id||'';
+  var it=estoque.find(function(e){return e.id===id;});
+  row.dataset.status=it?'coberto':'pendente';
+  var badge=row.querySelector('.mat-badge'); if(badge) badge.textContent=it?'🟢':'🎈';
+  var un=row.querySelector('.mat-un'); if(un) un.textContent=it?(it.un||'un'):'';
+}
+
+/* --- ficha técnica: agora com unidade --- */
+function adicionarItemFicha(nome,qtd,balao){
+  nome=nome||''; qtd=qtd||1; balao=balao||false;
+  var lista=document.getElementById('ficha-itens-lista'); if(!lista) return;
+  popularFichaDatalist();
+  var rowId='frow-'+uid();
+  var row=document.createElement('div'); row.className='ficha-item-row'; row.id=rowId;
+  row.style.cssText='display:grid;grid-template-columns:1fr 44px 26px auto 22px;gap:5px;align-items:center';
+  row.innerHTML=
+    '<input type="text" class="fi-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Item do estoque (ou tamanho do balao)" list="ficha-estoque-datalist" autocomplete="off" oninput="recalcFicha();_updFichaUn(\''+rowId+'\')" style="padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
+    '<input type="number" class="fi-qtd" value="'+qtd+'" min="0.1" step="0.1" oninput="recalcFicha()" style="text-align:center;padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
+    '<span class="fi-un" style="font-size:9px;color:var(--gray-d);text-align:center;white-space:nowrap">'+_unidadeDoNome(nome)+'</span>'+
+    '<label style="font-size:9px;color:var(--gray-d);display:flex;align-items:center;gap:3px;white-space:nowrap"><input type="checkbox" class="fi-balao" '+(balao?'checked':'')+' onchange="recalcFicha()">🎈</label>'+
+    '<button type="button" onclick="document.getElementById(\''+rowId+'\').remove();recalcFicha()" style="background:none;border:none;color:var(--gray-d);cursor:pointer;font-size:14px">✕</button>';
+  lista.appendChild(row);
+}
+</script>
 
 </body>
 </html>
