@@ -50,7 +50,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
-  height: 100%; width: 100%;
+  height: 100dvh; width: 100%;
   overflow: hidden;
   font-family: var(--font-main);
   background: var(--gray-l);
@@ -824,7 +824,7 @@ html, body {
     </div>
     <div class="header-actions" style="gap:4px">
       <span id="sync-indicator" style="font-size:14px;cursor:pointer;padding:4px" onclick="syncFromCloud()" title="Sincronizar agora">—</span>
-      <button class="icon-btn" onclick="openSyncConfig()" title="Configurar sincronização">☁️</button>
+      <button class="icon-btn" onclick="openSyncConfig()" title="Configurar sincronização">⚙️</button>
       <button class="icon-btn" onclick="exportData()" title="Exportar backup JSON">💾</button>
       <button class="icon-btn" onclick="exportarExcel()" title="Exportar planilha Excel">📊</button>
     </div>
@@ -6074,6 +6074,113 @@ function renderFornecedores(){
 @media (min-width:768px){
   .fab{display:flex!important;}
   #nav-add{display:none!important;}
+}
+</style>
+
+
+<div class="modal-overlay" id="modal-comprar-item">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🛒 Registrar compra</div>
+    <div class="modal-body">
+      <input type="hidden" id="ci2-id">
+      <div class="form-group">
+        <label class="form-label">Item</label>
+        <input class="form-input" id="ci2-nome" readonly style="background:var(--gray-l)">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Quantidade comprada</label>
+          <input class="form-input" id="ci2-qtd" type="number" step="0.1" min="0" oninput="ci2CalcTotal()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Valor unitário (R$)</label>
+          <input class="form-input" id="ci2-preco" type="number" step="0.01" min="0" oninput="ci2CalcTotal()">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fornecedor (opcional)</label>
+        <input class="form-input" id="ci2-forn" placeholder="Ex: CAS BRINDES" list="estoque-datalist">
+      </div>
+      <div style="background:var(--pink-l);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--brown)">
+        Total: <b id="ci2-total">R$ 0,00</b><br>
+        <span style="color:var(--gray-d)">Vai somar no estoque e lançar como custo no financeiro.</span>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('modal-comprar-item')" style="flex:1">Cancelar</button>
+      <button class="btn btn-pink" onclick="confirmarCompraItem()" style="flex:2">✅ Comprei, alimentar estoque</button>
+    </div>
+  </div>
+</div>
+<script>
+/* COMPRAR ITEM DA LISTA -> ALIMENTA ESTOQUE (Claude jun/2026) */
+function ci2CalcTotal(){
+  var q=parseFloat(document.getElementById('ci2-qtd').value)||0;
+  var p=parseFloat(document.getElementById('ci2-preco').value)||0;
+  var el=document.getElementById('ci2-total'); if(el) el.textContent=fmt(q*p);
+}
+function comprarItemLista(id){
+  var item=listaCompras.find(function(i){return i.id===id;});
+  if(!item) return;
+  document.getElementById('ci2-id').value=id;
+  document.getElementById('ci2-nome').value=item.nome||'';
+  document.getElementById('ci2-qtd').value=item.qtdTotal||1;
+  document.getElementById('ci2-preco').value='';
+  document.getElementById('ci2-forn').value='';
+  ci2CalcTotal();
+  if(typeof popularDatalistEstoque==='function') popularDatalistEstoque();
+  openModal('modal-comprar-item', false);
+}
+function confirmarCompraItem(){
+  var id=document.getElementById('ci2-id').value;
+  var item=listaCompras.find(function(i){return i.id===id;});
+  if(!item){ closeModal('modal-comprar-item'); return; }
+  var qtd=parseFloat(document.getElementById('ci2-qtd').value)||0;
+  var preco=parseFloat(document.getElementById('ci2-preco').value)||0;
+  var forn=document.getElementById('ci2-forn').value.trim();
+  if(qtd<=0){ toast('⚠️ Informe a quantidade comprada.'); return; }
+  // 1. alimenta o estoque
+  var it=estoque.find(function(e){return (e.nome||'').toLowerCase().trim()===(item.nome||'').toLowerCase().trim();});
+  if(it){
+    it.qtd=(parseFloat(it.qtd)||0)+qtd;
+    if(preco>0) it.preco=preco;
+    if(forn) it.forn=forn;
+  } else {
+    it={id:uid(), nome:item.nome, cat:'', un:'un', qtd:qtd, min:0, preco:preco, forn:forn};
+    estoque.push(it);
+  }
+  // 2. lança custo no financeiro
+  var total=Math.round(qtd*preco*100)/100;
+  if(total>0){
+    financeiro.unshift({id:uid(), tipo:'Custo', cat:'Material Criação', valor:total, desc:(item.nome||'')+(forn?(' — '+forn):''), data:today(), pgto:'PIX'});
+  }
+  // 3. marca materiais pendentes desses pedidos como cobertos
+  (item.pedidos||[]).forEach(function(pid){
+    var p=pedidos.find(function(x){return x.id===pid;});
+    if(!p) return;
+    (p.materiais||[]).forEach(function(m){
+      if((m.nome||'').toLowerCase().trim()===(item.nome||'').toLowerCase().trim() && m.status!=='coberto'){
+        m.status='coberto'; m.itemId=it.id;
+      }
+    });
+  });
+  // 4. remove da lista
+  listaCompras=listaCompras.filter(function(i){return i.id!==id;});
+  if(typeof DB!=='undefined'&&DB.set) DB.set('lista_compras', listaCompras);
+  save();
+  closeModal('modal-comprar-item');
+  renderScreen('compras');
+  toast('✅ "'+(item.nome||'')+'" entrou no estoque'+(total>0?(' · custo '+fmt(total)+' lançado'):'')+'!');
+}
+</script>
+
+
+<style>
+@media (max-width:767px){
+  html,body{height:100dvh;}
+  #app{height:100dvh;min-height:100dvh;}
+  .bottom-nav{padding-bottom:max(env(safe-area-inset-bottom,0px),2px);}
 }
 </style>
 
