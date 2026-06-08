@@ -2099,10 +2099,7 @@ function salvarPedido() {
     }
   }
 
-  // Auto-status: sinal recebido → muda Novo para Em andamento
-  if (obj.sinal > 0 && obj.status === 'Novo') {
-    obj.status = 'Em andamento';
-  }
+  // (Removido: sinal pago NÃO muda mais o status — fica Pendente até a Suzana mover manualmente)
   // Se mudou para Entregue → abre modal de baixa de estoque
   const virarEntregue = id && obj.status==='Entregue' && anterior?.status!=='Entregue';
 
