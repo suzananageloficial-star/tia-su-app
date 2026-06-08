@@ -1905,6 +1905,7 @@ function renderPedidos() {
           <div class="li-info" onclick="editarPedido('${p.id}')">
             <div class="li-title">${p.cliente}${badge}</div>
             <div class="li-sub">${p.produto||'—'}</div>
+            ${(p.itens&&p.itens.length&&p.itens[0].nome)?`<div class="li-sub" style="color:var(--brown);font-weight:600">📦 ${_primeiroItem(p)}</div>`:''}
             <div style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
               ${statusBadge(p.status)}<span style="font-size:10px;color:var(--gray-d)">· ${fmtDate(p.dataEntrega)}</span>
             </div>
@@ -5942,6 +5943,7 @@ function renderKanban(){
       return '<div class="kanban-card" style="border-color:'+col.border+';'+urgente+'cursor:pointer" onclick="editarPedido(\''+p.id+'\')">'+
         '<div class="kanban-card-name">'+(p.urgente?'🔴 ':'')+(p.cliente||'')+'</div>'+
         '<div class="kanban-card-product">'+(p.produto||'—')+'</div>'+
+      ((p.itens&&p.itens.length&&p.itens[0].nome)?'<div class="kanban-card-product" style="color:var(--brown);font-weight:600">📦 '+_primeiroItem(p)+'</div>':'')+
         '<div class="kanban-card-date" style="color:'+col.fg+'">📅 '+fmtDate(p.dataEntrega)+' · '+fmt(p.valor)+'</div>'+
         '<div style="display:flex;gap:4px;margin-top:6px;justify-content:flex-end">'+
           (colIdx>0 ? '<button onclick="voltarStatusKanban(\''+p.id+'\',event)" style="font-size:10px;padding:2px 7px;border:1px solid '+col.border+';background:white;color:'+col.fg+';border-radius:8px;cursor:pointer">◀</button>' : '')+
@@ -6681,6 +6683,18 @@ function statusBadge(s){
   var cls={'Orçamento':'orcamento','Novo':'novo','Em andamento':'andamento','Pronto':'pronto','Saiu para entrega':'saiu','Entregue':'entregue','Cancelado':'cancelado'};
   var lbl={'Novo':'Pendente','Em andamento':'Em produção','Saiu para entrega':'Saiu p/ entrega'};
   return '<span class="li-badge badge-'+(cls[s]||'novo')+'">'+(lbl[s]||s||'Pendente')+'</span>';
+}
+</script>
+
+
+<script>
+/* 1º item do pedido nos cards (Claude jun/2026) */
+function _primeiroItem(p){
+  var its=(p&&p.itens)||[];
+  if(!its.length) return '';
+  var n=(its[0]&&its[0].nome)||'';
+  if(!n) return '';
+  return its.length>1 ? (n+' +'+(its.length-1)) : n;
 }
 </script>
 
