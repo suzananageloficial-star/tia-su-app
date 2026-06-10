@@ -1337,7 +1337,7 @@ html, body {
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Tipo *</label>
-          <select class="form-select" id="f-tipo">
+          <select class="form-select" id="f-tipo" onchange="_popularCategoriasFin()">
             <option value="Receita">Receita</option>
             <option value="Custo">Custo</option>
             <option value="Despesa Fixa">Despesa Fixa</option>
@@ -1703,6 +1703,7 @@ function openModal(id, isNew) {
     el.onclick = null; // só fecha pelo botão Fechar
   }
   if(id==='modal-pedido'){ setTimeout(popularCatalogoSelect,60); }
+  if(id==='modal-fin'){ setTimeout(_popularCategoriasFin,30); }
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
@@ -6034,7 +6035,7 @@ function renderFornecedores(){
       </div>
       <div style="background:var(--pink-l);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--brown)">
         Total: <b id="ci2-total">R$ 0,00</b><br>
-        <span style="color:var(--gray-d)">Vai somar no estoque e lançar como custo no financeiro.</span>
+        <span style="color:var(--gray-d)">Vai somar no ESTOQUE. (A despesa você registra à parte no Financeiro.)</span>
       </div>
     </div>
     <div class="form-actions">
@@ -6696,6 +6697,146 @@ function _primeiroItem(p){
   if(!n) return '';
   return its.length>1 ? (n+' +'+(its.length-1)) : n;
 }
+</script>
+
+
+<script>
+/* CATEGORIAS DO FINANCEIRO POR TIPO + COMPREI SÓ ESTOQUE (Claude jun/2026) */
+var CAT_FIN = {
+  'Receita':          ['Receita Vendas','Receita Kit','Receita Balão','Receita Personalizado','Receita Sublimação','Outras Receitas'],
+  'Custo':            ['Material Criação','Embalagem','Impressão','Taxas/Envio','Outros Custos'],
+  'Despesa Fixa':     ['Aluguel / Espaço','Energia elétrica','Internet','Celular / Telefone','MEI / DAS','Plataformas (Canva etc.)','Manutenção','Contador','Outros Fixos'],
+  'Despesa Variável': ['Material Criação','Embalagem','Marketing','Combustível / Entrega','Taxas/Envio','Outros'],
+  'Investimento':     ['Equipamentos','Ferramentas','Cursos / Capacitação','Outros']
+};
+function _popularCategoriasFin(manter){
+  var t=(document.getElementById('f-tipo')||{}).value||'Receita';
+  var cats=CAT_FIN[t]||['Outros'];
+  var sel=document.getElementById('f-cat'); if(!sel) return;
+  var atual = (manter!=null?manter:sel.value);
+  sel.innerHTML=cats.map(function(c){return '<option>'+c+'</option>';}).join('');
+  if(atual && cats.indexOf(atual)>=0) sel.value=atual;
+}
+function editarFin(id){
+  var f=financeiro.find(function(x){return x.id===id;}); if(!f) return;
+  document.getElementById('f-id').value=f.id;
+  document.getElementById('f-tipo').value=f.tipo||'Receita';
+  _popularCategoriasFin(f.cat||'');
+  document.getElementById('f-valor').value=f.valor;
+  document.getElementById('f-desc').value=f.desc;
+  document.getElementById('f-data').value=f.data||today();
+  document.getElementById('f-pgto').value=f.pgto||'PIX';
+  openModal('modal-fin',false);
+}
+
+/* Comprei: alimenta SÓ o estoque (sem lançar despesa) */
+function confirmarCompraItem(){
+  var id=document.getElementById('ci2-id').value;
+  var item=listaCompras.find(function(i){return i.id===id;});
+  if(!item){ closeModal('modal-comprar-item'); return; }
+  var qtd=parseFloat(document.getElementById('ci2-qtd').value)||0;
+  var preco=parseFloat(document.getElementById('ci2-preco').value)||0;
+  var forn=document.getElementById('ci2-forn').value.trim();
+  if(qtd<=0){ toast('⚠️ Informe a quantidade comprada.'); return; }
+  var it=estoque.find(function(e){return (e.nome||'').toLowerCase().trim()===(item.nome||'').toLowerCase().trim();});
+  if(it){ it.qtd=(parseFloat(it.qtd)||0)+qtd; if(preco>0) it.preco=preco; if(forn) it.forn=forn; }
+  else { it={id:uid(), nome:item.nome, cat:'', un:'un', qtd:qtd, min:0, preco:preco, forn:forn}; estoque.push(it); }
+  (item.pedidos||[]).forEach(function(pid){
+    var p=pedidos.find(function(x){return x.id===pid;});
+    if(!p) return;
+    (p.materiais||[]).forEach(function(m){
+      if((m.nome||'').toLowerCase().trim()===(item.nome||'').toLowerCase().trim() && m.status!=='coberto'){ m.status='coberto'; m.itemId=it.id; }
+    });
+  });
+  listaCompras=listaCompras.filter(function(i){return i.id!==id;});
+  if(typeof DB!=='undefined'&&DB.set) DB.set('lista_compras', listaCompras);
+  save();
+  closeModal('modal-comprar-item');
+  renderScreen('compras');
+  toast('✅ "'+(item.nome||'')+'" entrou no estoque!');
+}
+</script>
+
+<script>
+/* ── SYNC AUTOMÁTICA COMPLETA (Claude jun/2026) ──────────────────
+   • ENVIO: automático ~1,5s após qualquer alteração (com flag de pendência)
+   • DOWNLOAD: automático a cada 1 minuto + ao abrir/voltar pro app
+   • PROTEÇÃO: nunca baixa por cima de alteração local ainda não enviada
+   • Os botões manuais Enviar/Baixar continuam funcionando normalmente */
+
+let _dirty;
+if ((pedidos.length + financeiro.length + estoque.length) === 0) {
+  _dirty = false; // aparelho vazio não tem nada pendente — pode baixar da nuvem
+} else {
+  _dirty = localStorage.getItem('ts_dirty') !== '0'; // na dúvida, envia primeiro (mais seguro)
+}
+function _setDirty(v){ _dirty = v; localStorage.setItem('ts_dirty', v ? '1' : '0'); }
+
+/* toda alteração marca pendência de envio */
+const _saveOrigAuto = save;
+save = function(){ _setDirty(true); _saveOrigAuto(); };
+
+/* envio com confirmação de sucesso (substitui o syncToCloud usado pelo save) */
+async function autoPush(){
+  if (!SYNC_URL || syncing) return;
+  if ((pedidos.length + financeiro.length + estoque.length) === 0) return; // nunca envia app vazio
+  syncing = true;
+  updateSyncStatus('syncing');
+  try {
+    const res = await fetch(SYNC_URL, { method:'POST', body: JSON.stringify({ action:'save', data:{ pedidos, financeiro, estoque, catalogo, clientes, fornecedores } }) });
+    const json = await res.json();
+    if (json.status === 'ok') {
+      _setDirty(false);
+      lastSync = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+      localStorage.setItem('ts_last_sync', lastSync);
+      updateSyncStatus('ok');
+    } else updateSyncStatus('error');
+  } catch(e){ updateSyncStatus('error'); }
+  syncing = false;
+}
+syncToCloud = autoPush;
+
+/* download silencioso — só roda se NÃO houver alteração local pendente */
+async function autoPull(){
+  if (!SYNC_URL || syncing || _dirty) return;
+  try {
+    const res  = await fetch(SYNC_URL + '?v=' + Date.now());
+    const json = await res.json();
+    if (json.status !== 'ok' || !json.data) return;
+    if (_dirty || syncing) return; // algo mudou enquanto baixava — aborta
+    const d = json.data;
+    const hasData = (d.pedidos?.length > 0) || (d.financeiro?.length > 0) || (d.estoque?.length > 0);
+    if (!hasData) return; // nuvem vazia: preserva dados locais
+    const next = {
+      pedidos:      d.pedidos     ?.length ? d.pedidos      : pedidos,
+      financeiro:   d.financeiro  ?.length ? d.financeiro   : financeiro,
+      estoque:      d.estoque     ?.length ? d.estoque      : estoque,
+      catalogo:     d.catalogo    ?.length ? d.catalogo     : catalogo,
+      clientes:     d.clientes    ?.length ? d.clientes     : clientes,
+      fornecedores: d.fornecedores?.length ? d.fornecedores : fornecedores,
+    };
+    const atual = { pedidos, financeiro, estoque, catalogo, clientes, fornecedores };
+    if (JSON.stringify(next) === JSON.stringify(atual)) { updateSyncStatus('ok'); return; } // nada novo
+    pedidos      = next.pedidos;      DB.set('pedidos',      pedidos);
+    financeiro   = next.financeiro;   DB.set('fin',          financeiro);
+    estoque      = next.estoque;      DB.set('est',          estoque);
+    catalogo     = next.catalogo;     DB.set('cat',          catalogo);
+    clientes     = next.clientes;     DB.set('clientes',     clientes);
+    fornecedores = next.fornecedores; DB.set('fornecedores', fornecedores);
+    lastSync = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    localStorage.setItem('ts_last_sync', lastSync);
+    updateSyncStatus('ok');
+    renderScreen(currentScreen);
+    toast('🔄 Atualizado da nuvem');
+  } catch(e){ /* silencioso — tenta de novo no próximo ciclo */ }
+}
+
+/* ciclo de 1 minuto: envia pendências ou baixa novidades */
+setInterval(function(){ _dirty ? autoPush() : autoPull(); }, 60000);
+
+/* ao abrir o app ou voltar pra ele (trocar de aba, desbloquear o celular) */
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) { _dirty ? autoPush() : autoPull(); } });
+window.addEventListener('load', function(){ setTimeout(function(){ _dirty ? autoPush() : autoPull(); }, 2000); });
 </script>
 
 </body>
