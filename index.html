@@ -867,7 +867,7 @@ html, body {
         <button class="filter-pill active" onclick="filtrarPedidos('todos')" id="f-todos">Todos</button>
         <button class="filter-pill" onclick="filtrarPedidos('Novo')" id="f-novo">Pendentes</button>
         <button class="filter-pill" onclick="filtrarPedidos('Em andamento')" id="f-em">Em produção</button>
-        <button class="filter-pill" onclick="filtrarPedidos('Pronto')" id="f-pronto">Prontos</button>
+        <button class="filter-pill" onclick="filtrarPedidos('Pronto')" id="f-pronto">Arte Pronta</button>
         <button class="filter-pill" onclick="filtrarPedidos('Entregue')" id="f-entregue">Entregues</button>
         <button class="filter-pill" onclick="filtrarPedidos('Orçamento')" id="f-orçamento">📝 Orçamentos</button>
         <button class="filter-pill" onclick="filtrarPedidos('a-receber')" id="f-a-receber">💰 A Receber</button>
@@ -1273,7 +1273,7 @@ html, body {
             <option value="Novo">Pendente</option>
             <option value="Orçamento">Orçamento (não confirmado)</option>
             <option value="Em andamento">Em produção</option>
-            <option value="Pronto">Pronto</option>
+            <option value="Pronto">Arte Pronta</option>
             <option value="Entregue">Entregue</option>
             <option value="Cancelado">Cancelado</option>
           </select>
@@ -2303,7 +2303,7 @@ function calcPrecoRapido() {
 const KANBAN_COLS = [
   {key:'Novo',              label:'🆕 Novo',            bg:'var(--cyan-l)',   fg:'var(--cyan-d)',   border:'var(--cyan)'},
   {key:'Em andamento',      label:'⚙️ Em andamento',   bg:'var(--yellow-l)', fg:'var(--orange)',   border:'var(--yellow)'},
-  {key:'Pronto',            label:'✅ Pronto',          bg:'var(--purple-l)', fg:'var(--purple)',   border:'var(--purple)'},
+  {key:'Pronto',            label:'✅ Arte Pronta',     bg:'var(--purple-l)', fg:'var(--purple)',   border:'var(--purple)'},
   {key:'Saiu para entrega', label:'🚀 Saiu p/ entrega', bg:'var(--orange-l)', fg:'var(--orange)',   border:'var(--orange)'},
   {key:'Entregue',          label:'🎉 Entregue',        bg:'var(--green-l)',  fg:'var(--green)',    border:'var(--green)'},
 ];
@@ -3955,7 +3955,7 @@ function gerarPDFPedidosCompleto() {
       '<td rowspan="'+rowspan+'" style="font-weight:700;font-size:12px;color:#FF1F78;white-space:nowrap">'+esc(p.cliente||'—')+'</td>' +
       '<td rowspan="'+rowspan+'" style="font-weight:600;font-size:11px">'+esc(p.produto||'—')+'</td>' +
       '<td rowspan="'+rowspan+'" style="white-space:nowrap;font-size:11px">'+DT(p.dataEntrega)+'</td>' +
-      '<td rowspan="'+rowspan+'" style="font-size:11px"><span style="background:'+cor+';color:white;border-radius:8px;padding:2px 7px;font-size:10px;font-weight:700">'+esc(p.status||'')+'</span></td>' +
+      '<td rowspan="'+rowspan+'" style="font-size:11px"><span style="background:'+cor+';color:white;border-radius:8px;padding:2px 7px;font-size:10px;font-weight:700">'+esc(typeof statusLabel==='function' ? statusLabel(p.status||'') : (p.status||''))+'</span></td>' +
       '<td rowspan="'+rowspan+'" style="font-weight:700;color:#FF1F78;white-space:nowrap">'+R(p.valor)+'</td>' +
       '<td rowspan="'+rowspan+'" style="color:'+(lucro>=0?'#22C55E':'#EF4444')+';font-weight:600;white-space:nowrap">'+(p.custo?R(lucro):'—')+'</td>' +
       (firstMat ?
@@ -4105,7 +4105,7 @@ function renderAnalise() {
   if (ctxSta) {
     _charts['sta'] = new Chart(ctxSta, {
       type: 'bar',
-      data: { labels: statusList, datasets: [{ data: statusCount, backgroundColor: statusCores, borderRadius: 6 }] },
+      data: { labels: statusList.map(function(s){ return typeof statusLabel==='function' ? statusLabel(s) : s; }), datasets: [{ data: statusCount, backgroundColor: statusCores, borderRadius: 6 }] },
       options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { stepSize: 1 } } } }
     });
   }
@@ -5900,7 +5900,7 @@ async function enviarParaNuvemManual(){
 var KCOLS_V2 = [
   {keys:['Novo'],                     label:'⏳ Pendentes',     bg:'var(--cyan-l)',   fg:'var(--cyan-d)', border:'var(--cyan)',   sortEntrega:true},
   {keys:['Em andamento'],             label:'⚙️ Em produção',   bg:'var(--yellow-l)', fg:'var(--orange)', border:'var(--yellow)'},
-  {keys:['Pronto','Saiu para entrega'],label:'✅ Pronto',        bg:'var(--purple-l)', fg:'var(--purple)', border:'var(--purple)'},
+  {keys:['Pronto','Saiu para entrega'],label:'✅ Arte Pronta',   bg:'var(--purple-l)', fg:'var(--purple)', border:'var(--purple)'},
   {keys:['Entregue'],                 label:'🎉 Entregue',      bg:'var(--green-l)',  fg:'var(--green)',  border:'var(--green)'},
 ];
 var KORDER_V2 = ['Novo','Em andamento','Pronto','Entregue'];
@@ -5916,7 +5916,7 @@ function avancarStatusKanban(pedidoId, ev){
   if(idx >= KORDER_V2.length-1){ toast('✅ Pedido já está no status final!'); return; }
   p.status = KORDER_V2[idx+1];
   save(); renderKanban();
-  toast('✅ '+p.cliente+' → '+p.status);
+  toast('✅ '+p.cliente+' → '+(typeof statusLabel==='function'?statusLabel(p.status):p.status));
 }
 function voltarStatusKanban(pedidoId, ev){
   if(ev) ev.stopPropagation();
@@ -5926,7 +5926,7 @@ function voltarStatusKanban(pedidoId, ev){
   if(idx<=0) return;
   p.status = KORDER_V2[idx-1];
   save(); renderKanban();
-  toast('↩️ '+p.cliente+' → '+p.status);
+  toast('↩️ '+p.cliente+' → '+(typeof statusLabel==='function'?statusLabel(p.status):p.status));
 }
 function renderKanban(){
   var board=document.getElementById('kanban-board'); if(!board) return;
@@ -6680,10 +6680,11 @@ function handleImport(e){
 
 <script>
 /* STATUS: rótulos amigáveis + Orçamento (Claude jun/2026) */
+var STATUS_LBL={'Novo':'Pendente','Em andamento':'Em produção','Pronto':'Arte Pronta','Saiu para entrega':'Saiu p/ entrega'};
+function statusLabel(s){ return STATUS_LBL[s]||s||'Pendente'; }
 function statusBadge(s){
   var cls={'Orçamento':'orcamento','Novo':'novo','Em andamento':'andamento','Pronto':'pronto','Saiu para entrega':'saiu','Entregue':'entregue','Cancelado':'cancelado'};
-  var lbl={'Novo':'Pendente','Em andamento':'Em produção','Saiu para entrega':'Saiu p/ entrega'};
-  return '<span class="li-badge badge-'+(cls[s]||'novo')+'">'+(lbl[s]||s||'Pendente')+'</span>';
+  return '<span class="li-badge badge-'+(cls[s]||'novo')+'">'+statusLabel(s)+'</span>';
 }
 </script>
 
