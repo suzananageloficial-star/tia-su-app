@@ -1629,6 +1629,7 @@ async function syncFromCloud() {
       if (d.catalogo   ?.length > 0) { catalogo     = d.catalogo;    DB.set('cat',          catalogo); }
       if (d.clientes   ?.length > 0) { clientes     = d.clientes;    DB.set('clientes',     clientes); }
       if (d.fornecedores?.length > 0){ fornecedores = d.fornecedores;DB.set('fornecedores', fornecedores); }
+      if (d.recorrentes ?.length > 0 && typeof recorrentes!=='undefined'){ recorrentes = d.recorrentes; DB.set('recorrentes', recorrentes); }
       lastSync = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
       localStorage.setItem('ts_last_sync', lastSync);
       updateSyncStatus('ok');
@@ -5872,7 +5873,7 @@ async function enviarParaNuvemManual(){
   if(box){ box.style.display='block'; box.style.background='var(--cyan-l)'; box.style.color='var(--cyan-d)'; box.textContent='🔄 Enviando para a nuvem...'; }
   if(typeof updateSyncStatus==='function') updateSyncStatus('syncing');
   try{
-    const res=await fetch(SYNC_URL,{method:'POST',body:JSON.stringify({action:'save',data:{pedidos,financeiro,estoque,catalogo,clientes,fornecedores}})});
+    const res=await fetch(SYNC_URL,{method:'POST',body:JSON.stringify({action:'save',data:{pedidos,financeiro,estoque,catalogo,clientes,fornecedores,recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[])}})});
     const json=await res.json();
     if(json.status==='ok'){
       lastSync=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
@@ -6765,17 +6766,58 @@ function confirmarCompraItem(){
    • PROTEÇÃO: nunca baixa por cima de alteração local ainda não enviada
    • Os botões manuais Enviar/Baixar continuam funcionando normalmente */
 
-let _dirty;
-if ((pedidos.length + financeiro.length + estoque.length) === 0) {
-  _dirty = false; // aparelho vazio não tem nada pendente — pode baixar da nuvem
-} else {
-  _dirty = localStorage.getItem('ts_dirty') !== '0'; // na dúvida, envia primeiro (mais seguro)
-}
+let _dirty = localStorage.getItem('ts_dirty') === '1';
 function _setDirty(v){ _dirty = v; localStorage.setItem('ts_dirty', v ? '1' : '0'); }
 
-/* toda alteração marca pendência de envio */
+/* ── MESCLAGEM SEGURA ─────────────────────────────────────────
+   Cada registro ganha um carimbo (updatedAt) quando é criado/alterado.
+   Exclusões viram "lápides" (id + quando foi excluído).
+   Na sync, os dados são MESCLADOS registro a registro: vale a versão
+   mais recente — um aparelho nunca apaga os dados do outro. */
+let tumbas = (function(){ try{ return JSON.parse(localStorage.getItem('ts_tumbas')||'[]'); }catch(e){ return []; } })();
+
+function _stores(){
+  return { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo,
+    clientes:clientes, fornecedores:fornecedores,
+    recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[]) };
+}
+let _snapIds = {};
+function _snapshot(){
+  const st=_stores();
+  for(const k in st){
+    const m={};
+    (st[k]||[]).forEach(function(r){ if(r&&r.id) m[r.id]=JSON.stringify(r); });
+    _snapIds[k]=m;
+  }
+}
+function _stampEDetecta(){
+  const agora=Date.now(); const st=_stores();
+  for(const k in st){
+    const prev=_snapIds[k]||{}; const atuais={};
+    (st[k]||[]).forEach(function(r){
+      if(!r||!r.id) return;
+      atuais[r.id]=1;
+      if(prev[r.id]!==JSON.stringify(r)) r.updatedAt=agora; // novo ou alterado
+    });
+    for(const id in prev){ if(!atuais[id]) tumbas.push({id:id, ts:agora}); } // excluído
+  }
+  const corte=Date.now()-1000*60*60*24*90; // guarda lápides por 90 dias
+  tumbas=tumbas.filter(function(t){ return t.ts>corte; });
+  localStorage.setItem('ts_tumbas', JSON.stringify(tumbas));
+  _snapshot();
+}
+_snapshot();
+
+/* toda alteração: carimba registros, detecta exclusões e marca pendência */
 const _saveOrigAuto = save;
-save = function(){ _setDirty(true); _saveOrigAuto(); };
+save = function(){
+  _stampEDetecta();
+  _setDirty(true);
+  _saveOrigAuto();
+  DB.set('clientes', clientes);
+  DB.set('fornecedores', fornecedores);
+  if (typeof recorrentes!=='undefined') DB.set('recorrentes', recorrentes);
+};
 
 /* envio com confirmação de sucesso (substitui o syncToCloud usado pelo save) */
 async function autoPush(){
@@ -6784,7 +6826,7 @@ async function autoPush(){
   syncing = true;
   updateSyncStatus('syncing');
   try {
-    const res = await fetch(SYNC_URL, { method:'POST', body: JSON.stringify({ action:'save', data:{ pedidos, financeiro, estoque, catalogo, clientes, fornecedores } }) });
+    const res = await fetch(SYNC_URL, { method:'POST', body: JSON.stringify({ action:'save', data:{ pedidos, financeiro, estoque, catalogo, clientes, fornecedores, recorrentes: (typeof recorrentes!=='undefined'?recorrentes:[]), _tumbas: tumbas } }) });
     const json = await res.json();
     if (json.status === 'ok') {
       _setDirty(false);
@@ -6797,47 +6839,263 @@ async function autoPush(){
 }
 syncToCloud = autoPush;
 
-/* download silencioso — só roda se NÃO houver alteração local pendente */
+/* download com MESCLAGEM — junta os dados da nuvem com os locais,
+   registro a registro; nunca apaga o que só existe deste lado */
 async function autoPull(){
-  if (!SYNC_URL || syncing || _dirty) return;
+  if (!SYNC_URL || syncing) return;
   try {
     const res  = await fetch(SYNC_URL + '?v=' + Date.now());
     const json = await res.json();
     if (json.status !== 'ok' || !json.data) return;
-    if (_dirty || syncing) return; // algo mudou enquanto baixava — aborta
+    if (syncing) return; // começou um envio enquanto baixava — aborta
     const d = json.data;
     const hasData = (d.pedidos?.length > 0) || (d.financeiro?.length > 0) || (d.estoque?.length > 0);
     if (!hasData) return; // nuvem vazia: preserva dados locais
-    const next = {
-      pedidos:      d.pedidos     ?.length ? d.pedidos      : pedidos,
-      financeiro:   d.financeiro  ?.length ? d.financeiro   : financeiro,
-      estoque:      d.estoque     ?.length ? d.estoque      : estoque,
-      catalogo:     d.catalogo    ?.length ? d.catalogo     : catalogo,
-      clientes:     d.clientes    ?.length ? d.clientes     : clientes,
-      fornecedores: d.fornecedores?.length ? d.fornecedores : fornecedores,
+    const tumbasNuvem = d._tumbas || [];
+    const todasTumbas = tumbas.concat(tumbasNuvem);
+    function mesclar(localArr, nuvemArr){
+      const map={}; const extras=[];
+      (nuvemArr||[]).forEach(function(r){ if(r&&r.id) map[r.id]=r; else if(r) extras.push(r); });
+      (localArr||[]).forEach(function(r){
+        if(!r) return;
+        if(!r.id){ extras.push(r); return; }
+        const c=map[r.id];
+        if(!c || (r.updatedAt||0) > (c.updatedAt||0)) map[r.id]=r; // vale o mais recente
+      });
+      todasTumbas.forEach(function(t){
+        const r=map[t.id];
+        if(r && (r.updatedAt||0) <= t.ts) delete map[t.id]; // excluído em algum aparelho
+      });
+      return Object.values(map).concat(extras);
+    }
+    const rcLocal = (typeof recorrentes!=='undefined'?recorrentes:[]);
+    const novo = {
+      pedidos:      mesclar(pedidos,      d.pedidos),
+      financeiro:   mesclar(financeiro,   d.financeiro),
+      estoque:      mesclar(estoque,      d.estoque),
+      catalogo:     mesclar(catalogo,     d.catalogo),
+      clientes:     mesclar(clientes,     d.clientes),
+      fornecedores: mesclar(fornecedores, d.fornecedores),
+      recorrentes:  mesclar(rcLocal,      d.recorrentes),
     };
-    const atual = { pedidos, financeiro, estoque, catalogo, clientes, fornecedores };
-    if (JSON.stringify(next) === JSON.stringify(atual)) { updateSyncStatus('ok'); return; } // nada novo
-    pedidos      = next.pedidos;      DB.set('pedidos',      pedidos);
-    financeiro   = next.financeiro;   DB.set('fin',          financeiro);
-    estoque      = next.estoque;      DB.set('est',          estoque);
-    catalogo     = next.catalogo;     DB.set('cat',          catalogo);
-    clientes     = next.clientes;     DB.set('clientes',     clientes);
-    fornecedores = next.fornecedores; DB.set('fornecedores', fornecedores);
+    // absorve as lápides da nuvem
+    const _vistas={}; tumbas.forEach(function(t){ _vistas[t.id+'|'+t.ts]=1; });
+    tumbasNuvem.forEach(function(t){ if(t&&t.id&&!_vistas[t.id+'|'+t.ts]) tumbas.push(t); });
+    localStorage.setItem('ts_tumbas', JSON.stringify(tumbas));
+
+    const atual = { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo, clientes:clientes, fornecedores:fornecedores, recorrentes:rcLocal };
+    const mudouLocal = JSON.stringify(novo) !== JSON.stringify(atual);
+    const igualNuvem = JSON.stringify(novo) === JSON.stringify({ pedidos:d.pedidos||[], financeiro:d.financeiro||[], estoque:d.estoque||[], catalogo:d.catalogo||[], clientes:d.clientes||[], fornecedores:d.fornecedores||[], recorrentes:d.recorrentes||[] });
+    if (mudouLocal) {
+      pedidos      = novo.pedidos;      DB.set('pedidos',      pedidos);
+      financeiro   = novo.financeiro;   DB.set('fin',          financeiro);
+      estoque      = novo.estoque;      DB.set('est',          estoque);
+      catalogo     = novo.catalogo;     DB.set('cat',          catalogo);
+      clientes     = novo.clientes;     DB.set('clientes',     clientes);
+      fornecedores = novo.fornecedores; DB.set('fornecedores', fornecedores);
+      if (typeof recorrentes!=='undefined') { recorrentes = novo.recorrentes; DB.set('recorrentes', recorrentes); }
+      _snapshot(); // o que veio da mesclagem não é alteração local
+      renderScreen(currentScreen);
+      toast('🔄 Atualizado da nuvem');
+    }
+    if (!igualNuvem) _setDirty(true); // este lado tem coisas que a nuvem não tem → envia a união no próximo ciclo
     lastSync = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     localStorage.setItem('ts_last_sync', lastSync);
     updateSyncStatus('ok');
-    renderScreen(currentScreen);
-    toast('🔄 Atualizado da nuvem');
   } catch(e){ /* silencioso — tenta de novo no próximo ciclo */ }
 }
 
-/* ciclo de 1 minuto: envia pendências ou baixa novidades */
-setInterval(function(){ _dirty ? autoPush() : autoPull(); }, 60000);
+/* ciclo de 1 minuto: baixa+mescla primeiro, depois envia a união */
+async function cicloSync(){ await autoPull(); if (_dirty) autoPush(); }
+setInterval(cicloSync, 60000);
 
 /* ao abrir o app ou voltar pra ele (trocar de aba, desbloquear o celular) */
-document.addEventListener('visibilitychange', function(){ if (!document.hidden) { _dirty ? autoPush() : autoPull(); } });
-window.addEventListener('load', function(){ setTimeout(function(){ _dirty ? autoPush() : autoPull(); }, 2000); });
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) cicloSync(); });
+window.addEventListener('load', function(){ setTimeout(cicloSync, 2000); });
+</script>
+
+<script>
+/* ── DESPESAS FIXAS RECORRENTES (Claude jun/2026) ─────────────────
+   Cadastre contas fixas (aluguel, luz, internet...) uma única vez.
+   Todo mês o app mostra no Financeiro o painel "Contas do mês" com
+   o status de cada uma (✓ Paga / ⏳ A pagar / ⚠️ Vencida) e um aviso
+   no Dashboard. "✓ Paguei" lança a despesa no financeiro sozinho. */
+
+let recorrentes = DB.get('recorrentes');
+
+function _mesRef(){ const n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); }
+function _recPaga(r){ const m=_mesRef(); return financeiro.some(f=>f.recId===r.id && f.mesRef===m); }
+
+/* ---- Modal de cadastro (injetado no body) ---- */
+document.body.insertAdjacentHTML('beforeend',
+  '<div class="modal-overlay" id="modal-rec">'+
+    '<div class="modal">'+
+      '<div class="modal-handle"></div>'+
+      '<div class="modal-title">📌 Despesa Fixa Recorrente</div>'+
+      '<div class="modal-body">'+
+        '<input type="hidden" id="r-id">'+
+        '<div class="form-group"><label class="form-label">Nome *</label><input class="form-input" id="r-nome" placeholder="Ex: Aluguel, Energia, Internet"></div>'+
+        '<div class="form-row">'+
+          '<div class="form-group"><label class="form-label">Valor (R$) *</label><input class="form-input" id="r-valor" type="number" placeholder="0,00"></div>'+
+          '<div class="form-group"><label class="form-label">Vence dia</label><input class="form-input" id="r-dia" type="number" min="1" max="31" placeholder="ex: 10"></div>'+
+        '</div>'+
+        '<div class="form-row">'+
+          '<div class="form-group"><label class="form-label">Categoria</label><select class="form-select" id="r-cat">'+
+            '<option>Aluguel / Espaço</option><option>Energia elétrica</option><option>Internet</option><option>Celular / Telefone</option><option>MEI / DAS</option><option>Plataformas (Canva etc.)</option><option>Manutenção</option><option>Contador</option><option>Outros Fixos</option>'+
+          '</select></div>'+
+          '<div class="form-group"><label class="form-label">Forma Pgto</label><select class="form-select" id="r-pgto">'+
+            '<option>PIX</option><option>Cartão crédito</option><option>Cartão débito</option><option>Dinheiro</option><option>Transferência</option><option>Débito automático</option><option>Boleto</option>'+
+          '</select></div>'+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--gray-d);margin-top:4px">💡 Se o valor varia (ex: conta de luz), cadastre o valor aproximado — na hora de marcar como paga você confirma o valor real.</div>'+
+      '</div>'+
+      '<div class="form-actions">'+
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-rec\')">Cancelar</button>'+
+        '<button class="btn btn-outline" id="r-excluir" style="color:var(--red);display:none" onclick="excluirRecorrente()">🗑️</button>'+
+        '<button class="btn btn-pink" style="flex:1" onclick="salvarRecorrente()">Salvar</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>');
+
+function novaRecorrente(){
+  document.getElementById('r-id').value='';
+  document.getElementById('r-nome').value='';
+  document.getElementById('r-valor').value='';
+  document.getElementById('r-dia').value='';
+  document.getElementById('r-cat').selectedIndex=0;
+  document.getElementById('r-pgto').selectedIndex=0;
+  document.getElementById('r-excluir').style.display='none';
+  openModal('modal-rec', false);
+}
+function editarRecorrente(id){
+  const r=recorrentes.find(x=>x.id===id); if(!r) return;
+  document.getElementById('r-id').value=r.id;
+  document.getElementById('r-nome').value=r.nome||'';
+  document.getElementById('r-valor').value=r.valor||'';
+  document.getElementById('r-dia').value=r.dia||'';
+  document.getElementById('r-cat').value=r.cat||'Outros Fixos';
+  document.getElementById('r-pgto').value=r.pgto||'PIX';
+  document.getElementById('r-excluir').style.display='';
+  openModal('modal-rec', false);
+}
+function salvarRecorrente(){
+  const id=document.getElementById('r-id').value;
+  const nome=document.getElementById('r-nome').value.trim();
+  const valor=parseFloat(document.getElementById('r-valor').value)||0;
+  if(!nome||!valor){ toast('⚠️ Preencha nome e valor!'); return; }
+  let dia=parseInt(document.getElementById('r-dia').value)||0;
+  if(dia<1||dia>31) dia=0;
+  const obj={ id:id||uid(), nome:nome, valor:valor, dia:dia,
+    cat:document.getElementById('r-cat').value, pgto:document.getElementById('r-pgto').value, ativo:true };
+  if(id){ const i=recorrentes.findIndex(r=>r.id===id); if(i>=0) recorrentes[i]=obj; else recorrentes.push(obj); }
+  else recorrentes.push(obj);
+  DB.set('recorrentes', recorrentes);
+  save();
+  closeModal('modal-rec');
+  renderScreen(currentScreen);
+  toast('✅ Despesa fixa salva!');
+}
+function excluirRecorrente(){
+  const id=document.getElementById('r-id').value; if(!id) return;
+  const r=recorrentes.find(x=>x.id===id);
+  if(!confirm('Excluir a despesa fixa "'+(r?r.nome:'')+'"?\n(Os pagamentos já lançados no financeiro NÃO serão apagados.)')) return;
+  recorrentes=recorrentes.filter(x=>x.id!==id);
+  DB.set('recorrentes', recorrentes);
+  save();
+  closeModal('modal-rec');
+  renderScreen(currentScreen);
+  toast('🗑️ Despesa fixa excluída.');
+}
+function pagarRecorrente(id){
+  const r=recorrentes.find(x=>x.id===id); if(!r) return;
+  let v=prompt('Valor pago de "'+r.nome+'" (R$):', String(r.valor||''));
+  if(v===null) return;
+  v=parseFloat(String(v).replace(',','.'))||0;
+  if(!v){ toast('⚠️ Valor inválido.'); return; }
+  financeiro.push({ id:uid(), tipo:'Despesa Fixa', cat:r.cat||'Outros Fixos', valor:v, desc:r.nome,
+    data:today(), pgto:r.pgto||'PIX', recId:r.id, mesRef:_mesRef() });
+  save();
+  renderScreen(currentScreen);
+  toast('✅ '+r.nome+' marcada como paga!');
+}
+
+/* ---- Painel "Contas do mês" na tela Financeiro ---- */
+function renderContasMes(){
+  const finList=document.getElementById('fin-list');
+  if(!finList) return;
+  let box=document.getElementById('contas-mes-box');
+  if(!box){
+    box=document.createElement('div');
+    box.id='contas-mes-box';
+    box.style='margin-bottom:14px';
+    finList.parentElement.insertBefore(box, finList);
+  }
+  const hoje=new Date().getDate();
+  const ativos=recorrentes.filter(r=>r.ativo!==false);
+  const linhas=ativos.slice().sort((a,b)=>(a.dia||32)-(b.dia||32)).map(function(r){
+    const paga=_recPaga(r);
+    const vencida=!paga && r.dia && hoje>r.dia;
+    const cor =paga?'var(--green)':(vencida?'var(--red)':'var(--orange)');
+    const bg  =paga?'var(--green-l)':(vencida?'var(--red-l)':'var(--yellow-l)');
+    const tag =paga?'✓ Paga':(vencida?'⚠️ Vencida':'⏳ A pagar');
+    return '<div style="display:flex;align-items:center;gap:10px;background:'+bg+';border-radius:12px;padding:10px 12px;margin-bottom:6px">'+
+      '<div style="flex:1;min-width:0;cursor:pointer" onclick="editarRecorrente(\''+r.id+'\')">'+
+        '<div style="font-weight:700;font-size:13px">'+(r.nome||'')+'</div>'+
+        '<div style="font-size:11px;color:var(--gray-d)">'+(r.dia?('vence dia '+r.dia+' · '):'')+fmt(r.valor||0)+(r.cat?(' · '+r.cat):'')+'</div>'+
+      '</div>'+
+      '<span style="font-size:11px;font-weight:800;color:'+cor+';white-space:nowrap">'+tag+'</span>'+
+      (paga?'':'<button onclick="pagarRecorrente(\''+r.id+'\')" style="background:var(--green);color:#fff;border:none;border-radius:10px;padding:6px 10px;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap">✓ Paguei</button>')+
+    '</div>';
+  }).join('');
+  const nPagas=ativos.filter(_recPaga).length;
+  box.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
+      '<div style="font-size:13px;font-weight:800;color:var(--brown)">📌 Contas do mês'+(ativos.length?(' · '+nPagas+'/'+ativos.length+' pagas'):'')+'</div>'+
+      '<button onclick="novaRecorrente()" style="background:var(--pink);color:#fff;border:none;border-radius:10px;padding:5px 10px;font-size:11px;font-weight:800;cursor:pointer">+ Despesa fixa</button>'+
+    '</div>'+
+    (linhas||'<div style="font-size:12px;color:var(--gray-d);background:#F5F5F5;border-radius:12px;padding:10px 12px">Cadastre suas despesas fixas (aluguel, luz, internet...) e todo mês o app te avisa sozinho o que falta pagar.</div>');
+}
+
+/* ---- Aviso no Dashboard ---- */
+function renderAvisoContasDash(){
+  const grid=document.getElementById('kpi-grid');
+  if(!grid) return;
+  let box=document.getElementById('dash-contas-box');
+  if(!box){
+    box=document.createElement('div');
+    box.id='dash-contas-box';
+    grid.parentElement.insertBefore(box, grid);
+  }
+  const ativos=recorrentes.filter(r=>r.ativo!==false);
+  if(!ativos.length){ box.innerHTML=''; return; }
+  const pend=ativos.filter(r=>!_recPaga(r));
+  if(!pend.length){
+    box.innerHTML='<div style="margin:10px 16px 0;background:var(--green-l);color:var(--green);border-radius:12px;padding:10px 14px;font-size:12px;font-weight:700">✅ Contas fixas do mês todas pagas!</div>';
+    return;
+  }
+  const hoje=new Date().getDate();
+  const venc=pend.filter(r=>r.dia&&hoje>r.dia).length;
+  box.innerHTML='<div onclick="navigate(\'financeiro\')" style="margin:10px 16px 0;background:'+(venc?'var(--red-l)':'var(--yellow-l)')+';color:'+(venc?'var(--red)':'var(--orange)')+';border-radius:12px;padding:10px 14px;font-size:12px;font-weight:700;cursor:pointer">💸 '+pend.length+' conta'+(pend.length>1?'s':'')+' fixa'+(pend.length>1?'s':'')+' a pagar este mês'+(venc?(' — '+venc+' vencida'+(venc>1?'s':'')+'!'):'')+' · toque pra ver</div>';
+}
+
+/* ---- Liga os painéis nas telas existentes ---- */
+const _renderFinOrigRec = renderFinanceiro;
+renderFinanceiro = function(){ _renderFinOrigRec(); renderContasMes(); };
+const _renderDashOrigRec = renderDashboard;
+renderDashboard = function(){ _renderDashOrigRec(); renderAvisoContasDash(); };
+
+/* Editar um pagamento no financeiro não pode perder o vínculo com a recorrente */
+const _salvarFinOrigRec = salvarFin;
+salvarFin = function(){
+  const id=document.getElementById('f-id').value;
+  const antigo=id?financeiro.find(f=>f.id===id):null;
+  const extras=(antigo&&antigo.recId)?{recId:antigo.recId,mesRef:antigo.mesRef}:null;
+  _salvarFinOrigRec();
+  if(extras){ const f=financeiro.find(x=>x.id===id); if(f){ f.recId=extras.recId; f.mesRef=extras.mesRef; DB.set('fin',financeiro); } }
+};
+
+/* Re-renderiza a tela atual pra os painéis aparecerem já na abertura */
+window.addEventListener('load', function(){ try{ renderScreen(currentScreen); }catch(e){} });
 </script>
 
 </body>
