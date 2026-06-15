@@ -913,6 +913,7 @@ html, body {
       </div>
       <div id="estoque-alertas"></div>
       <div class="section-title">Itens em estoque</div>
+      <div style="margin-bottom:8px"><select class="form-select" id="estoque-filtro-cat" onchange="renderEstoque()" style="font-size:13px"><option value="">📂 Todas as categorias</option></select></div>
       <div class="card"><div id="estoque-list"></div></div>
       <div style="height:80px"></div>
     </div>
@@ -1206,6 +1207,11 @@ html, body {
         <label class="form-label">Cliente *</label>
         <input class="form-input" id="p-cliente" placeholder="Nome do cliente" list="clientes-datalist" autocomplete="off" oninput="clienteAutocomplete()">
         <datalist id="clientes-datalist"></datalist>
+        <button type="button" onclick="_togglePickerCliente()" class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;border:1.5px dashed var(--pink);color:var(--pink);font-size:12px;font-weight:700">👤 Escolher cliente cadastrado</button>
+        <div id="p-cliente-picker" style="display:none;background:#fff;border:1.5px solid var(--pink-l);border-radius:12px;padding:8px;margin-top:6px;max-height:240px;overflow-y:auto">
+          <input class="form-input" id="p-cliente-busca" placeholder="🔍 buscar cliente..." autocomplete="off" oninput="_renderPickerCliente(this.value)" style="font-size:13px;margin-bottom:6px">
+          <div id="p-cliente-picker-lista"></div>
+        </div>
       </div>
       <div id="cliente-historico" style="display:none;background:#f8f8f8;border-radius:8px;padding:8px 12px;margin-bottom:8px"></div>
       <div class="form-group">
@@ -1747,7 +1753,7 @@ function openModal(id, isNew) {
   } else {
     el.onclick = null; // só fecha pelo botão Fechar
   }
-  if(id==='modal-pedido'){ setTimeout(popularCatalogoSelect,60); setTimeout(popularDatalistClientes,60); }
+  if(id==='modal-pedido'){ var _pk=document.getElementById('p-cliente-picker'); if(_pk) _pk.style.display='none'; setTimeout(popularCatalogoSelect,60); setTimeout(popularDatalistClientes,60); }
   if(id==='modal-fin'){ if(isNew){ _estLinhas=[]; } setTimeout(_popularCategoriasFin,30); }
 }
 function closeModal(id) {
@@ -2218,18 +2224,9 @@ function editarPedido(id) {
   const nomeCliente = p.cliente || '';
   const elHist = document.getElementById('cliente-historico');
   if (elHist) {
-    if (nomeCliente) {
-      const historico = pedidos.filter(x => x.id !== p.id && (x.cliente||'').toLowerCase() === nomeCliente.toLowerCase());
-      const totalGasto = historico.reduce((s,x) => s+(x.valor||0), 0);
-      if (historico.length > 0) {
-        elHist.style.display = 'block';
-        elHist.innerHTML = `<span style="font-size:11px;color:#888">👤 ${nomeCliente} já fez <b>${historico.length}</b> pedido(s) — total: <b style="color:var(--pink)">R$ ${totalGasto.toFixed(2).replace('.',',')}</b></span>`;
-      } else {
-        elHist.style.display = 'none';
-      }
-    } else {
-      elHist.style.display = 'none';
-    }
+    const html = nomeCliente ? _histClienteHTML(nomeCliente, p.id) : '';
+    if (html) { elHist.style.display = 'block'; elHist.innerHTML = html; }
+    else elHist.style.display = 'none';
   }
   // Carrega itens do pedido
   setTimeout(() => {
@@ -2546,8 +2543,17 @@ function renderEstoque() {
   document.getElementById('estoque-sub').textContent=`${estoque.length} item${estoque.length!==1?'s':''} cadastrado${estoque.length!==1?'s':''}`;
   document.getElementById('estoque-alertas').innerHTML=baixos.length
     ?`<div class="estoque-alert">⚠️ ${baixos.length} item${baixos.length>1?'s':''} abaixo do mínimo: ${baixos.map(e=>e.nome).join(', ')}</div>`:'';
-  document.getElementById('estoque-list').innerHTML=estoque.length
-    ?estoque.map(e=>`
+  const selCat=document.getElementById('estoque-filtro-cat');
+  const cats=[...new Set(estoque.map(e=>(e.cat||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  let filtroCat='';
+  if(selCat){
+    filtroCat=selCat.value;
+    selCat.innerHTML='<option value="">📂 Todas as categorias</option>'+cats.map(c=>`<option${c===filtroCat?' selected':''}>${c}</option>`).join('');
+    if(filtroCat && cats.indexOf(filtroCat)<0){ filtroCat=''; selCat.value=''; }
+  }
+  const _lista=estoque.filter(e=>!filtroCat || (e.cat||'').trim()===filtroCat).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
+  document.getElementById('estoque-list').innerHTML=_lista.length
+    ?_lista.map(e=>`
       <div class="list-item">
         <div class="li-icon" style="background:${e.qtd<=e.min&&e.min>0?'var(--red-l)':'var(--cyan-l)'}" onclick="editarEstoque('${e.id}')">
           ${e.qtd<=e.min&&e.min>0?'🔴':'📦'}
@@ -2565,7 +2571,7 @@ function renderEstoque() {
           </div>
         </div>
       </div>`).join('')
-    :empty('📦','Nenhum item cadastrado','Toque em + para adicionar');
+    :empty('📦',filtroCat?'Nenhum item nessa categoria':'Nenhum item cadastrado',filtroCat?'Troque o filtro acima':'Toque em + para adicionar');
 }
 
 function salvarEstoque() {
@@ -2885,35 +2891,71 @@ function popularDatalistClientes() {
   dl.innerHTML = nomes.map(n => `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
 }
 
+// Histórico detalhado dos pedidos de um cliente (Claude jun/2026)
+function _histClienteHTML(nome, excludeId){
+  var key=(nome||'').toLowerCase().trim();
+  var hist=(pedidos||[]).filter(function(x){ return x.id!==excludeId && (x.cliente||'').toLowerCase().trim()===key; });
+  if(!hist.length) return '';
+  hist.sort(function(a,b){ return (b.dataEntrega||'').localeCompare(a.dataEntrega||''); });
+  var total=hist.reduce(function(s,x){return s+(x.valor||0);},0);
+  var linhas=hist.slice(0,8).map(function(x){
+    var d=x.dataEntrega?(' · '+x.dataEntrega.split('-').reverse().join('/')):'';
+    return '<div style="font-size:11px;color:#666;padding:3px 0;border-top:1px solid #eee">'+_esc(x.produto||'(sem produto)')+d+' — <b>'+fmt(x.valor||0)+'</b></div>';
+  }).join('');
+  var mais = hist.length>8 ? ('<div style="font-size:10px;color:#999;padding-top:2px">+ '+(hist.length-8)+' pedido(s) mais antigos</div>') : '';
+  return '<div style="font-size:11px;color:#888;margin-bottom:2px">👤 <b>'+_esc(nome)+'</b> já fez <b>'+hist.length+'</b> pedido(s) — total <b style="color:var(--pink)">'+fmt(total)+'</b></div>'+linhas+mais;
+}
 // Ao digitar/selecionar um cliente, preenche WhatsApp e mostra histórico
 function clienteAutocomplete() {
   const nome = (document.getElementById('p-cliente').value || '').trim();
   const whatsEl = document.getElementById('p-whats');
   const elHist  = document.getElementById('cliente-historico');
   if (!nome) { if (elHist) elHist.style.display = 'none'; return; }
-
-  // Procura cliente cadastrado pelo nome (case-insensitive)
   const cli = (clientes || []).find(c => {
     const n = typeof c === 'string' ? c : (c && c.nome) || '';
     return n.toLowerCase().trim() === nome.toLowerCase();
   });
-  // Preenche WhatsApp se o cliente tiver e o campo estiver vazio
   if (cli && typeof cli === 'object' && cli.whats && whatsEl && !whatsEl.value.trim()) {
     whatsEl.value = cli.whats;
   }
-
-  // Mostra histórico de pedidos desse cliente
   if (elHist) {
     const pid = document.getElementById('p-id').value;
-    const historico = pedidos.filter(x => x.id !== pid && (x.cliente||'').toLowerCase().trim() === nome.toLowerCase());
-    const totalGasto = historico.reduce((s,x) => s+(x.valor||0), 0);
-    if (historico.length > 0) {
-      elHist.style.display = 'block';
-      elHist.innerHTML = `<span style="font-size:11px;color:#888">👤 ${nome} já fez <b>${historico.length}</b> pedido(s) — total: <b style="color:var(--pink)">R$ ${totalGasto.toFixed(2).replace('.',',')}</b></span>`;
-    } else {
-      elHist.style.display = 'none';
-    }
+    const html = _histClienteHTML(nome, pid);
+    if (html) { elHist.style.display='block'; elHist.innerHTML=html; }
+    else elHist.style.display='none';
   }
+}
+// ── Seletor de cliente cadastrado (toca pra escolher) ──
+var _pickerClientes=[];
+function _clientesUnicos(){
+  var mapa={};
+  (clientes||[]).forEach(function(c){ var n=(typeof c==='string'?c:(c&&c.nome)||'').trim(); if(n){ var k=n.toLowerCase(); if(!mapa[k]) mapa[k]={nome:n,qtd:0}; } });
+  (pedidos||[]).forEach(function(p){ var n=(p.cliente||'').trim(); if(!n) return; var k=n.toLowerCase(); if(!mapa[k]) mapa[k]={nome:n,qtd:0}; mapa[k].qtd++; });
+  return Object.values(mapa).sort(function(a,b){return a.nome.localeCompare(b.nome,'pt-BR');});
+}
+function _togglePickerCliente(){
+  var box=document.getElementById('p-cliente-picker'); if(!box) return;
+  var abrir = (box.style.display==='none' || !box.style.display);
+  box.style.display = abrir?'block':'none';
+  if(abrir){ var b=document.getElementById('p-cliente-busca'); if(b) b.value=''; _renderPickerCliente(''); }
+}
+function _renderPickerCliente(filtro){
+  var el=document.getElementById('p-cliente-picker-lista'); if(!el) return;
+  var f=(filtro||'').toLowerCase().trim();
+  _pickerClientes=_clientesUnicos().filter(function(c){ return !f || c.nome.toLowerCase().indexOf(f)>=0; });
+  if(!_pickerClientes.length){ el.innerHTML='<div style="font-size:12px;color:#999;padding:10px;text-align:center">Nenhum cliente encontrado</div>'; return; }
+  el.innerHTML=_pickerClientes.map(function(c,i){
+    return '<div onclick="_selecionarCliente('+i+')" style="padding:9px 10px;border-bottom:1px solid #f2f2f2;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<span style="font-size:13px;font-weight:600">'+_esc(c.nome)+'</span>'
+      +'<span style="font-size:11px;color:#999;white-space:nowrap">'+c.qtd+' pedido'+(c.qtd!==1?'s':'')+'</span>'
+    +'</div>';
+  }).join('');
+}
+function _selecionarCliente(i){
+  var c=_pickerClientes[i]; if(!c) return;
+  var inp=document.getElementById('p-cliente'); if(inp) inp.value=c.nome;
+  var box=document.getElementById('p-cliente-picker'); if(box) box.style.display='none';
+  if(typeof clienteAutocomplete==='function') clienteAutocomplete();
 }
 
 function adicionarMaterialPedido(nome='', qtd=1, status='pendente', matId='') {
