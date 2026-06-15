@@ -1753,7 +1753,7 @@ function openModal(id, isNew) {
   const el = document.getElementById(id);
   el.classList.add('open');
   // modal-pedido é um formulário longo — NÃO fecha ao clicar no fundo (evita perda de dados)
-  if (id !== 'modal-pedido') {
+  if (id !== 'modal-pedido' && id !== 'modal-fin') {
     el.onclick = e => { if(e.target===e.currentTarget) closeModal(id); };
   } else {
     el.onclick = null; // só fecha pelo botão Fechar
@@ -4906,7 +4906,7 @@ async function testarApiKey() {
 function mostrarConfigApiKey() {
   // Fecha outros modais abertos primeiro
   document.querySelectorAll('.modal-overlay.open').forEach(m => {
-    if (m.id !== 'modal-apikey') m.classList.remove('open');
+    if (m.id !== 'modal-apikey' && m.id !== 'modal-fin') m.classList.remove('open');
   });
   const existing = getApiKey();
   if (existing) document.getElementById('apikey-input').value = existing;
