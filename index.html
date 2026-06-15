@@ -3091,9 +3091,8 @@ function reconciliarPedidos() {
 function abrirModalEstoqueFin(descCompra, valorCompra) {
   document.getElementById('estoque-fin-lista').innerHTML = '';
   const itemSugerido = tentarAdivinharItem(descCompra);
-  // Não pre-popula o preço unitário com o valor total da compra
-  // pois valorCompra é o total, não o unitário
-  adicionarLinhaEstoqueFin(itemSugerido, 1, 0);
+  // Pré-popula a 1ª linha com o valor total da compra; o custo unitário sai de valor ÷ qtd
+  adicionarLinhaEstoqueFin(itemSugerido, 1, valorCompra || 0);
   openModal('modal-estoque-fin', false);
 }
 
@@ -3107,7 +3106,7 @@ function tentarAdivinharItem(desc) {
   return found ? found.id : '';
 }
 
-function adicionarLinhaEstoqueFin(itemId='', qtd=1, valorUnit=0) {
+function adicionarLinhaEstoqueFin(itemId='', qtd=1, valorTotal=0) {
   const lista = document.getElementById('estoque-fin-lista');
   const rowId = 'efrow-' + uid();
 
@@ -3117,6 +3116,7 @@ function adicionarLinhaEstoqueFin(itemId='', qtd=1, valorUnit=0) {
 
   const row = document.createElement('div');
   row.id = rowId;
+  row.className = 'ef-row';
   row.style.cssText = 'background:var(--gray-l);border-radius:var(--radius-xs);padding:10px;display:flex;flex-direction:column;gap:8px';
   row.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between">
@@ -3128,7 +3128,7 @@ function adicionarLinhaEstoqueFin(itemId='', qtd=1, valorUnit=0) {
       <option value="__novo__">✨ Cadastrar novo item</option>
       ${optsExistentes}
     </select>
-    <div id="${rowId}-novo" style="display:none">
+    <div class="ef-novo" style="display:none">
       <input class="form-input ef-novo-nome" placeholder="Nome do novo item" style="font-size:12px;margin-bottom:6px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
         <select class="form-select ef-novo-cat" style="font-size:11px">
@@ -3147,97 +3147,76 @@ function adicionarLinhaEstoqueFin(itemId='', qtd=1, valorUnit=0) {
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div>
-        <label style="font-size:10px;color:var(--gray-d);font-weight:700">Qtd recebida</label>
-        <input type="number" class="form-input ef-qtd" value="${qtd}" min="0.1" step="0.1" style="font-size:12px;text-align:center">
+        <label style="font-size:10px;color:var(--gray-d);font-weight:700">Qtd total</label>
+        <input type="number" class="form-input ef-qtd" value="${qtd}" min="0.01" step="0.01" oninput="_efUnit('${rowId}')" style="font-size:12px;text-align:center">
       </div>
       <div>
-        <label style="font-size:10px;color:var(--gray-d);font-weight:700">Preço unit (R$)</label>
-        <input type="number" class="form-input ef-preco" value="${valorUnit>0?valorUnit:''}" placeholder="0,00" step="0.01" style="font-size:12px;text-align:center">
+        <label style="font-size:10px;color:var(--gray-d);font-weight:700">Valor total (R$)</label>
+        <input type="number" class="form-input ef-valortotal" value="${valorTotal>0?valorTotal:''}" placeholder="0,00" step="0.01" oninput="_efUnit('${rowId}')" style="font-size:12px;text-align:center">
       </div>
     </div>
+    <div style="font-size:11px;color:var(--cyan-d);font-weight:700;text-align:right">Custo unitário: <span class="ef-unit">R$ 0,00</span></div>
   `;
 
-  // Listener para mostrar campo de novo item
   row.querySelector('.ef-select').addEventListener('change', function() {
-    const novoDiv = document.getElementById(rowId + '-novo');
-    novoDiv.style.display = this.value === '__novo__' ? 'block' : 'none';
+    row.querySelector('.ef-novo').style.display = this.value === '__novo__' ? 'block' : 'none';
   });
 
   lista.appendChild(row);
+  _efUnit(rowId);
+}
+
+// calcula e mostra o custo unitário (valor total ÷ qtd total) na linha
+function _efUnit(rowId) {
+  const row = document.getElementById(rowId); if(!row) return;
+  const qtd = parseFloat(row.querySelector('.ef-qtd')?.value) || 0;
+  const vt  = parseFloat(row.querySelector('.ef-valortotal')?.value) || 0;
+  const span = row.querySelector('.ef-unit');
+  if (span) span.textContent = fmt(qtd > 0 ? vt/qtd : 0);
 }
 
 function confirmarEstoqueFin() {
   const lista = document.getElementById('estoque-fin-lista');
   if (!lista) return;
-  const rows = lista.querySelectorAll('[data-efrow="true"]');
+  const rows = lista.querySelectorAll('.ef-row');
   const log  = [];
   let temErro = false;
 
   rows.forEach(row => {
-    const rowId  = row.getAttribute('data-rowid');
-    const selEl  = document.getElementById('sel-'   + rowId);
-    const qtdEl  = document.getElementById('qtd-'   + rowId);
-    const precoEl= document.getElementById('preco-' + rowId);
-    if (!selEl) return;
+    const selVal = row.querySelector('.ef-select')?.value || '';
+    const qtd    = parseFloat(row.querySelector('.ef-qtd')?.value) || 0;
+    const vt     = parseFloat(row.querySelector('.ef-valortotal')?.value) || 0;
+    const unit   = qtd > 0 ? vt/qtd : 0;
 
-    const selVal = selEl.value;
-    const qtd    = parseFloat(qtdEl?.value)  || 0;
-    const preco  = parseFloat(precoEl?.value) || 0;
-
-    if (!selVal) {
-      toast('⚠️ Selecione um item ou escolha "Cadastrar novo"!');
-      temErro = true; return;
-    }
-
-    if (qtd <= 0) {
-      toast('⚠️ Informe a quantidade recebida!');
-      temErro = true; return;
-    }
+    if (!selVal) { toast('⚠️ Selecione um item ou escolha "Cadastrar novo"!'); temErro = true; return; }
+    if (qtd <= 0) { toast('⚠️ Informe a quantidade total!'); temErro = true; return; }
 
     if (selVal === '__novo__') {
-      const nomeEl = document.getElementById('nome-' + rowId);
-      const catEl  = document.getElementById('cat-'  + rowId);
-      const unEl   = document.getElementById('un-'   + rowId);
-      const nome   = nomeEl?.value.trim();
-      const cat    = catEl?.value  || 'Outros';
-      const un     = unEl?.value   || 'un';
+      const nome = row.querySelector('.ef-novo-nome')?.value.trim();
+      const cat  = row.querySelector('.ef-novo-cat')?.value || 'Outros';
+      const un   = row.querySelector('.ef-novo-un')?.value || 'un';
       if (!nome) { toast('⚠️ Informe o nome do novo item!'); temErro = true; return; }
-      const novoItem = { id: uid(), nome, cat, un, qtd, min: 0, preco };
-      estoque.push(novoItem);
-      log.push('✨ ' + nome + ': ' + qtd + ' ' + un + ' cadastrado');
-
+      estoque.push({ id: uid(), nome, cat, un, qtd, min: 0, preco: unit });
+      log.push('✨ ' + nome + ': ' + qtd + ' ' + un + ' (' + fmt(unit) + '/un)');
     } else {
       const idx = estoque.findIndex(e => e.id === selVal);
       if (idx >= 0) {
         const antes = parseFloat(estoque[idx].qtd) || 0;
         estoque[idx].qtd = antes + qtd;
-        if (preco > 0) estoque[idx].preco = preco;
-        log.push(estoque[idx].nome + ': ' + antes + ' → ' + estoque[idx].qtd + ' ' + (estoque[idx].un||'un'));
+        if (unit > 0) estoque[idx].preco = unit;
+        log.push(estoque[idx].nome + ': ' + antes + ' → ' + estoque[idx].qtd + ' ' + (estoque[idx].un||'un') + ' (' + fmt(unit) + '/un)');
       }
     }
   });
 
   if (temErro) return;
-
-  if (log.length === 0) {
-    toast('⚠️ Nenhum item atualizado!');
-    return;
-  }
+  if (log.length === 0) { toast('⚠️ Nenhum item atualizado!'); return; }
 
   save();
   closeModal('modal-estoque-fin');
   navigate('estoque');
-  toast('📦 Estoque atualizado! ' + log.join(' | '));
-  // Verifica se há materiais pendentes em pedidos para matching
-  verificarMateriaisPendentes(log.map((l, i) => {
-    const el = document.querySelectorAll('#estoque-fin-lista .estoque-fin-row')[i];
-    const itemId = el ? el.querySelector('.efin-select')?.value : null;
-    const nome   = l;
-    const qtd    = el ? parseFloat(el.querySelector('.efin-qtd')?.value)||1 : 1;
-    return { nome, qtd, itemId };
-  }).filter(x => x.itemId));
+  toast('📦 Estoque atualizado!');
 }
-
 
 
 // ── EXCLUIR FINANCEIRO ────────────────────────────────────────
@@ -7251,40 +7230,4 @@ async function processarFotoNFFin(event){
         method:'POST',
         headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json'},
         body: JSON.stringify({
-          model:'claude-haiku-4-5-20251001', max_tokens:600,
-          messages:[{ role:'user', content:[
-            { type:'image', source:{ type:'base64', media_type:mediaType, data:base64 } },
-            { type:'text', text:'Você é um assistente financeiro. Analise esta nota fiscal, cupom fiscal ou recibo de DESPESA e extraia os dados. Responda APENAS com JSON válido, sem texto adicional, no formato exato: {"data":"YYYY-MM-DD","fornecedor":"nome da loja ou empresa","valor":0.00,"descricao":"resumo breve dos itens em até 80 caracteres"}. Se não conseguir ler algum campo, use null ou string vazia.' }
-          ]}]
-        })
-      });
-      if(!resp.ok){ const err=await resp.json(); throw new Error(err.error?.message||'Erro na API'); }
-      const json = await resp.json();
-      const texto = json.content?.[0]?.text || '';
-      const match = texto.match(/\{[\s\S]*\}/);
-      if(!match) throw new Error('Resposta inesperada da IA');
-      const dados = JSON.parse(match[0]);
-      // Preenche como DESPESA (tipo Custo por padrão) — sem tocar no estoque
-      document.getElementById('f-tipo').value = 'Custo';
-      if(typeof _popularCategoriasFin==='function') _popularCategoriasFin('Material Criação');
-      if(dados.valor)      document.getElementById('f-valor').value = parseFloat(dados.valor).toFixed(2);
-      if(dados.data)       document.getElementById('f-data').value  = dados.data;
-      const descParts = [];
-      if(dados.fornecedor) descParts.push(dados.fornecedor);
-      if(dados.descricao)  descParts.push(dados.descricao);
-      if(descParts.length) document.getElementById('f-desc').value = descParts.join(' — ');
-      if(msgEl){ msgEl.textContent='✅ Nota lida! Confira o tipo, a categoria e o valor antes de registrar.'; msgEl.style.color='var(--green)'; }
-      setTimeout(()=>{ if(statusEl) statusEl.style.display='none'; }, 4000);
-      toast('✅ Nota lida pela IA!');
-    } catch(e){
-      if(msgEl){ msgEl.textContent='❌ '+(e.message||'Erro ao ler a nota'); msgEl.style.color='var(--red)'; }
-      toast('❌ Erro ao ler a nota — veja a mensagem.');
-    }
-  };
-  reader.readAsDataURL(file);
-  event.target.value='';
-}
-</script>
-
-</body>
-</html>
+          model:'claude-haiku-4-5-20251001',
