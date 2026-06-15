@@ -976,6 +976,7 @@ html, body {
         <div class="section-title" style="padding:12px 12px 4px 12px">Contatos salvos</div>
         <button onclick="sincronizarTodosClientes()" style="font-size:11px;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:10px;padding:5px 12px;cursor:pointer;font-weight:700">🔄 Sincronizar</button>
       </div>
+      <div style="padding:0 12px 8px"><input class="form-input" id="clientes-busca" placeholder="🔍 buscar cliente por nome..." autocomplete="off" oninput="renderClientes()" style="font-size:13px"></div>
       <div class="card"><div id="clientes-list"></div></div>
       <div style="height:80px"></div>
     </div>
@@ -4444,6 +4445,27 @@ function sincronizarTodosClientes() {
   toast('✅ ' + Object.keys(mapa).length + ' cliente(s) sincronizado(s)!');
 }
 
+var _cliAberto='';
+var _cliKeys=[];
+// Lista de pedidos de um cliente (usada na aba Clientes ao tocar no contato)
+function _pedidosDoClienteHTML(nome){
+  var key=(nome||'').toLowerCase().trim();
+  var hist=(pedidos||[]).filter(function(x){return (x.cliente||'').toLowerCase().trim()===key;});
+  if(!hist.length) return '<div style="font-size:12px;color:#999;padding:6px 0">Nenhum pedido registrado ainda.</div>';
+  hist.sort(function(a,b){return (b.dataEntrega||'').localeCompare(a.dataEntrega||'');});
+  var total=hist.reduce(function(s,x){return s+(x.valor||0);},0);
+  var linhas=hist.map(function(x){
+    var d=x.dataEntrega?x.dataEntrega.split('-').reverse().join('/'):'sem data';
+    var st=x.status?(' · '+x.status):'';
+    return '<div style="font-size:12px;color:#555;padding:6px 0;border-top:1px solid #eee">📦 <b>'+_esc(x.produto||'(sem produto)')+'</b><br><span style="font-size:11px;color:#999">'+d+st+'</span> — <b style="color:var(--pink)">'+fmt(x.valor||0)+'</b></div>';
+  }).join('');
+  return '<div style="font-size:12px;color:#888;margin-bottom:2px">Total: <b style="color:var(--pink)">'+fmt(total)+'</b> em '+hist.length+' pedido(s)</div>'+linhas;
+}
+function _toggleClienteDet(i){
+  var key=_cliKeys[i]; if(key==null) return;
+  _cliAberto=(_cliAberto===key?'':key);
+  renderClientes();
+}
 function renderClientes() {
   // Re-lê do localStorage para garantir dados frescos
   clientes = DB.get('clientes');
@@ -4460,31 +4482,42 @@ function renderClientes() {
   }
 
   try {
+    const fbusca = ((document.getElementById('clientes-busca')||{}).value||'').toLowerCase().trim();
     const sorted = [...clientes].sort((a,b) => {
       const an = (typeof a === 'string' ? a : (a.nome||''));
       const bn = (typeof b === 'string' ? b : (b.nome||''));
       return an.localeCompare(bn);
+    }).filter(function(c){
+      const n = (typeof c === 'string' ? c : (c.nome||''));
+      return !fbusca || n.toLowerCase().indexOf(fbusca)>=0;
     });
 
+    _cliKeys = [];
     let out = '';
     sorted.forEach(function(c) {
       // Suporta clientes salvos como string ou como objeto
       const nome  = typeof c === 'string' ? c : (c.nome  || '(sem nome)');
       const whats = String(typeof c === 'string' ? '' : (c.whats || '')).trim();
       const num   = whats.replace(/\D/g, '');
+      const key   = nome.toLowerCase().trim();
+      const idx   = _cliKeys.length; _cliKeys.push(key);
+      const aberto= (_cliAberto===key);
       const pedStr = (c && c.totalPedidos) ? (c.totalPedidos + ' pedido' + (c.totalPedidos > 1 ? 's' : '')) : '';
-      const wBtn  = num ? '<a href="https://wa.me/55' + num + '" target="_blank" style="background:var(--green);color:#fff;border-radius:12px;padding:5px 10px;font-size:12px;font-weight:700;text-decoration:none;display:inline-block">💬 WhatsApp</a>' : '';
-      out += '<div class="list-item">'
+      const wBtn  = num ? '<a href="https://wa.me/55' + num + '" target="_blank" onclick="event.stopPropagation()" style="background:var(--green);color:#fff;border-radius:12px;padding:5px 10px;font-size:12px;font-weight:700;text-decoration:none;display:inline-block">💬 WhatsApp</a>' : '';
+      out += '<div>'
+           + '<div class="list-item" onclick="_toggleClienteDet(' + idx + ')" style="cursor:pointer">'
            + '<div style="width:40px;height:40px;background:var(--pink-l);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👤</div>'
            + '<div class="li-info">'
-           + '<div class="li-title">' + nome + '</div>'
+           + '<div class="li-title">' + nome + ' <span style="font-size:11px;color:#bbb">' + (aberto?'▲':'▼') + '</span></div>'
            + '<div class="li-sub">'  + (whats || 'WhatsApp não cadastrado') + '</div>'
            + (pedStr ? '<div class="li-sub" style="color:var(--pink)">' + pedStr + '</div>' : '')
            + '</div>'
            + (wBtn ? '<div style="flex-shrink:0">' + wBtn + '</div>' : '')
+           + '</div>'
+           + (aberto ? '<div style="background:#faf7f8;border-radius:10px;padding:10px 14px;margin:-2px 8px 10px">'+_pedidosDoClienteHTML(nome)+'</div>' : '')
            + '</div>';
     });
-    list.innerHTML = out || empty('👥', 'Nenhum cliente ainda', 'Os contatos aparecerão aqui após o primeiro pedido');
+    list.innerHTML = out || empty('👥', fbusca?'Nenhum cliente com esse nome':'Nenhum cliente ainda', fbusca?'Tente outro nome':'Os contatos aparecerão aqui após o primeiro pedido');
   } catch(e) {
     list.innerHTML = '<div style="padding:16px;color:red;font-size:12px">Erro ao carregar: ' + e.message + '</div>';
   }
