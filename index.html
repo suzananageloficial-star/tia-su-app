@@ -1379,22 +1379,11 @@ html, body {
           📦 Dar entrada no estoque
         </label>
         <div id="f-estoque-campos">
-          <label class="form-label" style="font-size:11px">Item do estoque</label>
-          <input class="form-input" id="f-est-item" list="f-est-datalist" autocomplete="off" placeholder="Nome do material">
+          <div style="font-size:11px;color:var(--cyan-d);margin-bottom:6px">Um item por material. Dá pra adicionar, editar ou remover antes de Registrar.</div>
+          <div id="f-est-linhas"></div>
           <datalist id="f-est-datalist"></datalist>
-          <div class="form-row" style="margin:8px 0 0 0">
-            <div class="form-group">
-              <label class="form-label" style="font-size:11px">Quantidade total</label>
-              <input class="form-input" id="f-est-qtd" type="number" step="0.01" min="0" placeholder="0" oninput="_efUnitFin()">
-            </div>
-            <div class="form-group">
-              <label class="form-label" style="font-size:11px">Unidade</label>
-              <select class="form-select" id="f-est-un">
-                <option>un</option><option>kg</option><option>g</option><option>m</option><option>pacote</option><option>rolo</option><option>caixa</option><option>folha</option><option>par</option>
-              </select>
-            </div>
-          </div>
-          <div style="font-size:11px;color:var(--cyan-d);font-weight:700;text-align:right;margin-top:4px">Custo unitário: <span id="f-est-unit">R$ 0,00</span></div>
+          <button type="button" onclick="_addEstLinhaFin()" class="btn btn-ghost btn-sm" style="width:100%;margin-top:2px;border:1.5px dashed var(--cyan);color:var(--cyan-d);font-size:12px;font-weight:700">+ adicionar item</button>
+          <div id="f-est-soma" style="font-size:11px;font-weight:700;text-align:right;margin-top:6px"></div>
         </div>
       </div>
       <div class="form-row">
@@ -1759,7 +1748,7 @@ function openModal(id, isNew) {
     el.onclick = null; // só fecha pelo botão Fechar
   }
   if(id==='modal-pedido'){ setTimeout(popularCatalogoSelect,60); setTimeout(popularDatalistClientes,60); }
-  if(id==='modal-fin'){ setTimeout(_popularCategoriasFin,30); }
+  if(id==='modal-fin'){ if(isNew){ _estLinhas=[]; } setTimeout(_popularCategoriasFin,30); }
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
@@ -2506,27 +2495,31 @@ function salvarFin() {
   if (id) { const i=financeiro.findIndex(f=>f.id===id); if(i>=0) financeiro[i]=obj; }
   else financeiro.push(obj);
 
-  // Entrada no estoque: custo unitário = valor total ÷ quantidade
+  // Entrada no estoque: uma linha por material (custo unitário = valor do item ÷ quantidade)
   let msgEstoque = '';
   const addEst = document.getElementById('f-add-estoque');
   const bloco  = document.getElementById('f-estoque-block');
   const ativo  = bloco && bloco.style.display !== 'none' && addEst && addEst.checked;
-  if (!id && ativo) {
-    const nomeItem = (document.getElementById('f-est-item').value || desc).trim();
-    const qtd = parseFloat(document.getElementById('f-est-qtd').value) || 0;
-    const un  = document.getElementById('f-est-un').value || 'un';
-    if (qtd > 0 && nomeItem) {
-      const unit = valor / qtd;
-      const ix = estoque.findIndex(e => (e.nome||'').toLowerCase().trim() === nomeItem.toLowerCase());
-      if (ix >= 0) {
-        estoque[ix].qtd = (parseFloat(estoque[ix].qtd)||0) + qtd;
-        estoque[ix].preco = unit;
-        msgEstoque = ' 📦 ' + estoque[ix].nome + ' → ' + estoque[ix].qtd + ' ' + (estoque[ix].un||un);
-      } else {
-        estoque.push({ id: uid(), nome: nomeItem, cat: cat, un, qtd, min: 0, preco: unit, forn: '' });
-        msgEstoque = ' 📦 ' + nomeItem + ' (' + fmt(unit) + '/' + un + ')';
+  if (!id && ativo && Array.isArray(_estLinhas)) {
+    let nAdd = 0;
+    _estLinhas.forEach(function(l){
+      const nomeItem = (l.nome||'').trim();
+      const qtd = parseFloat(l.qtd) || 0;
+      const un  = l.un || 'un';
+      const vItem = parseFloat(l.valor) || 0;
+      if (qtd > 0 && nomeItem) {
+        const unit = vItem / qtd;
+        const ix = estoque.findIndex(e => (e.nome||'').toLowerCase().trim() === nomeItem.toLowerCase());
+        if (ix >= 0) {
+          estoque[ix].qtd = (parseFloat(estoque[ix].qtd)||0) + qtd;
+          if (unit > 0) estoque[ix].preco = unit;
+        } else {
+          estoque.push({ id: uid(), nome: nomeItem, cat: cat, un: un, qtd: qtd, min: 0, preco: unit, forn: '' });
+        }
+        nAdd++;
       }
-    }
+    });
+    if (nAdd) msgEstoque = ' 📦 ' + nAdd + ' item(ns) no estoque';
   }
 
   save();
@@ -4967,7 +4960,7 @@ async function processarFotoNF(event) {
               },
               {
                 type: 'text',
-                text: 'Você é um assistente financeiro. Analise esta nota fiscal, cupom fiscal ou recibo e extraia as informações. Responda APENAS com JSON válido, sem texto adicional, no formato exato: {"data":"YYYY-MM-DD","fornecedor":"nome da loja ou empresa","valor":0.00,"descricao":"resumo breve dos itens comprados em até 80 caracteres"}. Se não conseguir ler algum campo, use null para o valor ou string vazia para texto.'
+                text: 'Você é um assistente financeiro. Analise esta nota fiscal, cupom fiscal ou recibo e extraia as informações. Responda APENAS com JSON válido, sem texto adicional, no formato exato: {"data":"YYYY-MM-DD","fornecedor":"nome da loja ou empresa","valor":0.00,"descricao":"resumo breve em até 80 caracteres","itens":[{"nome":"nome do produto","qtd":1,"valor":0.00}]}. No campo valor do topo coloque o TOTAL da nota. Em itens liste cada produto comprado com nome, quantidade (qtd) e o valor TOTAL daquele item (preço unitário vezes a quantidade). Se a nota tiver só um produto, itens tem um elemento. Se não conseguir ler algum campo, use null para número ou string vazia para texto.'
               }
             ]
           }]
@@ -6856,7 +6849,9 @@ function _popularCategoriasFin(manter){
   if(typeof _toggleEstoqueFin==='function') _toggleEstoqueFin();
 }
 
-// mostra/esconde o bloco de estoque na movimentação (só em lançamentos novos de material)
+// bloco de estoque na movimentação — lista de itens (Claude jun/2026)
+var _estLinhas = [];
+function _esc(s){ return String(s==null?'':s).replace(/"/g,'&quot;'); }
 function _toggleEstoqueFin(){
   var bloco=document.getElementById('f-estoque-block'); if(!bloco) return;
   var isNew=!document.getElementById('f-id').value;
@@ -6868,22 +6863,78 @@ function _toggleEstoqueFin(){
   bloco.style.display=mostrar?'block':'none';
   if(mostrar){
     _popularDatalistEstoqueFin();
-    var it=document.getElementById('f-est-item');
-    if(it && !it.value.trim()) it.value=(document.getElementById('f-desc').value||'').trim();
+    if(!_estLinhas.length){
+      var v=parseFloat((document.getElementById('f-valor')||{}).value)||0;
+      _estLinhas=[{nome:(document.getElementById('f-desc').value||'').trim(), qtd:'', un:'un', valor:(v||'')}];
+    }
     var campos=document.getElementById('f-estoque-campos');
     var chk=document.getElementById('f-add-estoque');
     if(campos&&chk) campos.style.display=chk.checked?'block':'none';
-    _efUnitFin();
+    _renderEstLinhasFin();
   }
 }
 function _popularDatalistEstoqueFin(){
   var dl=document.getElementById('f-est-datalist'); if(!dl) return;
   dl.innerHTML=(estoque||[]).map(function(e){return '<option value="'+String(e.nome||'').replace(/"/g,'&quot;')+'">';}).join('');
 }
+function _renderEstLinhasFin(){
+  var box=document.getElementById('f-est-linhas'); if(!box) return;
+  var UNS=['un','kg','g','m','pacote','rolo','caixa','folha','par'];
+  box.innerHTML=_estLinhas.map(function(l,i){
+    var unit=(parseFloat(l.qtd)>0)?(parseFloat(l.valor||0)/parseFloat(l.qtd)):0;
+    var uns=UNS.map(function(u){return '<option'+(l.un===u?' selected':'')+'>'+u+'</option>';}).join('');
+    var rm=(_estLinhas.length>1)?('<button type="button" onclick="_removeEstLinhaFin('+i+')" style="background:none;border:none;color:var(--red);font-size:20px;line-height:1;cursor:pointer;padding:0 4px">\u00d7</button>'):'';
+    return '<div style="background:#fff;border-radius:10px;padding:8px 10px;margin-bottom:8px">'
+      +'<div style="display:flex;gap:6px;align-items:center">'
+        +'<input class="form-input" style="flex:1;font-size:13px" list="f-est-datalist" autocomplete="off" placeholder="Material" value="'+_esc(l.nome)+'" oninput="_updEstLinhaFin('+i+",'nome',this.value)\">"
+        +rm
+      +'</div>'
+      +'<div class="form-row" style="margin-top:6px;gap:6px">'
+        +'<input class="form-input" style="font-size:13px" type="number" step="0.01" min="0" placeholder="Qtd" value="'+((l.qtd!==''&&l.qtd!=null)?l.qtd:'')+'" oninput="_updEstLinhaFin('+i+",'qtd',this.value)\">"
+        +'<select class="form-select" style="font-size:13px" onchange="_updEstLinhaFin('+i+",'un',this.value)\">"+uns+'</select>'
+        +'<input class="form-input" style="font-size:13px" type="number" step="0.01" min="0" placeholder="R$ item" value="'+((l.valor!==''&&l.valor!=null)?l.valor:'')+'" oninput="_updEstLinhaFin('+i+",'valor',this.value)\">"
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--cyan-d);font-weight:700;text-align:right;margin-top:4px">Custo unit: <span id="f-est-unit-'+i+'">'+fmt(unit)+'</span></div>'
+    +'</div>';
+  }).join('');
+  _atualizaSomaEstFin();
+}
+function _updEstLinhaFin(i, campo, val){
+  if(!_estLinhas[i]) return;
+  _estLinhas[i][campo]=val;
+  if(campo==='qtd'||campo==='valor'){
+    var l=_estLinhas[i];
+    var unit=(parseFloat(l.qtd)>0)?(parseFloat(l.valor||0)/parseFloat(l.qtd)):0;
+    var sp=document.getElementById('f-est-unit-'+i); if(sp) sp.textContent=fmt(unit);
+    _atualizaSomaEstFin();
+  }
+}
+function _addEstLinhaFin(nome, qtd, un, valor){
+  _estLinhas.push({nome:nome||'', qtd:(qtd!=null?qtd:''), un:un||'un', valor:(valor!=null?valor:'')});
+  _renderEstLinhasFin();
+}
+function _removeEstLinhaFin(i){
+  _estLinhas.splice(i,1);
+  if(!_estLinhas.length) _estLinhas=[{nome:'',qtd:'',un:'un',valor:''}];
+  _renderEstLinhasFin();
+}
+function _atualizaSomaEstFin(){
+  var el=document.getElementById('f-est-soma'); if(!el) return;
+  if(_estLinhas.length<=1){ el.textContent=''; return; }
+  var total=parseFloat((document.getElementById('f-valor')||{}).value)||0;
+  var soma=_estLinhas.reduce(function(a,l){return a+(parseFloat(l.valor)||0);},0);
+  var ok=Math.abs(soma-total)<0.01;
+  el.style.color = ok?'var(--cyan-d)':'var(--red)';
+  el.textContent='Soma dos itens: '+fmt(soma)+(total?(' / despesa: '+fmt(total)+(ok?' \u2713':' \u26a0\ufe0f')):'');
+}
 function _efUnitFin(){
-  var v=parseFloat((document.getElementById('f-valor')||{}).value)||0;
-  var q=parseFloat((document.getElementById('f-est-qtd')||{}).value)||0;
-  var sp=document.getElementById('f-est-unit'); if(sp) sp.textContent=fmt(q>0?v/q:0);
+  if(_estLinhas.length===1){
+    var v=parseFloat((document.getElementById('f-valor')||{}).value)||0;
+    _estLinhas[0].valor=(v||'');
+    _renderEstLinhasFin();
+  } else {
+    _atualizaSomaEstFin();
+  }
 }
 function editarFin(id){
   var f=financeiro.find(function(x){return x.id===id;}); if(!f) return;
@@ -7355,7 +7406,7 @@ async function processarFotoNFFin(event){
             role: 'user',
             content: [
               { type:'image', source:{ type:'base64', media_type:mediaType, data:base64 } },
-              { type:'text', text:'Você é um assistente financeiro. Analise esta nota fiscal, cupom fiscal ou recibo e extraia as informações. Responda APENAS com JSON válido, sem texto adicional, no formato exato: {"data":"YYYY-MM-DD","fornecedor":"nome da loja ou empresa","valor":0.00,"descricao":"resumo breve dos itens comprados em até 80 caracteres"}. Se não conseguir ler algum campo, use null para o valor ou string vazia para texto.' }
+              { type:'text', text:'Você é um assistente financeiro. Analise esta nota fiscal, cupom fiscal ou recibo e extraia as informações. Responda APENAS com JSON válido, sem texto adicional, no formato exato: {"data":"YYYY-MM-DD","fornecedor":"nome da loja ou empresa","valor":0.00,"descricao":"resumo breve em até 80 caracteres","itens":[{"nome":"nome do produto","qtd":1,"valor":0.00}]}. No campo valor do topo coloque o TOTAL da nota. Em itens liste cada produto comprado com nome, quantidade (qtd) e o valor TOTAL daquele item (preço unitário vezes a quantidade). Se a nota tiver só um produto, itens tem um elemento. Se não conseguir ler algum campo, use null para número ou string vazia para texto.' }
             ]
           }]
         })
@@ -7375,9 +7426,13 @@ async function processarFotoNFFin(event){
       if (dados.fornecedor) _dp.push(dados.fornecedor);
       if (dados.descricao)  _dp.push(dados.descricao);
       if (_dp.length) document.getElementById('f-desc').value = _dp.join(' — ');
+      if (Array.isArray(dados.itens) && dados.itens.length) {
+        _estLinhas = dados.itens.map(function(it){
+          return { nome:(it.nome||'').trim(), qtd:(it.qtd!=null?it.qtd:''), un:'un', valor:(it.valor!=null?it.valor:'') };
+        });
+      } else { _estLinhas = []; }
       if (typeof _toggleEstoqueFin === 'function') _toggleEstoqueFin();
-      if (typeof _efUnitFin === 'function') _efUnitFin();
-      if (msgEl){ msgEl.textContent = '✅ Nota lida! Revise os dados.'; msgEl.style.color = 'var(--green)'; }
+      if (msgEl){ msgEl.textContent = '✅ Nota lida! Revise itens e valores.'; msgEl.style.color = 'var(--green)'; }
       setTimeout(() => { if(statusEl) statusEl.style.display='none'; }, 3000);
       toast('✅ Nota processada pela IA!');
     } catch(e){
