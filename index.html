@@ -576,10 +576,11 @@ html, body {
 }
 .item-pedido-row {
   display: grid;
-  grid-template-columns: 1fr 52px 72px 28px;
+  grid-template-columns: 1fr 44px 42px 66px 26px;
   gap: 5px;
   align-items: center;
 }
+.item-pedido-row .pi-un { text-align: center; }
 .item-pedido-row input {
   padding: 7px 8px;
   border: 1.5px solid var(--gray);
@@ -1200,7 +1201,8 @@ html, body {
       <input type="hidden" id="p-id">
       <div class="form-group">
         <label class="form-label">Cliente *</label>
-        <input class="form-input" id="p-cliente" placeholder="Nome do cliente">
+        <input class="form-input" id="p-cliente" placeholder="Nome do cliente" list="clientes-datalist" autocomplete="off" oninput="clienteAutocomplete()">
+        <datalist id="clientes-datalist"></datalist>
       </div>
       <div id="cliente-historico" style="display:none;background:#f8f8f8;border-radius:8px;padding:8px 12px;margin-bottom:8px"></div>
       <div class="form-group">
@@ -1334,6 +1336,9 @@ html, body {
     <div class="modal-title">💰 Nova Movimentação</div>
     <div class="modal-body">
       <input type="hidden" id="f-id">
+      <button type="button" onclick="document.getElementById('f-foto-input').click()" style="width:100%;background:var(--cyan-l);color:var(--cyan-d);border:1px dashed var(--cyan);border-radius:12px;padding:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:10px">📷 Ler nota / cupom com IA</button>
+      <input type="file" id="f-foto-input" accept="image/*" capture="environment" style="display:none" onchange="processarFotoNFFin(event)">
+      <div id="f-ia-status" style="display:none;background:var(--cyan-l);border-radius:10px;padding:8px 12px;margin-bottom:10px"><span id="f-ia-msg" style="font-size:12px;color:var(--cyan-d);font-weight:700">🤖 Lendo nota com IA...</span></div>
       <div class="form-row">
         <div class="form-group">
           <label class="form-label">Tipo *</label>
@@ -1703,7 +1708,7 @@ function openModal(id, isNew) {
   } else {
     el.onclick = null; // só fecha pelo botão Fechar
   }
-  if(id==='modal-pedido'){ setTimeout(popularCatalogoSelect,60); }
+  if(id==='modal-pedido'){ setTimeout(popularCatalogoSelect,60); setTimeout(popularDatalistClientes,60); }
   if(id==='modal-fin'){ setTimeout(_popularCategoriasFin,30); }
 }
 function closeModal(id) {
@@ -1720,6 +1725,7 @@ function resetModal(id) {
     const histEl = document.getElementById('cliente-historico');
     if (histEl) histEl.style.display = 'none';
     popularDatalistEstoque(); // preenche autocomplete com itens do estoque
+    popularDatalistClientes(); // preenche autocomplete com clientes cadastrados
     setTimeout(()=>{
       const itens = document.getElementById('p-itens-lista');
       if(itens) itens.innerHTML = '';
@@ -2029,11 +2035,11 @@ function coletarItensPedido() {
   const rows = document.querySelectorAll('#p-itens-lista .item-pedido-row');
   const itens = [];
   rows.forEach(function(row) {
-    const inputs = row.querySelectorAll('input');
-    const nome  = inputs[0]?.value?.trim() || '';
-    const qtd   = parseFloat(inputs[1]?.value) || 1;
-    const preco = parseFloat(inputs[2]?.value) || 0;
-    if (nome || preco) itens.push({ nome, qtd, preco });
+    const nome  = row.querySelector('input[type=text]')?.value?.trim() || '';
+    const qtd   = parseFloat(row.querySelector('.pi-qtd')?.value) || 1;
+    const un    = row.querySelector('.pi-un')?.value?.trim() || 'un';
+    const preco = parseFloat(row.querySelector('.pi-preco')?.value) || 0;
+    if (nome || preco) itens.push({ nome, qtd, un, preco });
   });
   return itens;
 }
@@ -2043,7 +2049,7 @@ function popularItensPedido(itens) {
   if (!lista) return;
   lista.innerHTML = '';
   if (itens && itens.length) {
-    itens.forEach(function(it) { adicionarItemPedido(it.nome, it.qtd, it.preco); });
+    itens.forEach(function(it) { adicionarItemPedido(it.nome, it.qtd, it.preco, it.un); });
   }
   recalcularTotal();
 }
@@ -2131,12 +2137,15 @@ function salvarPedido() {
     const _diffJaLancado = Math.round((_sinalAtual - _anteriorSinal) * 100) / 100;
     // Só lança o restante se a Regra 2 não cobriu tudo
     if (_restanteVira > 0.01 && _diffJaLancado <= 0.01) {
-      financeiro.unshift({
+      const _lancRec = {
         id: uid(), tipo:'Receita', cat:'Receita Vendas',
         valor: _restanteVira,
         desc: 'Recebimento — ' + (obj.produto||'Pedido') + ' | ' + obj.cliente,
         data: obj.dataEntrega || today(), pgto: obj.pgto || 'Pix',
-      });
+      };
+      financeiro.unshift(_lancRec);
+      obj._recEntregaId = _lancRec.id;       // permite estorno se desfizer a entrega
+      obj._sinalAntesEntrega = _sinalAtual;  // guarda o sinal de antes
       obj.sinal = obj.valor; // marca como quitado
       toast('✅ Entregue! R$ ' + _restanteVira.toFixed(2).replace('.',',') + ' lançado no Financeiro.');
     } else {
@@ -2762,14 +2771,28 @@ function renderCatalogo() {
 
 // ── MATERIAIS NO PEDIDO ──────────────────────────────────────
 // Verifica se nome bate com algum item do estoque com quantidade suficiente
+/* Comparação de nomes mais rigorosa (Claude jun/2026):
+   só considera o MESMO item se os nomes forem iguais ou um contiver o
+   outro por inteiro (ignorando maiúsculas/acentos). Antes bastava o
+   comecinho ser parecido, o que marcava como "coberto" coisa que não
+   existe no estoque. Em caso de mais de um match, vale o mais específico. */
+function _normNome(s){ return (s||'').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' '); }
+function _matchEstoque(nome){
+  const n=_normNome(nome);
+  if(!n) return null;
+  let melhor=null, melhorLen=0;
+  estoque.forEach(function(e){
+    const en=_normNome(e.nome);
+    if(!en) return;
+    let ok = (en===n);
+    if(!ok && en.length>=4 && n.length>=4) ok = (n.includes(en) || en.includes(n));
+    if(ok && en.length>melhorLen){ melhor=e; melhorLen=en.length; }
+  });
+  return melhor;
+}
 function checarEstoqueNome(nome, qtd) {
   if (!nome || !nome.trim() || !estoque.length) return 'pendente';
-  const nomeLow = nome.toLowerCase().trim();
-  const trecho  = nomeLow.slice(0, Math.max(4, Math.floor(nomeLow.length * 0.6)));
-  const est = estoque.find(e => {
-    const eLow = (e.nome || '').toLowerCase();
-    return eLow.includes(trecho) || nomeLow.includes(eLow.slice(0, Math.max(4, Math.floor(eLow.length * 0.6))));
-  });
+  const est = _matchEstoque(nome);
   return (est && (est.qtd || 0) >= (qtd || 1)) ? 'coberto' : 'pendente';
 }
 
@@ -2790,6 +2813,48 @@ function popularDatalistEstoque() {
   const dl = document.getElementById('estoque-datalist');
   if (!dl) return;
   dl.innerHTML = estoque.map(e => `<option value="${e.nome}">`).join('');
+}
+
+// Popula datalist com nomes dos clientes já cadastrados (autocomplete do pedido)
+function popularDatalistClientes() {
+  const dl = document.getElementById('clientes-datalist');
+  if (!dl) return;
+  const nomes = (clientes || [])
+    .map(c => (typeof c === 'string' ? c : (c && c.nome) || ''))
+    .filter(Boolean)
+    .sort((a,b) => a.localeCompare(b, 'pt-BR'));
+  dl.innerHTML = nomes.map(n => `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
+}
+
+// Ao digitar/selecionar um cliente, preenche WhatsApp e mostra histórico
+function clienteAutocomplete() {
+  const nome = (document.getElementById('p-cliente').value || '').trim();
+  const whatsEl = document.getElementById('p-whats');
+  const elHist  = document.getElementById('cliente-historico');
+  if (!nome) { if (elHist) elHist.style.display = 'none'; return; }
+
+  // Procura cliente cadastrado pelo nome (case-insensitive)
+  const cli = (clientes || []).find(c => {
+    const n = typeof c === 'string' ? c : (c && c.nome) || '';
+    return n.toLowerCase().trim() === nome.toLowerCase();
+  });
+  // Preenche WhatsApp se o cliente tiver e o campo estiver vazio
+  if (cli && typeof cli === 'object' && cli.whats && whatsEl && !whatsEl.value.trim()) {
+    whatsEl.value = cli.whats;
+  }
+
+  // Mostra histórico de pedidos desse cliente
+  if (elHist) {
+    const pid = document.getElementById('p-id').value;
+    const historico = pedidos.filter(x => x.id !== pid && (x.cliente||'').toLowerCase().trim() === nome.toLowerCase());
+    const totalGasto = historico.reduce((s,x) => s+(x.valor||0), 0);
+    if (historico.length > 0) {
+      elHist.style.display = 'block';
+      elHist.innerHTML = `<span style="font-size:11px;color:#888">👤 ${nome} já fez <b>${historico.length}</b> pedido(s) — total: <b style="color:var(--pink)">R$ ${totalGasto.toFixed(2).replace('.',',')}</b></span>`;
+    } else {
+      elHist.style.display = 'none';
+    }
+  }
 }
 
 function adicionarMaterialPedido(nome='', qtd=1, status='pendente', matId='') {
@@ -2953,13 +3018,7 @@ function fecharMatch() {
 function _resolverItemEstoque(m){
   if(!m) return null;
   if(m.itemId){ const it=estoque.find(e=>e.id===m.itemId); if(it) return it; }
-  const nome=(m.nome||'').toLowerCase().trim();
-  if(!nome) return null;
-  const trecho=nome.slice(0,Math.max(4,Math.floor(nome.length*0.6)));
-  return estoque.find(e=>{
-    const eLow=(e.nome||'').toLowerCase();
-    return eLow.includes(trecho)||nome.includes(eLow.slice(0,Math.max(4,Math.floor(eLow.length*0.6))));
-  }) || null;
+  return _matchEstoque(m.nome); // mesma regra rigorosa do checarEstoqueNome
 }
 function sincronizarBaixaPedido(pedido, opt){
   opt=opt||{};
@@ -4531,7 +4590,8 @@ function enviarReciboWhatsApp(id) {
   let itensTxt = '';
   if (p.itens && p.itens.length) {
     p.itens.forEach(function(it) {
-      const sub = it.qtd > 1 ? ' (' + it.qtd + 'x)' : '';
+      const un = (it.un && it.un!=='un') ? (' ' + it.un) : (it.qtd > 1 ? 'x' : '');
+      const sub = it.qtd > 1 ? ' (' + it.qtd + un + ')' : (it.un && it.un!=='un' ? ' (' + it.qtd + ' ' + it.un + ')' : '');
       itensTxt += '• ' + it.nome + sub + '\n';
     });
   } else if (p.produto) {
@@ -5732,7 +5792,7 @@ function _espelharMaterialDoItem(row){
   row.dataset.mirrorMat=newId;
   if(typeof toast==='function') toast('📦 "'+it.nome+'" também entrou em Materiais (dá baixa no estoque).');
 }
-function adicionarItemPedido(nome, qtd, preco){
+function adicionarItemPedido(nome, qtd, preco, un){
   const lista=document.getElementById('p-itens-lista'); if(!lista) return;
   if(typeof popularDatalistEstoque==='function') popularDatalistEstoque();
   const rowId='pi-'+Date.now()+Math.random().toString(36).slice(2,6);
@@ -5748,6 +5808,10 @@ function adicionarItemPedido(nome, qtd, preco){
   qtdInput.type='number'; qtdInput.className='pi-qtd'; qtdInput.min='1'; qtdInput.step='1'; qtdInput.value=qtd||1;
   qtdInput.addEventListener('input', function(){ recalcularTotal(); _sincronizarQtdMirror(row); });
 
+  const unInput=document.createElement('input');
+  unInput.type='text'; unInput.className='pi-un'; unInput.placeholder='un'; unInput.value=un||'un';
+  unInput.title='Unidade (un, m, kg, cx...)';
+
   const precoInput=document.createElement('input');
   precoInput.type='number'; precoInput.className='pi-preco'; precoInput.placeholder='0,00'; precoInput.step='0.01'; precoInput.value=preco||'';
   precoInput.addEventListener('input', recalcularTotal);
@@ -5756,7 +5820,7 @@ function adicionarItemPedido(nome, qtd, preco){
   delBtn.className='material-del'; delBtn.type='button'; delBtn.textContent='✕';
   delBtn.onclick=function(){ _removerMirror(row); row.remove(); recalcularTotal(); };
 
-  row.appendChild(nomeInput); row.appendChild(qtdInput); row.appendChild(precoInput); row.appendChild(delBtn);
+  row.appendChild(nomeInput); row.appendChild(qtdInput); row.appendChild(unInput); row.appendChild(precoInput); row.appendChild(delBtn);
   lista.appendChild(row);
   recalcularTotal();
 }
@@ -5916,6 +5980,8 @@ function avancarStatusKanban(pedidoId, ev){
   if(idx<0) idx=0;
   if(idx >= KORDER_V2.length-1){ toast('✅ Pedido já está no status final!'); return; }
   p.status = KORDER_V2[idx+1];
+  if(typeof sincronizarBaixaPedido==='function') sincronizarBaixaPedido(p); // baixa estoque ao virar Entregue
+  if(typeof aplicarRecebimentoEntrega==='function') aplicarRecebimentoEntrega(p); // lança recebimento ao virar Entregue
   save(); renderKanban();
   toast('✅ '+p.cliente+' → '+(typeof statusLabel==='function'?statusLabel(p.status):p.status));
 }
@@ -5926,6 +5992,8 @@ function voltarStatusKanban(pedidoId, ev){
   var idx = KORDER_V2.indexOf(_kStatusNorm(p.status));
   if(idx<=0) return;
   p.status = KORDER_V2[idx-1];
+  if(typeof sincronizarBaixaPedido==='function') sincronizarBaixaPedido(p); // devolve ao estoque se desfizer Entregue
+  if(typeof aplicarRecebimentoEntrega==='function') aplicarRecebimentoEntrega(p); // estorna recebimento se desfizer Entregue
   save(); renderKanban();
   toast('↩️ '+p.cliente+' → '+(typeof statusLabel==='function'?statusLabel(p.status):p.status));
 }
@@ -7096,6 +7164,126 @@ salvarFin = function(){
 
 /* Re-renderiza a tela atual pra os painéis aparecerem já na abertura */
 window.addEventListener('load', function(){ try{ renderScreen(currentScreen); }catch(e){} });
+</script>
+
+<script>
+/* ── REAVALIAÇÃO DE MATERIAIS (Claude jun/2026) ──────────────────
+   Ao abrir o app, reconfere os materiais dos pedidos ativos com a
+   regra rigorosa de comparação de nomes. Corrige materiais que foram
+   marcados como "coberto" por engano (item nem existe no estoque) —
+   eles voltam pra lista de compras. Respeita vínculos manuais (itemId). */
+function _reavaliarMateriais(){
+  try {
+    let mudou=false;
+    pedidos.forEach(function(p){
+      if(p.status==='Entregue'||p.status==='Cancelado') return;
+      (p.materiais||[]).forEach(function(m){
+        if(!m || m.itemId) return; // vinculado manualmente — respeita
+        if((parseFloat(m.baixado)||0) > 0) return; // já teve baixa — não mexe
+        const novo=checarEstoqueNome(m.nome, parseFloat(m.qtd)||1);
+        if(m.status!==novo){ m.status=novo; mudou=true; }
+      });
+    });
+    if(mudou){
+      save();
+      renderScreen(currentScreen);
+      toast('🔎 Materiais reconferidos com o estoque!');
+    }
+  } catch(e){}
+}
+window.addEventListener('load', function(){ setTimeout(_reavaliarMateriais, 1500); });
+</script>
+
+<script>
+/* ── RECEBIMENTO AO ENTREGAR — também pelo kanban (Claude jun/2026) ──
+   Mesma lógica do formulário: ao virar Entregue, lança o restante
+   (valor − sinal) no Financeiro; ao desfazer, estorna. Idempotente:
+   guarda o id do lançamento em _recEntregaId pra não duplicar. */
+function aplicarRecebimentoEntrega(p){
+  if(!p) return;
+  if(p.status==='Entregue'){
+    if(p._recEntregaId) return; // já lançado — não duplica
+    const sinalAtual = parseFloat(p.sinal)||0;
+    const restante = Math.round(((parseFloat(p.valor)||0) - sinalAtual)*100)/100;
+    if(restante > 0.01){
+      const lanc = { id: uid(), tipo:'Receita', cat:'Receita Vendas', valor: restante,
+        desc: 'Recebimento — ' + (p.produto||'Pedido') + ' | ' + (p.cliente||''),
+        data: p.dataEntrega || today(), pgto: p.pgto || 'Pix' };
+      financeiro.unshift(lanc);
+      p._recEntregaId = lanc.id;
+      p._sinalAntesEntrega = sinalAtual;
+      p.sinal = p.valor;
+      toast('💰 R$ ' + restante.toFixed(2).replace('.',',') + ' lançado no Financeiro!');
+    }
+  } else {
+    if(p._recEntregaId){ // desfez a entrega → estorna o lançamento
+      const i = financeiro.findIndex(f=>f.id===p._recEntregaId);
+      if(i>=0) financeiro.splice(i,1);
+      if(p._sinalAntesEntrega!=null) p.sinal = p._sinalAntesEntrega;
+      delete p._recEntregaId; delete p._sinalAntesEntrega;
+      toast('↩️ Recebimento estornado do Financeiro.');
+    }
+  }
+}
+</script>
+
+<script>
+/* ── LER NOTA POR FOTO NO FINANCEIRO (Claude jun/2026) ───────────
+   Mesma IA da tela de Compras, mas aqui só preenche o lançamento de
+   despesa — NÃO mexe no estoque (a Suzana atualiza o estoque à mão
+   pra não dar divergência de nomenclatura). Reusa a chave de API já
+   configurada (Configurar sync → chave da IA). */
+async function processarFotoNFFin(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const apiKey = (typeof getApiKey==='function') ? getApiKey() : '';
+  if(!apiKey){ toast('🔑 Configure sua chave de IA primeiro!'); if(typeof mostrarConfigApiKey==='function') setTimeout(mostrarConfigApiKey,500); event.target.value=''; return; }
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    const base64 = ev.target.result.split(',')[1];
+    const mediaType = file.type || 'image/jpeg';
+    const statusEl = document.getElementById('f-ia-status');
+    const msgEl    = document.getElementById('f-ia-msg');
+    if(statusEl) statusEl.style.display='block';
+    if(msgEl){ msgEl.textContent='🤖 Lendo nota com IA...'; msgEl.style.color='var(--cyan-d)'; }
+    try {
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'x-api-key':apiKey,'anthropic-version':'2023-06-01','content-type':'application/json'},
+        body: JSON.stringify({
+          model:'claude-haiku-4-5-20251001', max_tokens:600,
+          messages:[{ role:'user', content:[
+            { type:'image', source:{ type:'base64', media_type:mediaType, data:base64 } },
+            { type:'text', text:'Você é um assistente financeiro. Analise esta nota fiscal, cupom fiscal ou recibo de DESPESA e extraia os dados. Responda APENAS com JSON válido, sem texto adicional, no formato exato: {"data":"YYYY-MM-DD","fornecedor":"nome da loja ou empresa","valor":0.00,"descricao":"resumo breve dos itens em até 80 caracteres"}. Se não conseguir ler algum campo, use null ou string vazia.' }
+          ]}]
+        })
+      });
+      if(!resp.ok){ const err=await resp.json(); throw new Error(err.error?.message||'Erro na API'); }
+      const json = await resp.json();
+      const texto = json.content?.[0]?.text || '';
+      const match = texto.match(/\{[\s\S]*\}/);
+      if(!match) throw new Error('Resposta inesperada da IA');
+      const dados = JSON.parse(match[0]);
+      // Preenche como DESPESA (tipo Custo por padrão) — sem tocar no estoque
+      document.getElementById('f-tipo').value = 'Custo';
+      if(typeof _popularCategoriasFin==='function') _popularCategoriasFin('Material Criação');
+      if(dados.valor)      document.getElementById('f-valor').value = parseFloat(dados.valor).toFixed(2);
+      if(dados.data)       document.getElementById('f-data').value  = dados.data;
+      const descParts = [];
+      if(dados.fornecedor) descParts.push(dados.fornecedor);
+      if(dados.descricao)  descParts.push(dados.descricao);
+      if(descParts.length) document.getElementById('f-desc').value = descParts.join(' — ');
+      if(msgEl){ msgEl.textContent='✅ Nota lida! Confira o tipo, a categoria e o valor antes de registrar.'; msgEl.style.color='var(--green)'; }
+      setTimeout(()=>{ if(statusEl) statusEl.style.display='none'; }, 4000);
+      toast('✅ Nota lida pela IA!');
+    } catch(e){
+      if(msgEl){ msgEl.textContent='❌ '+(e.message||'Erro ao ler a nota'); msgEl.style.color='var(--red)'; }
+      toast('❌ Erro ao ler a nota — veja a mensagem.');
+    }
+  };
+  reader.readAsDataURL(file);
+  event.target.value='';
+}
 </script>
 
 </body>
