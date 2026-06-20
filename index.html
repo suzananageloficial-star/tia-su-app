@@ -1064,8 +1064,8 @@ html, body {
 
           <!-- DESCRIÇÃO + FOTO (catálogo) -->
           <div class="form-group">
-            <label class="form-label">Descrição (aparece no catálogo)</label>
-            <input class="form-input" id="pr-descricao" placeholder="Ex: Kit festa com 30 balões + topo personalizado">
+            <label class="form-label">Descrição (aparece embaixo do nome no catálogo)</label>
+            <textarea class="form-input" id="pr-descricao" rows="3" style="resize:vertical;min-height:64px;font-family:inherit" placeholder="Conte o que vem no kit/presente/arranjo. Ex: Caixa com 1 caneca personalizada, chocolate, flor de papel e cartão com mensagem."></textarea>
           </div>
           <div class="form-group">
             <label class="form-label">📷 Foto do produto (fica só neste aparelho)</label>
@@ -1144,6 +1144,10 @@ html, body {
       </div>
       <div class="section-title">Catálogo de produtos</div>
       <button type="button" onclick="_gerarCatalogo()" style="width:100%;padding:11px;background:var(--cyan-l);color:var(--cyan-d);border:1.5px solid var(--cyan);border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">🌐 Gerar catálogo (marque os produtos abaixo)</button>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+        <select id="cat-filtro" class="form-select" onchange="renderCatalogo()" style="flex:1;min-width:150px;padding:9px;font-size:13px"></select>
+        <button type="button" onclick="_marcarTodosCat()" style="padding:9px 12px;background:var(--pink-l);color:var(--pink);border:1.5px solid var(--pink);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">☑️ Marcar todos</button>
+      </div>
       <div class="card"><div id="catalogo-list"></div></div>
       <div style="height:80px"></div>
     </div>
@@ -1520,6 +1524,10 @@ html, body {
           <input class="form-input" id="e-forn" placeholder="Opcional">
         </div>
       </div>
+      <label style="display:flex;align-items:flex-start;gap:8px;background:var(--cyan-l);border-radius:10px;padding:10px 12px;cursor:pointer;margin-top:6px">
+        <input type="checkbox" id="e-consumo" style="width:18px;height:18px;accent-color:#0097A7;margin-top:1px;flex-shrink:0">
+        <span style="font-size:12px;color:var(--cyan-d);font-weight:700">📋 Controle por inventário<br><span style="font-weight:400;color:#888">Entra no custo da precificação, mas NÃO vai pra lista de compras nem dá baixa por pedido (ex.: impressão, refil de cola quente). A quantidade você acerta no inventário.</span></span>
+      </label>
     </div>
     <div class="form-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-estoque')">Cancelar</button>
@@ -1745,6 +1753,10 @@ function navigate(screen) {
   currentScreen = screen;
   renderScreen(screen);
   document.getElementById('content').scrollTop = 0;
+  // Esconde o "+" nas telas que não usam (Compras = só lista + conciliação)
+  var semFab = (screen==='compras');
+  var _fab=document.getElementById('fab'); if(_fab) _fab.style.display = semFab ? 'none' : '';
+  var _navAdd=document.getElementById('nav-add'); if(_navAdd) _navAdd.style.visibility = semFab ? 'hidden' : '';
 }
 
 function renderScreen(s) {
@@ -1768,7 +1780,7 @@ function openFab() {
   else if (currentScreen==='estoque')    openModal('modal-estoque', true);
   else if (currentScreen==='kanban')     { navigate('pedidos'); setTimeout(()=>openModal('modal-pedido',true),100); }
   else if (currentScreen==='preco') { /* handled inline */ }
-  else if (currentScreen==='compras') openModal('modal-compras', true);
+  else if (currentScreen==='compras') { /* Compras é só lista + conciliação; despesa/estoque vão pelo Financeiro */ }
   else if (currentScreen==='fornecedores') openModal('modal-fornecedor', true);
 }
 
@@ -1785,6 +1797,7 @@ function openModal(id, isNew) {
   }
   if(id==='modal-pedido'){ var _pk=document.getElementById('p-cliente-picker'); if(_pk) _pk.style.display='none'; setTimeout(popularCatalogoSelect,60); setTimeout(popularDatalistClientes,60); }
   if(id==='modal-fin'){ if(isNew){ _estLinhas=[]; } setTimeout(_popularCategoriasFin,30); }
+  if(id==='modal-estoque' && isNew){ var _ec=document.getElementById('e-consumo'); if(_ec) _ec.checked=false; }
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
@@ -2590,7 +2603,7 @@ function renderEstoque() {
         </div>
         <div class="li-info" onclick="editarEstoque('${e.id}')">
           <div class="li-title">${e.nome}</div>
-          <div class="li-sub">${e.cat||''} · mín: ${e.min||0} ${e.un||'un'}</div>
+          <div class="li-sub">${e.cat||''}${e.consumo?' · 📋 inventário':''} · mín: ${e.min||0} ${e.un||'un'}</div>
         </div>
         <div class="li-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
           <div class="li-value" style="color:${e.qtd<=e.min&&e.min>0?'var(--red)':'var(--cyan-d)'}">${e.qtd||0} ${e.un||'un'}</div>
@@ -2616,6 +2629,7 @@ function salvarEstoque() {
     min:  parseFloat(document.getElementById('e-min').value)||0,
     preco:parseFloat(document.getElementById('e-preco').value)||0,
     forn: document.getElementById('e-forn').value,
+    consumo: !!(document.getElementById('e-consumo')||{}).checked,
   };
   if(id){const i=estoque.findIndex(e=>e.id===id);if(i>=0)estoque[i]=obj;}
   else estoque.push(obj);
@@ -2634,6 +2648,7 @@ function editarEstoque(id) {
   document.getElementById('e-min').value  =e.min||0;
   document.getElementById('e-preco').value=e.preco||0;
   document.getElementById('e-forn').value =e.forn||'';
+  var _ec=document.getElementById('e-consumo'); if(_ec) _ec.checked=!!e.consumo;
   openModal('modal-estoque',false);
 }
 
@@ -5451,7 +5466,7 @@ function reconstruirListaCompras() {
   pedidos
     .filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado')
     .forEach(p => {
-      (p.materiais || []).filter(m => m.status === 'pendente').forEach(mat => {
+      (p.materiais || []).filter(m => m.status === 'pendente' && !_ehConsumo(m.nome)).forEach(mat => {
         const key = (mat.nome || '').toLowerCase().trim();
         if (!key) return;
         if (!mapa[key]) mapa[key] = { nome: mat.nome, qtdTotal: 0, pedidos: [] };
@@ -5830,12 +5845,14 @@ function popularCatalogoSelect(){
   sel.innerHTML='<option value="">— escolher produto pronto —</option>'+
     catalogo.map(function(p){return '<option value="'+p.id+'">'+p.nome+' · '+fmt(p.preco)+'</option>';}).join('');
 }
+function _ehConsumo(nome){ var it=(typeof _estoqueAchaPorNome==='function')?_estoqueAchaPorNome(nome):null; return !!(it && it.consumo); }
 function puxarProdutoCatalogo(id){
   if(!id) return;
   const p=catalogo.find(function(x){return x.id===id;}); if(!p) return;
   const prodEl=document.getElementById('p-produto'); if(prodEl&&!prodEl.value.trim()) prodEl.value=p.nome;
   if(typeof adicionarItemPedido==='function'){ adicionarItemPedido(p.nome,1,p.preco); if(typeof recalcularTotal==='function') recalcularTotal(); }
   (p.materiais||[]).forEach(function(m){
+    if(m.tipo!=='balao' && _ehConsumo(m.nome)) return; // consumo/inventário: custo já está na precificação, não entra no pedido
     if(m.tipo==='balao') adicionarMaterialPedido('',m.qtd,'pendente','','balao',m.size||m.nome,'');
     else adicionarMaterialPedido(m.nome,m.qtd,'pendente','','normal','','');
   });
@@ -6245,35 +6262,25 @@ function renderFornecedores(){
 <div class="modal-overlay" id="modal-comprar-item">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">🛒 Registrar compra</div>
+    <div class="modal-title">✓ Conciliar com estoque</div>
     <div class="modal-body">
       <input type="hidden" id="ci2-id">
       <div class="form-group">
         <label class="form-label">Item</label>
         <input class="form-input" id="ci2-nome" readonly style="background:var(--gray-l)">
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Quantidade comprada</label>
-          <input class="form-input" id="ci2-qtd" type="number" step="0.1" min="0" oninput="ci2CalcTotal()">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Valor unitário (R$)</label>
-          <input class="form-input" id="ci2-preco" type="number" step="0.01" min="0" oninput="ci2CalcTotal()">
-        </div>
-      </div>
       <div class="form-group">
-        <label class="form-label">Fornecedor (opcional)</label>
-        <input class="form-input" id="ci2-forn" placeholder="Ex: CAS BRINDES" list="estoque-datalist">
+        <label class="form-label">Quantidade necessária (dos pedidos)</label>
+        <input class="form-input" id="ci2-qtd" readonly style="background:var(--gray-l)">
       </div>
-      <div style="background:var(--pink-l);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--brown)">
-        Total: <b id="ci2-total">R$ 0,00</b><br>
-        <span style="color:var(--gray-d)">Vai somar no ESTOQUE. (A despesa você registra à parte no Financeiro.)</span>
+      <div id="ci2-status" style="border-radius:10px;padding:11px 13px;font-size:13px;font-weight:700"></div>
+      <div style="background:var(--gray-l);border-radius:10px;padding:10px 12px;font-size:12px;color:var(--gray-d);margin-top:8px;line-height:1.5">
+        Conciliar <b>não soma no estoque</b>. A entrada do estoque é feita pelo <b>Financeiro</b> (lançando a despesa). Aqui você só marca que o item já foi comprado e está disponível, e ele sai da lista de pendências.
       </div>
     </div>
     <div class="form-actions">
       <button class="btn btn-outline" onclick="closeModal('modal-comprar-item')" style="flex:1">Cancelar</button>
-      <button class="btn btn-pink" onclick="confirmarCompraItem()" style="flex:2">✅ Comprei, alimentar estoque</button>
+      <button class="btn btn-pink" onclick="confirmarCompraItem()" style="flex:2">✓ Conferido, está no estoque</button>
     </div>
   </div>
 </div>
@@ -6289,20 +6296,31 @@ function comprarItemLista(id){
   if(!item) return;
   document.getElementById('ci2-id').value=id;
   document.getElementById('ci2-nome').value=item.nome||'';
-  document.getElementById('ci2-qtd').value=item.qtdTotal||1;
-  document.getElementById('ci2-preco').value='';
-  document.getElementById('ci2-forn').value='';
-  ci2CalcTotal();
-  if(typeof popularDatalistEstoque==='function') popularDatalistEstoque();
+  var precisa=parseFloat(item.qtdTotal)||1;
+  var it=estoque.find(function(e){return (e.nome||'').toLowerCase().trim()===(item.nome||'').toLowerCase().trim();});
+  var temQtd=it?(parseFloat(it.qtd)||0):0;
+  document.getElementById('ci2-qtd').value=precisa+' '+(it&&it.un?it.un:'un');
+  var box=document.getElementById('ci2-status');
+  if(!it){
+    box.style.background='#FDECEA'; box.style.color='#C0392B';
+    box.innerHTML='⚠️ Esse item ainda NÃO está no estoque.<br><span style="font-weight:400;font-size:12px">Lance a compra no Financeiro primeiro (é o que alimenta o estoque). Você ainda pode conciliar mesmo assim.</span>';
+  } else if(temQtd<precisa){
+    box.style.background='#FFF4E5'; box.style.color='#B26A00';
+    box.innerHTML='⚠️ No estoque tem só <b>'+temQtd+' '+(it.un||'un')+'</b> (precisa de '+precisa+').<br><span style="font-weight:400;font-size:12px">Confira se já lançou tudo no Financeiro.</span>';
+  } else {
+    box.style.background='#E8F5E9'; box.style.color='#2E7D32';
+    box.innerHTML='✅ No estoque: <b>'+temQtd+' '+(it.un||'un')+'</b> — quantidade suficiente.';
+  }
   openModal('modal-comprar-item', false);
 }
-function confirmarCompraItem(){
+/* DESATIVADA — substituída pela versão de conciliação mais abaixo. Mantida só por histórico. */
+function confirmarCompraItem_OLD_DESATIVADA(){
   var id=document.getElementById('ci2-id').value;
   var item=listaCompras.find(function(i){return i.id===id;});
   if(!item){ closeModal('modal-comprar-item'); return; }
-  var qtd=parseFloat(document.getElementById('ci2-qtd').value)||0;
-  var preco=parseFloat(document.getElementById('ci2-preco').value)||0;
-  var forn=document.getElementById('ci2-forn').value.trim();
+  var qtd=parseFloat((document.getElementById('ci2-qtd')||{}).value)||0;
+  var preco=0;
+  var forn='';
   if(qtd<=0){ toast('⚠️ Informe a quantidade comprada.'); return; }
   // 1. alimenta o estoque
   var it=estoque.find(function(e){return (e.nome||'').toLowerCase().trim()===(item.nome||'').toLowerCase().trim();});
@@ -6818,10 +6836,39 @@ function _renderFotoPreview(){
 }
 function _removerFotoAtual(){ _fotoAtual=null; _renderFotoPreview(); }
 function _escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function _popularFiltroCat(){
+  var sel=document.getElementById('cat-filtro'); if(!sel) return;
+  var atual=sel.value||'__todas__';
+  var cats=[]; catalogo.forEach(function(p){ var c=(p.cat||'Sem categoria'); if(cats.indexOf(c)<0) cats.push(c); });
+  cats.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+  var opts='<option value="__todas__">Todas as categorias ('+catalogo.length+')</option>';
+  cats.forEach(function(c){
+    var n=catalogo.filter(function(p){ return (p.cat||'Sem categoria')===c; }).length;
+    opts+='<option value="'+_escHtml(c)+'">'+_escHtml(c)+' ('+n+')</option>';
+  });
+  sel.innerHTML=opts;
+  // restaura seleção anterior se ainda existir
+  if(atual!=='__todas__' && cats.indexOf(atual)>=0){ sel.value=atual; }
+}
+function _catVisiveis(){
+  var sel=document.getElementById('cat-filtro');
+  var f=sel?sel.value:'__todas__';
+  return (!f||f==='__todas__') ? catalogo.slice() : catalogo.filter(function(p){ return (p.cat||'Sem categoria')===f; });
+}
+function _marcarTodosCat(){
+  var boxes=document.querySelectorAll('#catalogo-list .cat-sel');
+  if(!boxes.length) return;
+  // se todos já marcados, desmarca; senão marca todos os visíveis
+  var todosMarcados=true; boxes.forEach(function(c){ if(!c.checked) todosMarcados=false; });
+  boxes.forEach(function(c){ c.checked=!todosMarcados; });
+}
 function renderCatalogo(){
   var el=document.getElementById('catalogo-list'); if(!el) return;
+  _popularFiltroCat();
   if(!catalogo.length){ el.innerHTML=empty('🏷️','Catálogo vazio','Calcule um preço acima e salve'); return; }
-  el.innerHTML=catalogo.map(function(p){
+  var lista=_catVisiveis();
+  if(!lista.length){ el.innerHTML=empty('🏷️','Nenhum produto nessa categoria','Troque o filtro acima'); return; }
+  el.innerHTML=lista.map(function(p){
     var foto=_getFoto(p.id);
     var thumb = foto ? `<img src="${foto}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0">` : `<div class="li-icon" style="background:var(--pink-l)">🏷️</div>`;
     return `<div class="list-item">`+
@@ -6841,8 +6888,9 @@ function renderCatalogo(){
 function _gerarCatalogo(){
   if(!catalogo.length){ toast('Catálogo vazio — cadastre produtos antes.'); return; }
   var ids=[]; document.querySelectorAll('#catalogo-list .cat-sel:checked').forEach(function(c){ ids.push(c.dataset.id); });
-  var prods = ids.length ? catalogo.filter(function(p){ return ids.indexOf(p.id)>=0; }) : catalogo.slice();
-  if(!ids.length){ if(!confirm('Nenhum produto marcado. Gerar o catálogo com TODOS os '+catalogo.length+' produtos?')) return; }
+  var visiveis=_catVisiveis();
+  var prods = ids.length ? catalogo.filter(function(p){ return ids.indexOf(p.id)>=0; }) : visiveis.slice();
+  if(!ids.length){ if(!confirm('Nenhum produto marcado. Gerar o catálogo com os '+visiveis.length+' produto(s) exibidos?')) return; }
   var html=_montarCatalogoHTML(prods);
   var blob=new Blob([html],{type:'text/html;charset=utf-8'});
   var url=URL.createObjectURL(blob);
@@ -6874,7 +6922,24 @@ function _montarCatalogoHTML(prods){
     `<div class="cover"><img class="logo" src="${_CAT_LOGO}" alt="Tia Sú"><div class="ctitulo">Catálogo</div></div>`+
     `<div class="grid">${cards}</div>`+
     `<div class="rodape">Tia Sú · 📱 ${wpp} · 📷 ${insta} · CNPJ ${cnpj}<br>📍 ${ender}</div>`+
+    `<button class="share-fab" onclick="_compartilharCat()">📲 Compartilhar no WhatsApp</button>`+
+    `<script>${_catShareJS()}<\/script>`+
     `</body></html>`;
+}
+function _catShareJS(){
+  return `async function _compartilharCat(){
+    var msg='Confira o catálogo da Tia Sú! 🎈 Balões e presentes personalizados.';
+    try{
+      var html='<!DOCTYPE html>'+document.documentElement.outerHTML;
+      var file=new File([html],'catalogo-tiasu.html',{type:'text/html'});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],title:'Catálogo Tia Sú',text:msg});
+        return;
+      }
+      if(navigator.share){ await navigator.share({title:'Catálogo Tia Sú',text:msg}); return; }
+    }catch(e){ if(e&&e.name==='AbortError') return; }
+    window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  }`;
 }
 function _catCSS(){
   return `*{box-sizing:border-box}body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#4A1C1C;background:#fff}
@@ -6889,7 +6954,10 @@ function _catCSS(){
   .pinfo{padding:12px 14px;display:flex;flex-direction:column;gap:5px}
   .pnome{font-size:17px;font-weight:800;line-height:1.2}
   .pcat{font-size:11px;color:#fff;background:#00BCD4;align-self:flex-start;padding:2px 9px;border-radius:20px}
-  .desc{font-size:13px;color:#666;line-height:1.35}
+  .desc{font-size:13px;color:#666;line-height:1.35;white-space:pre-line}
+  .share-fab{position:fixed;right:18px;bottom:18px;z-index:50;background:#25D366;color:#fff;border:none;border-radius:30px;padding:14px 20px;font-size:15px;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.25);display:flex;align-items:center;gap:8px}
+  .share-fab:active{transform:scale(.96)}
+  @media print{.share-fab{display:none}}
   .precos{margin-top:6px;display:flex;flex-wrap:wrap;gap:10px;font-weight:800;font-size:15px}
   .precos .pix{color:#2E7D32}
   .precos .cartao{color:#FF1F78}
@@ -6987,7 +7055,7 @@ function calcPreco(){
   if(bd) bd.innerHTML=
     _cmvLinha('📦 Material', mat)+
     _cmvLinha('⏱️ Mão de obra ('+(MO_LABEL[_nivelCMV]||'')+')', mo)+
-    _cmvLinha('🧮 Custo', custo)+
+    '<div style="display:flex;justify-content:space-between;border-top:1px dashed #ddd;padding-top:5px;margin-top:3px"><span style="color:var(--gray-d)">🧮 Custo (= material + mão de obra)</span><b>'+fmt(custo)+'</b></div>'+
     _cmvLinha('💰 Lucro ('+lucroPct+'%)', lucroV);
   var pe=document.getElementById('cmv-preco'); if(pe) pe.value = precoPix? precoPix.toFixed(2): '';
   var ci=document.getElementById('cmv-info'); if(ci) ci.textContent='Mão de obra: '+(MO_LABEL[_nivelCMV]||'')+' (R$ '+mo+') · lucro '+lucroPct+'% · cartão '+taxaPct+'%';
@@ -7215,23 +7283,27 @@ function editarFin(id){
   openModal('modal-fin',false);
 }
 
-/* Comprei: alimenta SÓ o estoque (sem lançar despesa) */
+/* Conciliar: NÃO mexe no estoque (entrada é só pelo Financeiro).
+   Confere se o item já está no estoque, marca os materiais dos pedidos
+   como cobertos e tira da lista de pendências. A baixa é feita no pedido. */
 function confirmarCompraItem(){
   var id=document.getElementById('ci2-id').value;
   var item=listaCompras.find(function(i){return i.id===id;});
   if(!item){ closeModal('modal-comprar-item'); return; }
-  var qtd=parseFloat(document.getElementById('ci2-qtd').value)||0;
-  var preco=parseFloat(document.getElementById('ci2-preco').value)||0;
-  var forn=document.getElementById('ci2-forn').value.trim();
-  if(qtd<=0){ toast('⚠️ Informe a quantidade comprada.'); return; }
+  var precisa=parseFloat(item.qtdTotal)||1;
   var it=estoque.find(function(e){return (e.nome||'').toLowerCase().trim()===(item.nome||'').toLowerCase().trim();});
-  if(it){ it.qtd=(parseFloat(it.qtd)||0)+qtd; if(preco>0) it.preco=preco; if(forn) it.forn=forn; }
-  else { it={id:uid(), nome:item.nome, cat:'', un:'un', qtd:qtd, min:0, preco:preco, forn:forn}; estoque.push(it); }
+  var temQtd=it?(parseFloat(it.qtd)||0):0;
+  if(!it){
+    if(!confirm('"'+(item.nome||'')+'" ainda não está no estoque.\n\nO certo é lançar a compra no Financeiro primeiro (é o que alimenta o estoque).\n\nQuer conciliar assim mesmo?')) return;
+  } else if(temQtd<precisa){
+    if(!confirm('No estoque tem só '+temQtd+' '+(it.un||'un')+' de "'+(item.nome||'')+'" (precisa de '+precisa+').\n\nQuer conciliar assim mesmo?')) return;
+  }
+  // marca os materiais dos pedidos como cobertos (disponível em estoque) — NÃO dá baixa
   (item.pedidos||[]).forEach(function(pid){
     var p=pedidos.find(function(x){return x.id===pid;});
     if(!p) return;
     (p.materiais||[]).forEach(function(m){
-      if((m.nome||'').toLowerCase().trim()===(item.nome||'').toLowerCase().trim() && m.status!=='coberto'){ m.status='coberto'; m.itemId=it.id; }
+      if((m.nome||'').toLowerCase().trim()===(item.nome||'').toLowerCase().trim() && m.status!=='coberto'){ m.status='coberto'; if(it) m.itemId=it.id; }
     });
   });
   listaCompras=listaCompras.filter(function(i){return i.id!==id;});
@@ -7239,7 +7311,7 @@ function confirmarCompraItem(){
   save();
   closeModal('modal-comprar-item');
   renderScreen('compras');
-  toast('✅ "'+(item.nome||'')+'" entrou no estoque!');
+  toast('✓ "'+(item.nome||'')+'" conciliado — já está no estoque!');
 }
 </script>
 
@@ -7711,6 +7783,115 @@ async function processarFotoNFFin(event){
   };
   reader.readAsDataURL(file);
 }
+</script>
+
+<!-- ════════ SYNC EM TEMPO REAL — FIREBASE (Claude jun/2026) ════════
+     Sincroniza na HORA entre celular e navegador via Firestore.
+     O Google Sheets continua intacto como BACKUP.
+     Reusa a mesma mesclagem segura (por id + lápides) do sync por planilha. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  var firebaseConfig = {
+    apiKey: "AIzaSyAA-AfwpP4hljctN7FVfX_dC3_oG2J6Fjk",
+    authDomain: "tia-su-app.firebaseapp.com",
+    projectId: "tia-su-app",
+    storageBucket: "tia-su-app.firebasestorage.app",
+    messagingSenderId: "1077661946608",
+    appId: "1:1077661946608:web:cda968c2e8049e253ea835"
+  };
+  var fdoc=null, _fbReady=false, _fbTimer=null, _fbAplicando=false;
+  try{
+    if(typeof firebase==='undefined') throw new Error('SDK do Firebase não carregou');
+    firebase.initializeApp(firebaseConfig);
+    fdoc = firebase.firestore().collection('tiasu').doc('dados');
+    _fbReady=true;
+    console.log('[Firebase] conectado ✓');
+  }catch(e){ console.warn('[Firebase] init falhou:', e); }
+  if(!_fbReady) return;
+
+  function _mesclarFB(localArr, nuvemArr, todasTumbas){
+    var map={}, extras=[];
+    (nuvemArr||[]).forEach(function(r){ if(r&&r.id) map[r.id]=r; else if(r) extras.push(r); });
+    (localArr||[]).forEach(function(r){
+      if(!r) return;
+      if(!r.id){ extras.push(r); return; }
+      var c=map[r.id];
+      if(!c || (r.updatedAt||0) > (c.updatedAt||0)) map[r.id]=r;
+    });
+    (todasTumbas||[]).forEach(function(t){
+      var r=map[t.id];
+      if(r && (r.updatedAt||0) <= t.ts) delete map[t.id];
+    });
+    return Object.keys(map).map(function(k){return map[k];}).concat(extras);
+  }
+
+  function _aplicarRemotoFB(d){
+    if(!d) return;
+    var hasData = (d.pedidos&&d.pedidos.length>0)||(d.financeiro&&d.financeiro.length>0)||(d.estoque&&d.estoque.length>0);
+    if(!hasData) return;
+    var tumbasNuvem = d._tumbas||[];
+    var todasTumbas = (typeof tumbas!=='undefined'?tumbas:[]).concat(tumbasNuvem);
+    var rcLocal = (typeof recorrentes!=='undefined'?recorrentes:[]);
+    var novo = {
+      pedidos:      _mesclarFB(pedidos,      d.pedidos,      todasTumbas),
+      financeiro:   _mesclarFB(financeiro,   d.financeiro,   todasTumbas),
+      estoque:      _mesclarFB(estoque,      d.estoque,      todasTumbas),
+      catalogo:     _mesclarFB(catalogo,     d.catalogo,     todasTumbas),
+      clientes:     _mesclarFB(clientes,     d.clientes,     todasTumbas),
+      fornecedores: _mesclarFB(fornecedores, d.fornecedores, todasTumbas),
+      recorrentes:  _mesclarFB(rcLocal,      d.recorrentes,  todasTumbas)
+    };
+    if(typeof tumbas!=='undefined'){
+      var vistas={}; tumbas.forEach(function(t){ vistas[t.id+'|'+t.ts]=1; });
+      tumbasNuvem.forEach(function(t){ if(t&&t.id&&!vistas[t.id+'|'+t.ts]) tumbas.push(t); });
+      try{ localStorage.setItem('ts_tumbas', JSON.stringify(tumbas)); }catch(e){}
+    }
+    var atual = { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo, clientes:clientes, fornecedores:fornecedores, recorrentes:rcLocal };
+    if(JSON.stringify(novo)===JSON.stringify(atual)) return;
+    _fbAplicando=true;
+    pedidos=novo.pedidos;            DB.set('pedidos', pedidos);
+    financeiro=novo.financeiro;      DB.set('fin', financeiro);
+    estoque=novo.estoque;            DB.set('est', estoque);
+    catalogo=novo.catalogo;          DB.set('cat', catalogo);
+    clientes=novo.clientes;          DB.set('clientes', clientes);
+    fornecedores=novo.fornecedores;  DB.set('fornecedores', fornecedores);
+    if(typeof recorrentes!=='undefined'){ recorrentes=novo.recorrentes; DB.set('recorrentes', recorrentes); }
+    if(typeof _snapshot==='function') _snapshot();
+    if(typeof renderScreen==='function') renderScreen(typeof currentScreen!=='undefined'?currentScreen:'dashboard');
+    if(typeof toast==='function') toast('🔄 Atualizado (tempo real)');
+    _fbAplicando=false;
+    var igualNuvem = JSON.stringify(novo)===JSON.stringify({pedidos:d.pedidos||[],financeiro:d.financeiro||[],estoque:d.estoque||[],catalogo:d.catalogo||[],clientes:d.clientes||[],fornecedores:d.fornecedores||[],recorrentes:d.recorrentes||[]});
+    if(!igualNuvem) _fbAgendarEnvio();
+  }
+
+  fdoc.onSnapshot(function(snap){
+    if(!snap || !snap.exists) return;
+    if(snap.metadata && snap.metadata.hasPendingWrites) return; // eco da própria gravação
+    var data = snap.data();
+    if(!data) return;
+    try{
+      var d = data.payload ? JSON.parse(data.payload) : null;
+      if(d) _aplicarRemotoFB(d);
+    }catch(e){ console.warn('[Firebase] payload inválido', e); }
+  }, function(err){ console.warn('[Firebase] onSnapshot erro', err); });
+
+  function _fbEnviar(){
+    if(!_fbReady) return;
+    if((pedidos.length+financeiro.length+estoque.length)===0) return; // nunca grava app vazio
+    var data = { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo, clientes:clientes, fornecedores:fornecedores, recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[]), _tumbas:(typeof tumbas!=='undefined'?tumbas:[]) };
+    fdoc.set({ payload: JSON.stringify(data), updatedAt: Date.now() }).catch(function(e){ console.warn('[Firebase] envio erro', e); });
+  }
+  function _fbAgendarEnvio(){ clearTimeout(_fbTimer); _fbTimer=setTimeout(_fbEnviar, 1200); }
+
+  if(typeof save==='function'){
+    var _saveAntesFB = save;
+    save = function(){ _saveAntesFB(); if(!_fbAplicando) _fbAgendarEnvio(); };
+  }
+  window.addEventListener('load', function(){ setTimeout(_fbEnviar, 3500); });
+  window._fbForcarEnvio = _fbEnviar;
+})();
 </script>
 </body>
 </html>
