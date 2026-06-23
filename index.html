@@ -1262,7 +1262,11 @@ html, body {
         <datalist id="clientes-datalist"></datalist>
         <button type="button" onclick="_togglePickerCliente()" class="btn btn-ghost btn-sm" style="width:100%;margin-top:6px;border:1.5px dashed var(--pink);color:var(--pink);font-size:12px;font-weight:700">👤 Escolher cliente cadastrado</button>
         <div id="p-cliente-picker" style="display:none;background:#fff;border:1.5px solid var(--pink-l);border-radius:12px;padding:8px;margin-top:6px;max-height:240px;overflow-y:auto">
-          <input class="form-input" id="p-cliente-busca" placeholder="🔍 buscar cliente..." autocomplete="off" oninput="_renderPickerCliente(this.value)" style="font-size:13px;margin-bottom:6px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-size:11px;font-weight:700;color:var(--gray-d)">Clientes cadastrados</span>
+            <button type="button" onclick="_togglePickerCliente()" style="background:var(--gray-l);border:none;border-radius:8px;width:26px;height:26px;font-size:14px;color:var(--gray-d);cursor:pointer;line-height:1">✕</button>
+          </div>
+          <input class="form-input" id="p-cliente-busca" placeholder="Buscar cliente..." autocomplete="off" oninput="_renderPickerCliente(this.value)" style="font-size:13px;margin-bottom:6px">
           <div id="p-cliente-picker-lista"></div>
         </div>
       </div>
@@ -1369,8 +1373,11 @@ html, body {
       <!-- MATERIAIS DO PEDIDO -->
       <div style="margin-top:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <label class="form-label" style="margin:0">📦 Materiais usados</label>
-          <button type="button" onclick="adicionarMaterialPedido()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;border:1px dashed var(--cyan);color:var(--cyan-d)">+ Adicionar</button>
+          <label class="form-label" style="margin:0;display:flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" style="fill:none;stroke:#0BA5EC;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg>Materiais usados</label>
+          <div style="display:flex;gap:6px">
+            <button type="button" onclick="limparMateriaisPedido()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 9px;border:1px dashed var(--gray-d);color:var(--gray-d)">Limpar todos</button>
+            <button type="button" onclick="adicionarMaterialPedido()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;border:1px dashed var(--cyan);color:var(--cyan-d)">+ Adicionar</button>
+          </div>
         </div>
         <datalist id="estoque-datalist"></datalist>
         <div id="p-materiais-lista" style="display:flex;flex-direction:column;gap:6px"></div>
@@ -1406,9 +1413,8 @@ html, body {
           <label class="form-label">Tipo *</label>
           <select class="form-select" id="f-tipo" onchange="_popularCategoriasFin()">
             <option value="Receita">Receita</option>
-            <option value="Custo">Custo</option>
-            <option value="Despesa Fixa">Despesa Fixa</option>
             <option value="Despesa Variável">Despesa Variável</option>
+            <option value="Despesa Fixa">Despesa Fixa</option>
             <option value="Investimento">Investimento</option>
           </select>
         </div>
@@ -1420,12 +1426,7 @@ html, body {
       <div class="form-group">
         <label class="form-label">Categoria</label>
         <select class="form-select" id="f-cat" onchange="_toggleEstoqueFin()">
-          <option>Receita Vendas</option><option>Receita Kit</option>
-          <option>Receita Balão</option><option>Receita Personalizado</option>
-          <option>Receita Sublimação</option><option>Material Criação</option>
-          <option>Embalagem</option><option>Ferramentas</option>
-          <option>Arquivos/Cursos</option><option>Marketing</option>
-          <option>Taxas/Envio</option><option>Outros Custos</option>
+          <option>Vendas</option><option>Sinal/Entrada</option><option>Outras receitas</option>
         </select>
       </div>
       <div class="form-group">
@@ -1479,6 +1480,7 @@ html, body {
       <div class="form-group">
         <label class="form-label">Sua chave (sk-ant-...)</label>
         <input class="form-input" id="apikey-input" type="password" placeholder="sk-ant-..." autocomplete="off">
+        <button type="button" onclick="var i=document.getElementById('apikey-input'); i.type=(i.type==='password'?'text':'password'); this.textContent=(i.type==='password'?'👁 Mostrar chave':'🙈 Ocultar chave');" style="background:none;border:none;color:var(--cyan-d);font-size:12px;font-weight:700;cursor:pointer;padding:5px 0;margin-top:3px">👁 Mostrar chave</button>
       </div>
       <div id="apikey-test-result" style="display:none;border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:700"></div>
       <button class="btn btn-outline" style="width:100%;margin-bottom:8px" onclick="testarApiKey()">🧪 Testar chave</button>
@@ -1808,8 +1810,8 @@ function openModal(id, isNew) {
   if (isNew) resetModal(id);
   const el = document.getElementById(id);
   el.classList.add('open');
-  // modal-pedido é um formulário longo — NÃO fecha ao clicar no fundo (evita perda de dados)
-  if (id !== 'modal-pedido' && id !== 'modal-fin') {
+  // Formulários onde NÃO se fecha ao clicar no fundo (evita perder o que digitou)
+  if (id !== 'modal-pedido' && id !== 'modal-fin' && id !== 'modal-apikey') {
     el.onclick = e => { if(e.target===e.currentTarget) closeModal(id); };
   } else {
     el.onclick = null; // só fecha pelo botão Fechar
@@ -2320,10 +2322,9 @@ function receberCompleto() {
     toast('✅ Pagamento já registrado completo!');
     return;
   }
-  // Confirmação antes de lançar
-  if (!confirm(`Confirmar recebimento de ${fmt(restante)} da ${p.cliente}?\n\nIsso vai lançar no Financeiro e marcar o pedido como Entregue.`)) return;
+  // Confirmação antes de lançar (NÃO marca como entregue — entrega é pelo Kanban)
+  if (!confirm(`Confirmar recebimento de ${fmt(restante)} da ${p.cliente}?\n\nIsso só marca como PAGO e lança no Financeiro. A entrega você marca no Kanban quando entregar.`)) return;
   p.sinal = p.valor;
-  p.status = 'Entregue';
   // Cria lançamento no financeiro para o valor restante recebido
   if (restante > 0.01) {
     financeiro.unshift({
@@ -2333,13 +2334,12 @@ function receberCompleto() {
       data: today(), pgto: p.pgto || 'PIX',
     });
   }
-  save(); // era salvarDados() — função inexistente (bug corrigido)
-  // Atualiza campos na tela
+  save();
+  // Atualiza campos na tela (status NÃO muda)
   document.getElementById('p-sinal').value = p.valor;
-  document.getElementById('p-status').value = 'Entregue';
   const el = document.getElementById('p-restante');
   if (el) el.textContent = 'R$ 0,00';
-  toast('✅ Recebido! ' + (restante > 0.01 ? fmt(restante) + ' lançado no Financeiro.' : 'Pagamento já estava registrado.'));
+  toast('✅ Pago! ' + (restante > 0.01 ? fmt(restante) + ' lançado no Financeiro.' : 'Pagamento já estava registrado.') + ' (entrega: marque no Kanban)');
   renderPedidos();
 }
 
@@ -2378,6 +2378,9 @@ function enviarLembreteWhatsApp(id) {
       ? ('\u{1F4B0} Valor restante: *' + fmtR(restante) + '* (' + pgto + ')')
       : '✅ Pagamento: *Quitado*',
     p.obs ? ('\u{1F4DD} _' + p.obs + '_') : null,
+    '',
+    '⚠️ *Confira com atenção todos os detalhes acima* (descrição, data e valores).',
+    'Após o produto finalizado, não nos responsabilizamos por erros que não tenham sido apontados aqui na confirmação.',
     '',
     'Confirma? \u{1F60A}',
     '',
@@ -3023,6 +3026,14 @@ function _selecionarCliente(i){
   if(typeof clienteAutocomplete==='function') clienteAutocomplete();
 }
 
+function limparMateriaisPedido(){
+  const lista = document.getElementById('p-materiais-lista');
+  if (!lista) return;
+  if (!lista.children.length){ toast('Não há materiais para limpar.'); return; }
+  if (!confirm('Limpar TODOS os materiais deste pedido?')) return;
+  lista.innerHTML='';
+  toast('🧹 Materiais limpos.');
+}
 function adicionarMaterialPedido(nome='', qtd=1, status='pendente', matId='') {
   const lista = document.getElementById('p-materiais-lista');
   if (!lista) return;
@@ -4697,6 +4708,13 @@ async function gerarImagemRecibo(id) {
       words.forEach(w=>{ const t=(line?line+' ':'')+w; if(ctx.measureText(t).width>mw&&line){ctx.fillText(line,LX+6,y);y+=20;line=w;}else{line=t;} });
       if(line){ctx.fillText(line,LX+6,y);y+=20;}
     }
+    { divider(); section('⚠️ IMPORTANTE', '#E67E22');
+      const _aviso='Confira com atenção todos os detalhes acima (descrição, data e valores). Após o produto finalizado, não nos responsabilizamos por erros que não tenham sido apontados nesta confirmação.';
+      const mw=RX-LX-6; ctx.font='400 11px Nunito,sans-serif'; ctx.fillStyle='#666'; ctx.textAlign='left';
+      const words=_aviso.split(' '); let line='';
+      words.forEach(w=>{ const t=(line?line+' ':'')+w; if(ctx.measureText(t).width>mw&&line){ctx.fillText(line,LX+6,y);y+=18;line=w;}else{line=t;} });
+      if(line){ctx.fillText(line,LX+6,y);y+=18;}
+    }
     y+=10; divider();
     ctx.font='italic 11px Mali,cursive'; ctx.fillStyle='#888'; ctx.textAlign='center';
     ctx.fillText('✨ Transformando Momentos em Memórias',CX,y); y+=18;
@@ -5047,7 +5065,7 @@ function mostrarConfigApiKey() {
   const el = document.getElementById('modal-apikey');
   el.style.zIndex = '300';
   el.classList.add('open');
-  el.onclick = e => { if(e.target===e.currentTarget) closeModal('modal-apikey'); };
+  el.onclick = null; /* não fecha mais ao clicar fora — só pelo botão Fechar (evita fechar sozinho) */
 }
 
 async function processarFotoNF(event) {
@@ -7247,11 +7265,12 @@ function _primeiroItem(p){
 
 <script>
 /* CATEGORIAS DO FINANCEIRO POR TIPO + COMPREI SÓ ESTOQUE (Claude jun/2026) */
+var _CAT_VARIAVEL = ['Material/Insumos','Embalagem','Manutenção/Peças','Frete/Entrega','Taxas (cartão/maquininha)','Marketing/Anúncios','Outros'];
 var CAT_FIN = {
-  'Receita':          ['Receita Vendas','Receita Kit','Receita Balão','Receita Personalizado','Receita Sublimação','Outras Receitas'],
-  'Custo':            ['Material Criação','Embalagem','Impressão','Taxas/Envio','Outros Custos'],
-  'Despesa Fixa':     ['Aluguel / Espaço','Energia elétrica','Internet','Celular / Telefone','MEI / DAS','Plataformas (Canva etc.)','Manutenção','Contador','Outros Fixos'],
-  'Despesa Variável': ['Material Criação','Embalagem','Marketing','Combustível / Entrega','Taxas/Envio','Outros'],
+  'Receita':          ['Vendas','Sinal/Entrada','Outras receitas'],
+  'Despesa Variável': _CAT_VARIAVEL,
+  'Custo':            _CAT_VARIAVEL, /* compatibilidade: lançamentos antigos com tipo "Custo" */
+  'Despesa Fixa':     ['Aluguel / Espaço','Energia elétrica','Internet','Celular / Telefone','MEI / DAS','Plataformas (Canva etc.)','Contador','Outros Fixos'],
   'Investimento':     ['Equipamentos','Ferramentas','Cursos / Capacitação','Outros']
 };
 function _popularCategoriasFin(manter){
@@ -7272,7 +7291,7 @@ function _toggleEstoqueFin(){
   var isNew=!document.getElementById('f-id').value;
   var tipo=(document.getElementById('f-tipo')||{}).value||'';
   var cat =(document.getElementById('f-cat')||{}).value||'';
-  var MAT=['Material Criação','Embalagem','Impressão','Ferramentas','Equipamentos'];
+  var MAT=['Material/Insumos','Embalagem','Manutenção/Peças','Ferramentas','Equipamentos','Material Criação','Impressão'];
   var tiposOk=['Custo','Despesa Variável','Investimento'];
   var mostrar=isNew && tiposOk.indexOf(tipo)>=0 && MAT.indexOf(cat)>=0;
   bloco.style.display=mostrar?'block':'none';
@@ -7373,10 +7392,11 @@ function confirmarCompraItem(){
   var precisa=parseFloat(item.qtdTotal)||1;
   var it=estoque.find(function(e){return (e.nome||'').toLowerCase().trim()===(item.nome||'').toLowerCase().trim();});
   var temQtd=it?(parseFloat(it.qtd)||0):0;
-  if(!it){
-    if(!confirm('"'+(item.nome||'')+'" ainda não está no estoque.\n\nO certo é lançar a compra no Financeiro primeiro (é o que alimenta o estoque).\n\nQuer conciliar assim mesmo?')) return;
-  } else if(temQtd<precisa){
-    if(!confirm('No estoque tem só '+temQtd+' '+(it.un||'un')+' de "'+(item.nome||'')+'" (precisa de '+precisa+').\n\nQuer conciliar assim mesmo?')) return;
+  if(!it || temQtd<precisa){
+    closeModal('modal-comprar-item');
+    if(!it) toast('⚠️ "'+(item.nome||'')+'" ainda não está no estoque — lance a compra no Financeiro. Ele CONTINUA na lista.');
+    else toast('⚠️ Só '+temQtd+' '+(it.un||'un')+' no estoque de "'+(item.nome||'')+'" (precisa de '+precisa+'). CONTINUA na lista.');
+    return; // mantém na lista até estar no estoque de verdade
   }
   // marca os materiais dos pedidos como cobertos (disponível em estoque) — NÃO dá baixa
   (item.pedidos||[]).forEach(function(pid){
@@ -7836,9 +7856,9 @@ async function processarFotoNFFin(event){
       const match = texto.match(/\{[\s\S]*\}/);
       if (!match) throw new Error('Resposta inesperada da IA');
       const dados = JSON.parse(match[0]);
-      document.getElementById('f-tipo').value = 'Custo';
-      if (typeof _popularCategoriasFin === 'function') _popularCategoriasFin('Material Criação');
-      document.getElementById('f-cat').value = 'Material Criação';
+      document.getElementById('f-tipo').value = 'Despesa Variável';
+      if (typeof _popularCategoriasFin === 'function') _popularCategoriasFin('Material/Insumos');
+      document.getElementById('f-cat').value = 'Material/Insumos';
       if (dados.valor)     document.getElementById('f-valor').value = parseFloat(dados.valor).toFixed(2);
       if (dados.data)      document.getElementById('f-data').value  = dados.data;
       const _dp = [];
