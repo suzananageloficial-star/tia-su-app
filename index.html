@@ -6319,6 +6319,13 @@ function renderKanban(){
         return da<db?-1:(da>db?1:0);
       });
     }
+    if(col.keys.indexOf('Entregue')>=0){
+      // Entregues: mais recente primeiro (o último entregue fica no topo)
+      items = items.slice().sort(function(a,b){
+        var da=a.dataEntrega||'0000-00-00', db=b.dataEntrega||'0000-00-00';
+        return da>db?-1:(da<db?1:0);
+      });
+    }
     var isLast = colIdx===KCOLS_V2.length-1;
     var cards = items.length ? items.map(function(p){
       var urgente = p.urgente ? 'border-left:3px solid var(--red);' : '';
