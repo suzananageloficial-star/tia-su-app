@@ -826,6 +826,7 @@ html, body {
     <div class="header-info">
       <div class="header-title">Tia Sú</div>
       <div class="header-sub">Balões & Personalizados</div>
+      <div class="header-sub" id="ultima-sync" style="font-size:9px;opacity:0.7;margin-top:1px">—</div>
     </div>
     <div class="header-actions" style="gap:4px">
       <span id="sync-indicator" style="font-size:14px;cursor:pointer;padding:4px" onclick="syncFromCloud()" title="Sincronizar agora">—</span>
@@ -7296,7 +7297,7 @@ async function _lerFotoComposicao(){
         max_tokens:500,
         messages:[{role:'user',content:[
           {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
-          {type:'text',text:'Você é assistente de uma loja de presentes personalizados e balões. Esta é a foto de um produto/kit. Liste os itens/componentes VISÍVEIS que provavelmente compõem o produto (ex: caneca, caixa, chocolate, flor de papel, laço de fita, cartão, balão). Responda APENAS com JSON válido, sem texto extra, no formato exato: {"itens":[{"nome":"nome curto em português","qtd":1}]}. Quantidade aproximada (use 1 se não der pra saber). NÃO invente preços. No máximo 12 itens. Se um item for balão, escreva a palavra "balão" no nome.'}
+          {type:'text',text:'Você é assistente de uma loja de presentes personalizados e balões. Esta é a foto de UM produto/kit à venda. Liste APENAS os itens que fazem parte do presente/arranjo em si — o que o cliente realmente recebe (ex: caneca, caixa, chocolate, flor de papel, laço de fita, cartão, balão). IGNORE completamente o cenário e o fundo: mesa, bancada, superfície, parede, chão, toalha, decoração ao redor, plantas, mãos, pessoas, sombras, logotipo/marca d\'água e qualquer objeto que seja só ambientação e NÃO faça parte do produto. Na dúvida se algo faz parte do produto, NÃO inclua. Responda APENAS com JSON válido, sem texto extra, no formato exato: {"itens":[{"nome":"nome curto em português","qtd":1}]}. Quantidade aproximada (use 1 se não der pra saber). NÃO invente preços. No máximo 12 itens. Se um item for balão, escreva a palavra "balão" no nome.'}
         ]}]
       })
     });
@@ -8002,6 +8003,23 @@ async function processarFotoNFFin(event){
 }
 </script>
 
+<!-- ════════ ÚLTIMA ATUALIZAÇÃO (carimbo de data/hora) — Claude jun/2026 ════════ -->
+<script>
+window._renderUltimaSync = function(){
+  try{
+    var el=document.getElementById('ultima-sync'); if(!el) return;
+    var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
+    if(!t){ el.textContent='Sem sincronização ainda'; return; }
+    var d=new Date(t);
+    var dd=('0'+d.getDate()).slice(-2), mm=('0'+(d.getMonth()+1)).slice(-2);
+    var hh=('0'+d.getHours()).slice(-2), mi=('0'+d.getMinutes()).slice(-2);
+    el.textContent='✓ Atualizado '+dd+'/'+mm+' '+hh+':'+mi;
+  }catch(e){}
+};
+window._marcarSync = function(){ try{ localStorage.setItem('ts_ultimaSync', String(Date.now())); window._renderUltimaSync(); }catch(e){} };
+window.addEventListener('load', function(){ setTimeout(window._renderUltimaSync, 300); });
+</script>
+
 <!-- ════════ SYNC EM TEMPO REAL — FIREBASE (Claude jun/2026) ════════
      Sincroniza na HORA entre celular e navegador via Firestore.
      O Google Sheets continua intacto como BACKUP.
@@ -8078,6 +8096,7 @@ async function processarFotoNFFin(event){
     if(typeof _snapshot==='function') _snapshot();
     if(typeof renderScreen==='function') renderScreen(typeof currentScreen!=='undefined'?currentScreen:'dashboard');
     if(typeof toast==='function') toast('🔄 Atualizado (tempo real)');
+    if(window._marcarSync) window._marcarSync();
     _fbAplicando=false;
     var igualNuvem = JSON.stringify(novo)===JSON.stringify({pedidos:d.pedidos||[],financeiro:d.financeiro||[],estoque:d.estoque||[],catalogo:d.catalogo||[],clientes:d.clientes||[],fornecedores:d.fornecedores||[],recorrentes:d.recorrentes||[]});
     if(!igualNuvem) _fbAgendarEnvio();
@@ -8098,7 +8117,7 @@ async function processarFotoNFFin(event){
     if(!_fbReady) return;
     if((pedidos.length+financeiro.length+estoque.length)===0) return; // nunca grava app vazio
     var data = { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo, clientes:clientes, fornecedores:fornecedores, recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[]), _tumbas:(typeof tumbas!=='undefined'?tumbas:[]) };
-    fdoc.set({ payload: JSON.stringify(data), updatedAt: Date.now() }).catch(function(e){ console.warn('[Firebase] envio erro', e); });
+    fdoc.set({ payload: JSON.stringify(data), updatedAt: Date.now() }).then(function(){ if(window._marcarSync) window._marcarSync(); }).catch(function(e){ console.warn('[Firebase] envio erro', e); });
   }
   function _fbAgendarEnvio(){ clearTimeout(_fbTimer); _fbTimer=setTimeout(_fbEnviar, 1200); }
 
