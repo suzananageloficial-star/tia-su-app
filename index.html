@@ -1514,7 +1514,7 @@ html, body {
             <option>Canecas/Cerâmica</option><option>Embalagem</option>
             <option>Fitas/Laços</option><option>Enchimento</option>
             <option>Ferramentas</option><option>Arquivos Digitais</option>
-            <option>Outros</option>
+            <option>Insumos</option><option>Decoração</option><option>Outros</option>
           </select>
         </div>
         <div class="form-group">
@@ -3357,7 +3357,7 @@ function adicionarLinhaEstoqueFin(itemId='', qtd=1, valorUnit=0) {
           <option>Tintas/Toner</option><option>Tecido/Sublimação</option>
           <option>Canecas/Cerâmica</option><option>Embalagem</option>
           <option>Fitas/Laços</option><option>Ferramentas</option>
-          <option>Arquivos Digitais</option><option>Outros</option>
+          <option>Arquivos Digitais</option><option>Insumos</option><option>Decoração</option><option>Outros</option>
         </select>
         <select class="form-select ef-novo-un" style="font-size:11px">
           <option>un</option><option>kg</option><option>g</option>
@@ -7382,7 +7382,7 @@ function _primeiroItem(p){
 
 <script>
 /* CATEGORIAS DO FINANCEIRO POR TIPO + COMPREI SÓ ESTOQUE (Claude jun/2026) */
-var _CAT_VARIAVEL = ['Material/Insumos','Embalagem','Manutenção/Peças','Frete/Entrega','Taxas (cartão/maquininha)','Marketing/Anúncios','Outros'];
+var _CAT_VARIAVEL = ['Material/Insumos','Embalagem','Manutenção/Peças','Frete/Entrega','Combustível','Taxas (cartão/maquininha)','Marketing/Anúncios','Outros'];
 var CAT_FIN = {
   'Receita':          ['Vendas','Sinal/Entrada','Outras receitas'],
   'Despesa Variável': _CAT_VARIAVEL,
