@@ -883,6 +883,7 @@ html, body {
         <button class="filter-pill" onclick="filtrarPedidos('Orçamento')" id="f-orçamento">Orçamentos</button>
         <button class="filter-pill" onclick="filtrarPedidos('a-receber')" id="f-a-receber">A Receber</button>
       </div>
+      <div style="margin-bottom:10px"><input type="search" id="pedido-busca" placeholder="🔎 Buscar por cliente ou produto" oninput="_setBuscaPedido(this.value)" class="form-input" style="font-size:13px"></div>
       <div class="card"><div id="pedidos-list"></div></div>
       <div style="height:80px"></div>
     </div>
@@ -950,19 +951,19 @@ html, body {
       <!-- Faturamento por período -->
       <div class="section-title"><svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:#12B76A;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:6px"><path d="M3 17 9 11l4 4 8-8"/><path d="M14 7h7v7"/></svg>Faturamento por semana (no período)</div>
       <div class="card" style="padding:14px">
-        <canvas id="chart-faturamento" height="180"></canvas>
+        <div style="position:relative;height:240px"><canvas id="chart-faturamento"></canvas></div>
       </div>
 
       <!-- Receita por tipo de produto -->
       <div class="section-title" style="margin-top:14px"><svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:#FF1F78;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:6px"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.38 8.38 0 0 1 0-17 8.38 8.38 0 0 1 8.5 8.5Z"/><path d="M12 3v9l6-3"/></svg>Faturamento por categoria (produtos)</div>
       <div class="card" style="padding:14px">
-        <canvas id="chart-categorias" height="200"></canvas>
+        <div style="position:relative;height:240px"><canvas id="chart-categorias"></canvas></div>
       </div>
 
       <!-- Pedidos por status -->
       <div class="section-title" style="margin-top:14px"><svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:#6941C6;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;vertical-align:-3px;margin-right:6px"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>Pedidos por status</div>
       <div class="card" style="padding:14px">
-        <canvas id="chart-status" height="160"></canvas>
+        <div style="position:relative;height:200px"><canvas id="chart-status"></canvas></div>
       </div>
 
       <!-- Top clientes -->
@@ -1126,17 +1127,17 @@ html, body {
           <div class="form-group">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
               <label class="form-label" style="margin:0">🧾 Materiais (inclui embalagem)</label>
-              <button type="button" onclick="adicionarItemFicha()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;border:1px dashed var(--pink);color:var(--pink)">+ Material</button>
+              <div style="display:flex;gap:6px">
+                <button type="button" onclick="adicionarItemFicha()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;border:1px dashed var(--pink);color:var(--pink)">+ Material</button>
+                <button type="button" onclick="if(confirm('Limpar todos os materiais da ficha?')){document.getElementById('ficha-itens-lista').innerHTML='';calcPreco();}" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;border:1px dashed var(--red);color:var(--red)">🗑️ Limpar</button>
+              </div>
             </div>
             <button type="button" id="btn-ler-foto-ia" onclick="_lerFotoComposicao()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:7px;background:var(--cyan-l);color:var(--cyan-d);border:1.5px solid var(--cyan);border-radius:10px;padding:9px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px">
               <svg width="16" height="16" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/></svg>
               Ler foto e sugerir materiais (IA)
             </button>
             <datalist id="ficha-estoque-datalist"></datalist>
-            <div style="display:grid;grid-template-columns:1fr 42px 56px 62px auto 20px;gap:5px;font-size:9px;color:var(--gray-d);margin-bottom:3px;padding:0 2px">
-              <span>ITEM</span><span style="text-align:center">QTD</span><span style="text-align:center">VL/UN</span><span style="text-align:right">SUBTOTAL</span><span></span><span></span>
-            </div>
-            <div id="ficha-itens-lista" style="display:flex;flex-direction:column;gap:6px"></div>
+            <div id="ficha-itens-lista" style="display:flex;flex-direction:column;gap:8px"></div>
             <div style="font-size:10px;color:var(--gray-d);margin-top:4px;font-style:italic">Valor é por UNIDADE (o total já multiplica pela quantidade). Itens do estoque puxam o valor sozinhos. Marque 🎈 para balão. Embalagem entra como material.</div>
           </div>
           <input type="hidden" id="pr-mat" value="0">
@@ -1994,6 +1995,8 @@ function renderDashboard() {
 
 // ── PEDIDOS ───────────────────────────────────────────────────
 let filtroAtivo = 'todos';
+var _buscaPedido = '';
+function _setBuscaPedido(v){ _buscaPedido = v||''; renderPedidos(); }
 function filtrarPedidos(f) {
   filtroAtivo = f;
   document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
@@ -2014,6 +2017,10 @@ function renderPedidos() {
     if (filtroAtivo==='Novo') {
       lista = lista.slice().sort(function(a,b){var da=a.dataEntrega||'9999-12-31',db=b.dataEntrega||'9999-12-31';return da<db?-1:(da>db?1:0);});
     }
+  }
+  if (_buscaPedido && _buscaPedido.trim()) {
+    var _bq = _buscaPedido.trim().toLowerCase();
+    lista = lista.filter(function(p){ return ((p.cliente||'')+' '+(p.produto||'')).toLowerCase().indexOf(_bq) >= 0; });
   }
   document.getElementById('pedidos-count').textContent = `${lista.length} pedido${lista.length!==1?'s':''}`;
   const _agora = new Date();
@@ -4386,7 +4393,7 @@ function renderAnalise() {
           { label: 'Gastos',  data: gasArr, backgroundColor: '#f4336688', borderColor: '#f43366', borderWidth: 2, borderRadius: 6 }
         ]
       },
-      options: { responsive: true, plugins: { legend: { position: 'bottom' } }, scales: { y: { ticks: { callback: function(v) { return 'R$'+v; } } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { ticks: { callback: function(v) { return 'R$'+v; } } } } }
     });
   }
 
@@ -4408,7 +4415,7 @@ function renderAnalise() {
     _charts['cat'] = new Chart(ctxCat, {
       type: 'doughnut',
       data: { labels: catLabels, datasets: [{ data: catData, backgroundColor: cores.slice(0, catLabels.length), borderWidth: 2 }] },
-      options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
     });
   } else if (ctxCat) {
     ctxCat.parentElement.innerHTML = '<div style="text-align:center;padding:20px;color:var(--gray-d)">Sem pedidos no período</div>';
@@ -4429,7 +4436,7 @@ function renderAnalise() {
     _charts['sta'] = new Chart(ctxSta, {
       type: 'bar',
       data: { labels: statusList, datasets: [{ data: statusCount, backgroundColor: statusCores, borderRadius: 6 }] },
-      options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { stepSize: 1 } } } }
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { stepSize: 1 } } } }
     });
   }
 
@@ -6692,16 +6699,16 @@ function adicionarItemFicha(nome,qtd,balao,valor){
   if(typeof popularFichaDatalist==='function') popularFichaDatalist();
   var rowId='frow-'+uid();
   var row=document.createElement('div'); row.className='ficha-item-row'; row.id=rowId;
-  row.style.cssText='display:grid;grid-template-columns:1fr 44px 70px 26px auto 22px;gap:5px;align-items:center';
+  row.style.cssText='display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding-bottom:6px;border-bottom:1px solid #f1f1f1';
   if(_estoqueAchaPorNome(nome)) row.dataset.fromStock='1';
   var unidade=(typeof _unidadeDoNome==='function')?_unidadeDoNome(nome):'';
   row.innerHTML=
-    '<input type="text" class="fi-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Item" list="ficha-estoque-datalist" autocomplete="off" oninput="fiNomeChanged(\''+rowId+'\')" style="padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
-    '<input type="number" class="fi-qtd" value="'+qtd+'" min="0.1" step="0.1" oninput="fiQtdChanged(\''+rowId+'\')" style="text-align:center;padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
-    '<input type="number" class="fi-valor" value="'+valor+'" placeholder="0,00" step="0.01" min="0" oninput="fiValorChanged(\''+rowId+'\')" style="text-align:right;padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
-    '<span class="fi-un" style="font-size:9px;color:var(--gray-d);text-align:center;white-space:nowrap">'+unidade+'</span>'+
-    '<label style="font-size:9px;color:var(--gray-d);display:flex;align-items:center;gap:3px;white-space:nowrap"><input type="checkbox" class="fi-balao" '+(balao?'checked':'')+' onchange="calcPreco()">🎈</label>'+
-    '<button type="button" onclick="document.getElementById(\''+rowId+'\').remove();calcPreco()" style="background:none;border:none;color:var(--gray-d);cursor:pointer;font-size:14px">✕</button>';
+    '<input type="text" class="fi-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Item" list="ficha-estoque-datalist" autocomplete="off" oninput="fiNomeChanged(\''+rowId+'\')" style="flex:1 1 100%;min-width:0;padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
+    '<input type="number" class="fi-qtd" value="'+qtd+'" min="0.1" step="0.1" oninput="fiQtdChanged(\''+rowId+'\')" style="width:56px;text-align:center;padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
+    '<input type="number" class="fi-valor" value="'+valor+'" placeholder="0,00" step="0.01" min="0" oninput="fiValorChanged(\''+rowId+'\')" style="width:84px;text-align:right;padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+
+    '<span class="fi-un" style="font-size:9px;color:var(--gray-d);text-align:center;white-space:nowrap;min-width:18px">'+unidade+'</span>'+
+    '<label style="font-size:11px;color:var(--gray-d);display:flex;align-items:center;gap:3px;white-space:nowrap"><input type="checkbox" class="fi-balao" '+(balao?'checked':'')+' onchange="calcPreco()">🎈</label>'+
+    '<button type="button" title="Remover item" onclick="document.getElementById(\''+rowId+'\').remove();calcPreco()" style="margin-left:auto;background:var(--red-l);border:none;color:var(--red);cursor:pointer;font-size:13px;font-weight:800;border-radius:8px;padding:7px 11px">✕</button>';
   lista.appendChild(row);
 }
 function coletarItensFicha(){
