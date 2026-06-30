@@ -6000,6 +6000,8 @@ function matchSize(estoqueName, sizeText){
 }
 function _ehBalao(nome){ return /bal[aã]o|bubble|foil/i.test(nome||''); }
 function _ehFita(nome){ return /cetim|voal|gorgur|vin[ií]l|confete|\bfita\b/i.test(nome||''); }
+// Serviços (não vão pro estoque nem pra lista de compras; contam só na precificação)
+function _ehServico(nome){ return /impress|m[ãa]o\s*de\s*obra|servi[çc]o|h[eé]lio|\bfrete\b/i.test(nome||''); }
 function matchFita(estoqueName, baseText){
   var en=(estoqueName||'').toLowerCase().replace(/\s+/g,' ').trim();
   var bt=(baseText||'').toLowerCase().replace(/\s+/g,' ').trim();
@@ -6083,7 +6085,7 @@ function puxarProdutoCatalogo(id){
   const prodEl=document.getElementById('p-produto'); if(prodEl&&!prodEl.value.trim()) prodEl.value=p.nome;
   if(typeof adicionarItemPedido==='function'){ adicionarItemPedido(p.nome,1,p.preco); if(typeof recalcularTotal==='function') recalcularTotal(); }
   (p.materiais||[]).forEach(function(m){
-    if(m.tipo!=='balao' && m.tipo!=='fita' && _ehConsumo(m.nome)) return; // consumo/inventário: custo já está na precificação, não entra no pedido
+    if(m.tipo!=='balao' && m.tipo!=='fita' && (_ehConsumo(m.nome) || _ehServico(m.nome))) return; // consumo/serviço (impressão, mão de obra...): custo já está na precificação, não entra no pedido
     if(m.tipo==='balao') adicionarMaterialPedido('',m.qtd,'pendente','','balao',m.size||m.nome,'');
     else if(m.tipo==='fita') adicionarMaterialPedido('',m.qtd,'pendente','','fita',m.size||m.nome,'');
     else adicionarMaterialPedido(m.nome,m.qtd,'pendente','','normal','','');
