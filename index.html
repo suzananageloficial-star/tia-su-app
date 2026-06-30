@@ -924,6 +924,7 @@ html, body {
       </div>
       <div id="estoque-alertas"></div>
       <div class="section-title">Itens em estoque</div>
+      <div style="margin-bottom:8px"><input type="search" id="estoque-busca" placeholder="🔎 Buscar item pelo nome" oninput="_setBuscaEstoque(this.value)" class="form-input" style="font-size:13px"></div>
       <div style="margin-bottom:8px"><select class="form-select" id="estoque-filtro-cat" onchange="renderEstoque()" style="font-size:13px"><option value="">Todas as categorias</option></select></div>
       <div class="card"><div id="estoque-list"></div></div>
       <div style="height:80px"></div>
@@ -2691,6 +2692,8 @@ function editarFin(id) {
 }
 
 // ── ESTOQUE ───────────────────────────────────────────────────
+var _buscaEstoque='';
+function _setBuscaEstoque(v){ _buscaEstoque=v||''; renderEstoque(); }
 function renderEstoque() {
   const baixos=estoque.filter(e=>e.qtd<=e.min&&e.min>0);
   document.getElementById('estoque-sub').textContent=`${estoque.length} item${estoque.length!==1?'s':''} cadastrado${estoque.length!==1?'s':''}`;
@@ -2704,7 +2707,8 @@ function renderEstoque() {
     selCat.innerHTML='<option value="">Todas as categorias</option>'+cats.map(c=>`<option${c===filtroCat?' selected':''}>${c}</option>`).join('');
     if(filtroCat && cats.indexOf(filtroCat)<0){ filtroCat=''; selCat.value=''; }
   }
-  const _lista=estoque.filter(e=>!filtroCat || (e.cat||'').trim()===filtroCat).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
+  const _bqEst=(_buscaEstoque||'').trim().toLowerCase();
+  const _lista=estoque.filter(e=>(!filtroCat || (e.cat||'').trim()===filtroCat) && (!_bqEst || (e.nome||'').toLowerCase().indexOf(_bqEst)>=0)).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
   document.getElementById('estoque-list').innerHTML=_lista.length
     ?_lista.map(e=>`
       <div class="list-item">
