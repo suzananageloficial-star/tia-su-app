@@ -6090,10 +6090,12 @@ function puxarProdutoCatalogo(id){
   const prodEl=document.getElementById('p-produto'); if(prodEl&&!prodEl.value.trim()) prodEl.value=p.nome;
   if(typeof adicionarItemPedido==='function'){ adicionarItemPedido(p.nome,1,p.preco); if(typeof recalcularTotal==='function') recalcularTotal(); }
   (p.materiais||[]).forEach(function(m){
-    if(m.tipo!=='balao' && m.tipo!=='fita' && (_ehConsumo(m.nome) || _ehServico(m.nome))) return; // consumo/serviço (impressão, mão de obra...): custo já está na precificação, não entra no pedido
-    if(m.tipo==='balao') adicionarMaterialPedido('',m.qtd,'pendente','','balao',m.size||m.nome,'');
-    else if(m.tipo==='fita') adicionarMaterialPedido('',m.qtd,'pendente','','fita',m.size||m.nome,'');
-    else adicionarMaterialPedido(m.nome,m.qtd,'pendente','','normal','','');
+    var nm=m.nome||'';
+    // serviço (impressão, mão de obra...) e consumo: só entram na precificação, não vão pro pedido
+    if(m.tipo!=='balao' && (_ehServico(nm) || _ehConsumo(nm))) return;
+    if(m.tipo==='balao') adicionarMaterialPedido('',m.qtd,'pendente','','balao',m.size||nm,'');
+    else if(m.tipo==='fita' || _ehFita(nm)) adicionarMaterialPedido('',m.qtd,'pendente','','fita',m.size||nm,''); // re-detecta fita/voal/vinil/confete pelo nome (faz produtos antigos puxarem certo)
+    else adicionarMaterialPedido(nm,m.qtd,'pendente','','normal','','');
   });
   const custoEl=document.getElementById('p-custo');
   if(custoEl){ custoEl.value=(parseFloat(p.matCusto)||0).toFixed(2); if(typeof calcularLucro==='function') calcularLucro(); }
