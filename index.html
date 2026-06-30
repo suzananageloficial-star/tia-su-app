@@ -2694,11 +2694,14 @@ function editarFin(id) {
 // ── ESTOQUE ───────────────────────────────────────────────────
 var _buscaEstoque='';
 function _setBuscaEstoque(v){ _buscaEstoque=v||''; renderEstoque(); }
+var _filtroBaixo=false;
+function _toggleFiltroBaixo(){ _filtroBaixo=!_filtroBaixo; renderEstoque(); }
 function renderEstoque() {
   const baixos=estoque.filter(e=>e.qtd<=e.min&&e.min>0);
+  if(!baixos.length) _filtroBaixo=false;
   document.getElementById('estoque-sub').textContent=`${estoque.length} item${estoque.length!==1?'s':''} cadastrado${estoque.length!==1?'s':''}`;
   document.getElementById('estoque-alertas').innerHTML=baixos.length
-    ?`<div class="estoque-alert">⚠️ ${baixos.length} item${baixos.length>1?'s':''} abaixo do mínimo: ${baixos.map(e=>e.nome).join(', ')}</div>`:'';
+    ?`<div class="estoque-alert" onclick="_toggleFiltroBaixo()" style="cursor:pointer">⚠️ ${baixos.length} item${baixos.length>1?'s':''} abaixo do mínimo${_filtroBaixo?' ✓ — toque p/ ver TODOS':' — toque p/ ver SÓ estes'}: ${baixos.map(e=>e.nome).join(', ')}</div>`:'';
   const selCat=document.getElementById('estoque-filtro-cat');
   const cats=[...new Set(estoque.map(e=>(e.cat||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   let filtroCat='';
@@ -2708,7 +2711,7 @@ function renderEstoque() {
     if(filtroCat && cats.indexOf(filtroCat)<0){ filtroCat=''; selCat.value=''; }
   }
   const _bqEst=(_buscaEstoque||'').trim().toLowerCase();
-  const _lista=estoque.filter(e=>(!filtroCat || (e.cat||'').trim()===filtroCat) && (!_bqEst || (e.nome||'').toLowerCase().indexOf(_bqEst)>=0)).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
+  const _lista=estoque.filter(e=>(!filtroCat || (e.cat||'').trim()===filtroCat) && (!_bqEst || (e.nome||'').toLowerCase().indexOf(_bqEst)>=0) && (!_filtroBaixo || ((e.qtd||0)<=(e.min||0) && (e.min||0)>0))).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
   document.getElementById('estoque-list').innerHTML=_lista.length
     ?_lista.map(e=>`
       <div class="list-item">
@@ -6166,6 +6169,7 @@ function renderMateriaisPedido(materiais){
   lista.innerHTML='';
   (materiais||[]).forEach(function(m){
     const nome=m.nome||((estoque.find(function(e){return e.id===m.itemId;})||{}).nome)||'';
+    if(typeof _ehServico==='function' && _ehServico(nome)) return; // serviço (impressão, mão de obra...): não entra no pedido
     adicionarMaterialPedido(nome,m.qtd,m.status||'pendente',m.id,m.tipo||'normal',m.size||'',m.itemId||'');
   });
 }
@@ -8319,7 +8323,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v30/06-c5';
+    var ver='v30/06-c7';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
