@@ -6091,11 +6091,12 @@ function puxarProdutoCatalogo(id){
   if(typeof adicionarItemPedido==='function'){ adicionarItemPedido(p.nome,1,p.preco); if(typeof recalcularTotal==='function') recalcularTotal(); }
   (p.materiais||[]).forEach(function(m){
     var nm=m.nome||'';
-    // serviço (impressão, mão de obra...) e consumo: só entram na precificação, não vão pro pedido
-    if(m.tipo!=='balao' && (_ehServico(nm) || _ehConsumo(nm))) return;
-    if(m.tipo==='balao') adicionarMaterialPedido('',m.qtd,'pendente','','balao',m.size||nm,'');
-    else if(m.tipo==='fita' || _ehFita(nm)) adicionarMaterialPedido('',m.qtd,'pendente','','fita',m.size||nm,''); // re-detecta fita/voal/vinil/confete pelo nome (faz produtos antigos puxarem certo)
-    else adicionarMaterialPedido(nm,m.qtd,'pendente','','normal','','');
+    // detecta pelo NOME (corrige itens marcados errado): serviço sai; fita/voal/vinil/confete viram cor
+    if(_ehServico(nm)) return;
+    if(_ehFita(nm)){ adicionarMaterialPedido('',m.qtd,'pendente','','fita',m.size||nm,''); return; }
+    if(m.tipo!=='balao' && _ehConsumo(nm)) return;
+    if(m.tipo==='balao' || _ehBalao(nm)){ adicionarMaterialPedido('',m.qtd,'pendente','','balao',m.size||nm,''); return; }
+    adicionarMaterialPedido(nm,m.qtd,'pendente','','normal','','');
   });
   const custoEl=document.getElementById('p-custo');
   if(custoEl){ custoEl.value=(parseFloat(p.matCusto)||0).toFixed(2); if(typeof calcularLucro==='function') calcularLucro(); }
@@ -6647,9 +6648,10 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId){
   var rowId='mrow-'+uid(); var id=matId||uid();
   var row=document.createElement('div'); row.className='material-row'; row.id=rowId;
   row.dataset.matId=id; row.dataset.tipo=tipo;
-  if(tipo==='balao' || tipo==='fita'){
-    var ehFit=(tipo==='fita'); var emo=ehFit?'🎨':'🎈';
+  if(tipo==='balao' || tipo==='fita' || _ehFita(size||nome)){
     var sz=size||nome; row.dataset.balaoSize=sz;
+    var ehFit=_ehFita(sz)||(tipo==='fita'); var emo=ehFit?'🎨':'🎈';
+    row.dataset.tipo=ehFit?'fita':'balao';
     var opts=ehFit
       ? estoque.filter(function(e){return _ehFita(e.nome)&&matchFita(e.nome,sz);})
       : estoque.filter(function(e){return _ehBalao(e.nome)&&matchSize(e.nome,sz);});
@@ -8312,7 +8314,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v30/06-cor';
+    var ver='v30/06-c3';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
