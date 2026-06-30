@@ -5445,6 +5445,7 @@ function resetComprasModal() {
 }
 
 function renderCompras() {
+  if(typeof reconstruirListaCompras==='function') reconstruirListaCompras(); // sempre atualiza pelos pedidos EM ABERTO (tira entregues/cancelados)
   // ── Lista de compras pendentes ────────────────────────────────
   const secLista = document.getElementById('lista-compras-section');
   const cardLista = document.getElementById('lista-compras-card');
@@ -8309,13 +8310,14 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
+    var ver='v30/06-cor';
     var txt;
-    if(!t){ txt='Sem sincronização ainda'; }
+    if(!t){ txt=ver+' · sem sync ainda'; }
     else{
       var d=new Date(t);
       var dd=('0'+d.getDate()).slice(-2), mm=('0'+(d.getMonth()+1)).slice(-2);
       var hh=('0'+d.getHours()).slice(-2), mi=('0'+d.getMinutes()).slice(-2);
-      txt='✓ Atualizado '+dd+'/'+mm+' '+hh+':'+mi;
+      txt=ver+' · ✓ '+dd+'/'+mm+' '+hh+':'+mi;
     }
     els.forEach(function(el){ el.textContent=txt; });
   }catch(e){}
