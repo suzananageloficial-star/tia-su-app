@@ -2078,7 +2078,7 @@ function filtrarPedidos(f) {
 function renderPedidos() {
   let lista;
   if (filtroAtivo==='todos') {
-    lista = pedidos;
+    lista = [...pedidos].sort(function(a,b){ return String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')); }); // mais recente primeiro
   } else if (filtroAtivo==='a-receber') {
     lista = pedidos.filter(p => ((p.valor||0)-(p.sinal||0)) > 0.01 && p.status!=='Cancelado' && p.status!=='Orçamento');
   } else {
@@ -6657,15 +6657,17 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId){
       : estoque.filter(function(e){return _ehBalao(e.nome)&&matchSize(e.nome,sz);});
     if(!opts.length) opts=estoque.filter(function(e){return ehFit?_ehFita(e.nome):_ehBalao(e.nome);});
     var selId=itemId||''; row.dataset.itemId=selId;
-    row.dataset.status=selId?'coberto':'pendente';
     var selItem=estoque.find(function(e){return e.id===selId;});
+    var _need0=parseFloat(qtd)||0;
+    var _ok0=selItem && (parseFloat(selItem.qtd)||0)>=_need0 && (parseFloat(selItem.qtd)||0)>0;
+    row.dataset.status=_ok0?'coberto':'pendente';
     var optionsHtml='<option value="">'+emo+' escolher cor — '+sz+'</option>'+
       opts.map(function(e){return '<option value="'+e.id+'" '+(selId===e.id?'selected':'')+'>'+e.nome+' · '+(e.qtd||0)+' em estoque</option>';}).join('');
     row.innerHTML=
       '<select class="mat-sel" onchange="_balaoSelecionado(\''+rowId+'\')" style="padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+optionsHtml+'</select>'+
-      '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" style="padding:8px;border:1px solid #eee;border-radius:8px;text-align:center;font-size:12px">'+
+      '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" oninput="_balaoSelecionado(\''+rowId+'\')" style="padding:8px;border:1px solid #eee;border-radius:8px;text-align:center;font-size:12px">'+
       '<span class="mat-un">'+(selItem?(selItem.un||'un'):'')+'</span>'+
-      '<span class="mat-badge" title="'+tipo+'">'+(selId?'🟢':emo)+'</span>'+
+      '<span class="mat-badge" title="'+tipo+'">'+(selId?(_ok0?'🟢':'🟡'):emo)+'</span>'+
       '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove()">✕</button>';
   } else {
     var statusFinal=status==='coberto'?'coberto':(typeof checarEstoqueNome==='function'?checarEstoqueNome(nome,qtd):'pendente');
@@ -6685,8 +6687,11 @@ function _balaoSelecionado(rowId){
   var sel=row.querySelector('.mat-sel'); var id=sel?sel.value:'';
   row.dataset.itemId=id||'';
   var it=estoque.find(function(e){return e.id===id;});
-  row.dataset.status=it?'coberto':'pendente';
-  var badge=row.querySelector('.mat-badge'); if(badge) badge.textContent=it?'🟢':(row.dataset.tipo==='fita'?'🎨':'🎈');
+  var need=parseFloat((row.querySelector('.mat-qtd')||{}).value)||0;
+  var temEst=it && (parseFloat(it.qtd)||0)>=need && (parseFloat(it.qtd)||0)>0;
+  row.dataset.status=temEst?'coberto':'pendente';
+  var emo=(row.dataset.tipo==='fita'?'🎨':'🎈');
+  var badge=row.querySelector('.mat-badge'); if(badge) badge.textContent=it?(temEst?'🟢':'🟡'):emo;
   var un=row.querySelector('.mat-un'); if(un) un.textContent=it?(it.un||'un'):'';
 }
 
@@ -8314,7 +8319,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v30/06-c3';
+    var ver='v30/06-c5';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
