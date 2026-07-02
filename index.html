@@ -2111,6 +2111,7 @@ function renderPedidos() {
             <div class="li-title">${p.cliente}${badge}</div>
             <div class="li-sub">${p.produto||'—'}</div>
             ${(p.itens&&p.itens.length&&p.itens[0].nome)?`<div class="li-sub" style="color:var(--brown);font-weight:600">📦 ${_primeiroItem(p)}</div>`:''}
+            ${p.obs?`<div class="li-sub" style="color:var(--gray-d);font-style:italic">📝 ${p.obs}</div>`:''}
             <div style="margin-top:3px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
               ${statusBadge(p.status)}<span style="font-size:10px;color:var(--gray-d)">· ${fmtDate(p.dataEntrega)}</span>
             </div>
@@ -2564,6 +2565,15 @@ function renderKanban() {
 }
 
 // ── FINANCEIRO ────────────────────────────────────────────────
+var _finTipoFiltro='todos';
+function _setFinTipo(t){ _finTipoFiltro=t; renderFinanceiro(); }
+function _finTipoBtns(){
+  var opts=[['todos','Todos'],['receita','Receitas'],['saida','Saídas']];
+  return '<span style="display:inline-flex;gap:5px;margin-left:6px">'+opts.map(function(o){
+    var on=_finTipoFiltro===o[0];
+    return '<button onclick="_setFinTipo(\''+o[0]+'\')" style="font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid '+(on?'var(--pink)':'#e5e5e5')+';background:'+(on?'var(--pink)':'#fff')+';color:'+(on?'#fff':'var(--gray-d)')+';font-weight:700;cursor:pointer">'+o[1]+'</button>';
+  }).join('')+'</span>';
+}
 function renderFinanceiro() {
   // Garante que a seção de saldo inicial existe
   const finScreen = document.getElementById('screen-financeiro');
@@ -2581,7 +2591,7 @@ function renderFinanceiro() {
   if (siEl) siEl.textContent = 'R$ ' + saldoInicial.toFixed(2).replace('.',',');
 
   const m=_filtroMes; const y=_filtroAno;
-  var _ff=document.getElementById('fin-mes-filtro'); if(_ff) _ff.innerHTML='<span style="font-size:12px;color:var(--gray-d);font-weight:700">Mês:</span>'+_seletorMesHTML('fin-sel-mes');
+  var _ff=document.getElementById('fin-mes-filtro'); if(_ff) _ff.innerHTML='<span style="font-size:12px;color:var(--gray-d);font-weight:700">Mês:</span>'+_seletorMesHTML('fin-sel-mes')+_finTipoBtns();
   const mesAtual=financeiro.filter(f=>{const d=new Date(f.data+'T12:00');return d.getMonth()===m&&d.getFullYear()===y;});
   const rec=mesAtual.filter(f=>f.tipo==='Receita').reduce((a,f)=>a+f.valor,0);
   const sai=mesAtual.filter(f=>f.tipo!=='Receita').reduce((a,f)=>a+f.valor,0);
@@ -2603,8 +2613,9 @@ function renderFinanceiro() {
   `;
   document.getElementById('fin-periodo').textContent = _MESES_PT[m]+' de '+y;
 
-  document.getElementById('fin-list').innerHTML = mesAtual.length
-    ? [...mesAtual].reverse().map(f=>`
+  var _listaFin = mesAtual.filter(function(f){ return _finTipoFiltro==='todos' || (_finTipoFiltro==='receita' ? f.tipo==='Receita' : f.tipo!=='Receita'); });
+  document.getElementById('fin-list').innerHTML = _listaFin.length
+    ? [..._listaFin].reverse().map(f=>`
       <div class="list-item">
         <div class="li-icon" style="background:${f.tipo==='Receita'?'var(--green-l)':'var(--red-l)'}" onclick="editarFin('${f.id}')">
           ${f.tipo==='Receita'?'💚':'🔴'}
@@ -6007,6 +6018,8 @@ function matchSize(estoqueName, sizeText){
   return (estoqueName||'').toLowerCase().includes((sizeText||'').toLowerCase());
 }
 function _ehBalao(nome){ return /bal[aã]o|bubble|foil/i.test(nome||''); }
+// acessórios que TÊM "balão" no nome mas NÃO são balão (não têm cor pra escolher)
+function _naoEBalao(nome){ return /vareta|haste|suporte|bomba|arco|presilha|palito|prato|bico\b|inflad|base p|fita p|cola p/i.test(nome||''); }
 function _ehFita(nome){ return /cetim|voal|gorgur|vin[ií]l|confete|\bfita\b/i.test(nome||''); }
 // Serviços (não vão pro estoque nem pra lista de compras; contam só na precificação)
 function _ehServico(nome){ return /impress|m[ãa]o\s*de\s*obra|servi[çc]o|h[eé]lio|\bfrete\b/i.test(nome||''); }
@@ -6098,7 +6111,7 @@ function puxarProdutoCatalogo(id){
     if(_ehServico(nm)) return;
     if(_ehFita(nm)){ adicionarMaterialPedido('',m.qtd,'pendente','','fita',m.size||nm,''); return; }
     if(m.tipo!=='balao' && _ehConsumo(nm)) return;
-    if(m.tipo==='balao' || _ehBalao(nm)){ adicionarMaterialPedido('',m.qtd,'pendente','','balao',m.size||nm,''); return; }
+    if((m.tipo==='balao' || _ehBalao(nm)) && !_naoEBalao(nm)){ adicionarMaterialPedido('',m.qtd,'pendente','','balao',m.size||nm,''); return; }
     adicionarMaterialPedido(nm,m.qtd,'pendente','','normal','','');
   });
   const custoEl=document.getElementById('p-custo');
@@ -6447,6 +6460,7 @@ function renderKanban(){
       return '<div class="kanban-card" style="border-color:'+col.border+';'+urgente+'cursor:pointer" onclick="editarPedido(\''+p.id+'\')">'+
         '<div class="kanban-card-name">'+(p.urgente?'<svg width="9" height="9" viewBox="0 0 10 10" style="vertical-align:1px;margin-right:4px"><circle cx="5" cy="5" r="4" fill="#E53935"/></svg>':'')+(p.cliente||'')+'</div>'+
         '<div class="kanban-card-product">'+(p.produto||'—')+'</div>'+
+        (p.obs?'<div class="kanban-card-product" style="color:var(--gray-d);font-style:italic">📝 '+p.obs+'</div>':'')+
       ((p.itens&&p.itens.length&&p.itens[0].nome)?'<div class="kanban-card-product" style="color:var(--brown);font-weight:600;display:flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg>'+_primeiroItem(p)+'</div>':'')+
         '<div class="kanban-card-date" style="color:'+col.fg+';display:flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>'+fmtDate(p.dataEntrega)+' · '+fmt(p.valor)+'</div>'+
         '<div style="display:flex;gap:4px;margin-top:6px;justify-content:flex-end">'+
@@ -6652,9 +6666,10 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId){
   var rowId='mrow-'+uid(); var id=matId||uid();
   var row=document.createElement('div'); row.className='material-row'; row.id=rowId;
   row.dataset.matId=id; row.dataset.tipo=tipo;
-  if(tipo==='balao' || tipo==='fita' || _ehFita(size||nome)){
-    var sz=size||nome; row.dataset.balaoSize=sz;
-    var ehFit=_ehFita(sz)||(tipo==='fita'); var emo=ehFit?'🎨':'🎈';
+  var _sz0=size||nome, _isFita0=_ehFita(_sz0), _isBal0=(tipo==='balao'||_ehBalao(_sz0))&&!_isFita0&&!_naoEBalao(_sz0);
+  if(_isFita0 || _isBal0){
+    var sz=_sz0; row.dataset.balaoSize=sz;
+    var ehFit=_isFita0; var emo=ehFit?'🎨':'🎈';
     row.dataset.tipo=ehFit?'fita':'balao';
     var opts=ehFit
       ? estoque.filter(function(e){return _ehFita(e.nome)&&matchFita(e.nome,sz);})
@@ -8323,7 +8338,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v30/06-c7';
+    var ver='v02/07-c8';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
