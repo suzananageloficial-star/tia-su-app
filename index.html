@@ -6034,6 +6034,33 @@ function _maybeConvertColor(rowId){
   row.remove();
   adicionarMaterialPedido('', qtd, 'pendente', '', ehF?'fita':'balao', nm, exato?it.id:'');
 }
+// ── Busca própria (por QUALQUER parte do nome) no campo de material manual ──
+function _matSugerir(rowId){
+  var row=document.getElementById(rowId); if(!row) return;
+  var inp=row.querySelector('.mat-nome'); if(!inp) return;
+  var q=(inp.value||'').trim().toLowerCase();
+  var box=document.getElementById('mat-sug-box');
+  if(!box){ box=document.createElement('div'); box.id='mat-sug-box'; box.style.cssText='position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:99999;max-height:230px;overflow:auto'; document.body.appendChild(box); }
+  if(q.length<2){ box.style.display='none'; return; }
+  var matches=(estoque||[]).filter(function(e){ return (e.nome||'').toLowerCase().indexOf(q)>=0; }).slice(0,15);
+  if(!matches.length){ box.style.display='none'; return; }
+  var r=inp.getBoundingClientRect();
+  box.style.left=r.left+'px'; box.style.top=(r.bottom+2)+'px'; box.style.width=r.width+'px';
+  box.style.display='block';
+  box.innerHTML=matches.map(function(e){
+    return '<div onmousedown="_matEscolher(\''+rowId+'\',\''+e.id+'\')" style="padding:9px 11px;font-size:12px;cursor:pointer;border-bottom:1px solid #f3f3f3">'+(e.nome||'')+' · '+(e.qtd||0)+' '+(e.un||'un')+' em estoque</div>';
+  }).join('');
+}
+function _matEscolher(rowId, itemId){
+  var box=document.getElementById('mat-sug-box'); if(box) box.style.display='none';
+  var it=(estoque||[]).find(function(e){return e.id===itemId;}); if(!it) return;
+  var row=document.getElementById(rowId); if(!row) return;
+  var inp=row.querySelector('.mat-nome'); if(inp) inp.value=it.nome;
+  if(typeof atualizarStatusMaterial==='function') atualizarStatusMaterial(rowId);
+  if(typeof _updMatUn==='function') _updMatUn(rowId);
+  if(typeof _maybeConvertColor==='function') _maybeConvertColor(rowId);
+}
+function _matSugFechar(){ var box=document.getElementById('mat-sug-box'); if(box) setTimeout(function(){ box.style.display='none'; },200); }
 function _ehFita(nome){ return /cetim|voal|gorgur|vin[ií]l|confete|\bfita\b/i.test(nome||''); }
 // Serviços (não vão pro estoque nem pra lista de compras; contam só na precificação)
 function _ehServico(nome){ return /impress|m[ãa]o\s*de\s*obra|servi[çc]o|h[eé]lio|\bfrete\b/i.test(nome||''); }
@@ -6707,7 +6734,7 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId){
     row.dataset.status=statusFinal; if(itemId) row.dataset.itemId=itemId;
     var icon=statusFinal==='coberto'?'🟢':'🟡';
     row.innerHTML=
-      '<input type="text" class="mat-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Nome do material" list="estoque-datalist" autocomplete="off" oninput="atualizarStatusMaterial(\''+rowId+'\');_updMatUn(\''+rowId+'\')" onchange="_maybeConvertColor(\''+rowId+'\')">'+
+      '<input type="text" class="mat-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Buscar material (qualquer parte do nome)" autocomplete="off" oninput="atualizarStatusMaterial(\''+rowId+'\');_updMatUn(\''+rowId+'\');_matSugerir(\''+rowId+'\')" onchange="_maybeConvertColor(\''+rowId+'\')" onblur="_matSugFechar()">'+
       '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" placeholder="Qtd" oninput="atualizarStatusMaterial(\''+rowId+'\')">'+
       '<span class="mat-un">'+_unidadeDoNome(nome)+'</span>'+
       '<span class="mat-badge" title="'+statusFinal+'">'+icon+'</span>'+
@@ -8352,7 +8379,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v02/07-c9';
+    var ver='v06/07-c10';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
