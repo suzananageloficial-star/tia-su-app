@@ -926,6 +926,13 @@ html, body {
       <div class="section-title">Itens em estoque</div>
       <div style="margin-bottom:8px"><input type="search" id="estoque-busca" placeholder="🔎 Buscar item pelo nome" oninput="_setBuscaEstoque(this.value)" class="form-input" style="font-size:13px"></div>
       <div style="margin-bottom:8px"><select class="form-select" id="estoque-filtro-cat" onchange="renderEstoque()" style="font-size:13px"><option value="">Todas as categorias</option></select></div>
+      <div id="estoque-filtros-atr" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+        <select class="form-select" id="estoque-filtro-tipo" onchange="renderEstoque()" style="font-size:12px"><option value="">Todos os tipos</option></select>
+        <select class="form-select" id="estoque-filtro-tam"  onchange="renderEstoque()" style="font-size:12px"><option value="">Todos os tamanhos</option></select>
+        <select class="form-select" id="estoque-filtro-cor"  onchange="renderEstoque()" style="font-size:12px"><option value="">Todas as cores</option></select>
+        <select class="form-select" id="estoque-filtro-mat"  onchange="renderEstoque()" style="font-size:12px"><option value="">Todos os materiais</option></select>
+      </div>
+      <div style="margin-bottom:8px;text-align:right"><button id="estoque-limpar-filtros" onclick="_limparFiltrosEstoque()" style="display:none;font-size:11px;background:var(--red-l);color:var(--red);border:none;border-radius:10px;padding:4px 10px;cursor:pointer;font-weight:700">✖ Limpar filtros</button></div>
       <div class="card"><div id="estoque-list"></div></div>
       <div style="height:80px"></div>
     </div>
@@ -1620,6 +1627,31 @@ html, body {
           <input class="form-input" id="e-forn" placeholder="Opcional">
         </div>
       </div>
+      <div style="font-size:11px;font-weight:800;color:var(--cyan-d);margin:8px 0 2px">🏷️ Características (opcional — preencha o que fizer sentido)</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Tipo</label>
+          <input class="form-input" id="e-tipo" list="atr-tipo-list" placeholder="Ex: Cromado, Liso">
+          <datalist id="atr-tipo-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tamanho</label>
+          <input class="form-input" id="e-tam" list="atr-tam-list" placeholder="Ex: 5&quot;, 9&quot;, 12&quot;">
+          <datalist id="atr-tam-list"></datalist>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Cor</label>
+          <input class="form-input" id="e-cor" list="atr-cor-list" placeholder="Ex: Vermelho, Dourado">
+          <datalist id="atr-cor-list"></datalist>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Material/Acabamento</label>
+          <input class="form-input" id="e-mat" list="atr-mat-list" placeholder="Ex: Látex, Foil, Cetim">
+          <datalist id="atr-mat-list"></datalist>
+        </div>
+      </div>
       <label style="display:flex;align-items:flex-start;gap:8px;background:var(--cyan-l);border-radius:10px;padding:10px 12px;cursor:pointer;margin-top:6px">
         <input type="checkbox" id="e-consumo" style="width:18px;height:18px;accent-color:#0097A7;margin-top:1px;flex-shrink:0">
         <span style="font-size:12px;color:var(--cyan-d);font-weight:700">📋 Controle por inventário<br><span style="font-weight:400;color:#888">Entra no custo da precificação, mas NÃO vai pra lista de compras nem dá baixa por pedido (ex.: impressão, refil de cola quente). A quantidade você acerta no inventário.</span></span>
@@ -1895,7 +1927,7 @@ function openModal(id, isNew) {
   }
   if(id==='modal-pedido'){ var _pk=document.getElementById('p-cliente-picker'); if(_pk) _pk.style.display='none'; setTimeout(popularCatalogoSelect,60); setTimeout(popularDatalistClientes,60); }
   if(id==='modal-fin'){ if(isNew){ _estLinhas=[]; } setTimeout(_popularCategoriasFin,30); }
-  if(id==='modal-estoque' && isNew){ var _ec=document.getElementById('e-consumo'); if(_ec) _ec.checked=false; }
+  if(id==='modal-estoque' && isNew){ var _ec=document.getElementById('e-consumo'); if(_ec) _ec.checked=false; if(typeof popularDatalistAtributos==='function') popularDatalistAtributos(); }
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
@@ -2705,6 +2737,12 @@ function editarFin(id) {
 // ── ESTOQUE ───────────────────────────────────────────────────
 var _buscaEstoque='';
 function _setBuscaEstoque(v){ _buscaEstoque=v||''; renderEstoque(); }
+function _limparFiltrosEstoque(){
+  ['estoque-filtro-cat','estoque-filtro-tipo','estoque-filtro-tam','estoque-filtro-cor','estoque-filtro-mat'].forEach(function(id){ var s=document.getElementById(id); if(s) s.value=''; });
+  var b=document.getElementById('estoque-busca'); if(b) b.value='';
+  _buscaEstoque=''; _filtroBaixo=false;
+  renderEstoque();
+}
 var _filtroBaixo=false;
 function _toggleFiltroBaixo(){ _filtroBaixo=!_filtroBaixo; renderEstoque(); }
 function renderEstoque() {
@@ -2721,8 +2759,36 @@ function renderEstoque() {
     selCat.innerHTML='<option value="">Todas as categorias</option>'+cats.map(c=>`<option${c===filtroCat?' selected':''}>${c}</option>`).join('');
     if(filtroCat && cats.indexOf(filtroCat)<0){ filtroCat=''; selCat.value=''; }
   }
+  // ── Filtros de característica (tipo/tamanho/cor/material) ──
+  // As opções vêm dos itens da categoria escolhida (ou de todos, se nenhuma).
+  const _baseCat=estoque.filter(e=>!filtroCat || (e.cat||'').trim()===filtroCat);
+  function _popFiltro(idSel, campo, rotulo){
+    const sel=document.getElementById(idSel); if(!sel) return '';
+    const atual=sel.value;
+    const opts=[...new Set(_baseCat.map(e=>(e[campo]||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+    let val=atual;
+    if(val && opts.indexOf(val)<0){ val=''; }
+    sel.innerHTML=`<option value="">${rotulo}</option>`+opts.map(o=>`<option${o===val?' selected':''}>${o}</option>`).join('');
+    sel.value=val;
+    // esconde o filtro se não há nenhum valor pra escolher
+    sel.style.display = opts.length ? '' : 'none';
+    return val;
+  }
+  const fTipo=_popFiltro('estoque-filtro-tipo','tipo','Todos os tipos');
+  const fTam =_popFiltro('estoque-filtro-tam','tam','Todos os tamanhos');
+  const fCor =_popFiltro('estoque-filtro-cor','cor','Todas as cores');
+  const fMat =_popFiltro('estoque-filtro-mat','mat','Todos os materiais');
+  const _btnLimpar=document.getElementById('estoque-limpar-filtros');
+  if(_btnLimpar) _btnLimpar.style.display=(filtroCat||fTipo||fTam||fCor||fMat||_buscaEstoque)?'inline-block':'none';
   const _bqEst=(_buscaEstoque||'').trim().toLowerCase();
-  const _lista=estoque.filter(e=>(!filtroCat || (e.cat||'').trim()===filtroCat) && (!_bqEst || (e.nome||'').toLowerCase().indexOf(_bqEst)>=0) && (!_filtroBaixo || ((e.qtd||0)<=(e.min||0) && (e.min||0)>0))).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
+  const _lista=estoque.filter(e=>(!filtroCat || (e.cat||'').trim()===filtroCat)
+      && (!fTipo || (e.tipo||'').trim()===fTipo)
+      && (!fTam  || (e.tam||'').trim()===fTam)
+      && (!fCor  || (e.cor||'').trim()===fCor)
+      && (!fMat  || (e.mat||'').trim()===fMat)
+      && (!_bqEst || (e.nome||'').toLowerCase().indexOf(_bqEst)>=0)
+      && (!_filtroBaixo || ((e.qtd||0)<=(e.min||0) && (e.min||0)>0))).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
+  const _atrTxt=e=>[e.tipo,e.tam,e.cor,e.mat].map(x=>(x||'').trim()).filter(Boolean).join(' · ');
   document.getElementById('estoque-list').innerHTML=_lista.length
     ?_lista.map(e=>`
       <div class="list-item">
@@ -2730,7 +2796,7 @@ function renderEstoque() {
           ${e.qtd<=e.min&&e.min>0?'🔴':'📦'}
         </div>
         <div class="li-info" onclick="editarEstoque('${e.id}')">
-          <div class="li-title">${e.nome}</div>
+          <div class="li-title">${e.nome}${_atrTxt(e)?` <span style="font-size:10px;font-weight:600;color:var(--cyan-d);background:var(--cyan-l);border-radius:8px;padding:1px 6px;margin-left:4px">${_atrTxt(e)}</span>`:''}</div>
           <div class="li-sub">${e.cat||''}${e.consumo?' · 📋 inventário':''} · mín: ${e.min||0} ${e.un||'un'}</div>
         </div>
         <div class="li-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -2757,6 +2823,10 @@ function salvarEstoque() {
     min:  parseFloat(document.getElementById('e-min').value)||0,
     preco:parseFloat(document.getElementById('e-preco').value)||0,
     forn: document.getElementById('e-forn').value,
+    tipo: (document.getElementById('e-tipo')||{}).value ? document.getElementById('e-tipo').value.trim() : '',
+    tam:  (document.getElementById('e-tam') ||{}).value ? document.getElementById('e-tam').value.trim()  : '',
+    cor:  (document.getElementById('e-cor') ||{}).value ? document.getElementById('e-cor').value.trim()  : '',
+    mat:  (document.getElementById('e-mat') ||{}).value ? document.getElementById('e-mat').value.trim()  : '',
     consumo: !!(document.getElementById('e-consumo')||{}).checked,
   };
   if(id){const i=estoque.findIndex(e=>e.id===id);if(i>=0)estoque[i]=obj;}
@@ -2818,8 +2888,24 @@ function editarEstoque(id) {
   document.getElementById('e-min').value  =e.min||0;
   document.getElementById('e-preco').value=e.preco||0;
   document.getElementById('e-forn').value =e.forn||'';
+  var _et=document.getElementById('e-tipo'); if(_et) _et.value=e.tipo||'';
+  var _em=document.getElementById('e-tam');  if(_em) _em.value=e.tam||'';
+  var _ecor=document.getElementById('e-cor');if(_ecor)_ecor.value=e.cor||'';
+  var _emat=document.getElementById('e-mat');if(_emat)_emat.value=e.mat||'';
   var _ec=document.getElementById('e-consumo'); if(_ec) _ec.checked=!!e.consumo;
+  popularDatalistAtributos();
   openModal('modal-estoque',false);
+}
+
+// Preenche as sugestões (datalists) dos campos de característica com os valores já usados
+function popularDatalistAtributos(){
+  var mapa={tipo:'atr-tipo-list', tam:'atr-tam-list', cor:'atr-cor-list', mat:'atr-mat-list'};
+  Object.keys(mapa).forEach(function(campo){
+    var dl=document.getElementById(mapa[campo]); if(!dl) return;
+    var vals=[...new Set(estoque.map(function(e){return (e[campo]||'').trim();}).filter(Boolean))]
+      .sort(function(a,b){return a.localeCompare(b,'pt-BR');});
+    dl.innerHTML=vals.map(function(v){return '<option value="'+v.replace(/"/g,'&quot;')+'">';}).join('');
+  });
 }
 
 // ── PRECIFICAÇÃO ──────────────────────────────────────────────
