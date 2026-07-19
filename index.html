@@ -926,11 +926,12 @@ html, body {
       <div class="section-title">Itens em estoque</div>
       <div style="margin-bottom:8px"><input type="search" id="estoque-busca" placeholder="🔎 Buscar item pelo nome" oninput="_setBuscaEstoque(this.value)" class="form-input" style="font-size:13px"></div>
       <div style="margin-bottom:8px"><select class="form-select" id="estoque-filtro-cat" onchange="renderEstoque()" style="font-size:13px"><option value="">Todas as categorias</option></select></div>
+      <div style="font-size:10px;color:var(--gray-d);font-weight:600;margin:2px 0 4px">🏷️ Digite para filtrar (procura também dentro do nome do item)</div>
       <div id="estoque-filtros-atr" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
-        <select class="form-select" id="estoque-filtro-tipo" onchange="renderEstoque()" style="font-size:12px"><option value="">Todos os tipos</option></select>
-        <select class="form-select" id="estoque-filtro-tam"  onchange="renderEstoque()" style="font-size:12px"><option value="">Todos os tamanhos</option></select>
-        <select class="form-select" id="estoque-filtro-cor"  onchange="renderEstoque()" style="font-size:12px"><option value="">Todas as cores</option></select>
-        <select class="form-select" id="estoque-filtro-mat"  onchange="renderEstoque()" style="font-size:12px"><option value="">Todos os materiais</option></select>
+        <input class="form-input" id="estoque-ftxt-tipo" oninput="renderEstoque()" placeholder="Tipo (ex: cromado, liso)" style="font-size:12px">
+        <input class="form-input" id="estoque-ftxt-tam"  oninput="renderEstoque()" placeholder="Tamanho (ex: 9, 22mm)" style="font-size:12px">
+        <input class="form-input" id="estoque-ftxt-cor"  oninput="renderEstoque()" placeholder="Cor (ex: azul, verde)" style="font-size:12px">
+        <input class="form-input" id="estoque-ftxt-mat"  oninput="renderEstoque()" placeholder="Material (ex: cetim, látex)" style="font-size:12px">
       </div>
       <div style="margin-bottom:8px;text-align:right"><button id="estoque-limpar-filtros" onclick="_limparFiltrosEstoque()" style="display:none;font-size:11px;background:var(--red-l);color:var(--red);border:none;border-radius:10px;padding:4px 10px;cursor:pointer;font-weight:700">✖ Limpar filtros</button></div>
       <div class="card"><div id="estoque-list"></div></div>
@@ -2738,7 +2739,7 @@ function editarFin(id) {
 var _buscaEstoque='';
 function _setBuscaEstoque(v){ _buscaEstoque=v||''; renderEstoque(); }
 function _limparFiltrosEstoque(){
-  ['estoque-filtro-cat','estoque-filtro-tipo','estoque-filtro-tam','estoque-filtro-cor','estoque-filtro-mat'].forEach(function(id){ var s=document.getElementById(id); if(s) s.value=''; });
+  ['estoque-filtro-cat','estoque-ftxt-tipo','estoque-ftxt-tam','estoque-ftxt-cor','estoque-ftxt-mat'].forEach(function(id){ var s=document.getElementById(id); if(s) s.value=''; });
   var b=document.getElementById('estoque-busca'); if(b) b.value='';
   _buscaEstoque=''; _filtroBaixo=false;
   renderEstoque();
@@ -2759,34 +2760,20 @@ function renderEstoque() {
     selCat.innerHTML='<option value="">Todas as categorias</option>'+cats.map(c=>`<option${c===filtroCat?' selected':''}>${c}</option>`).join('');
     if(filtroCat && cats.indexOf(filtroCat)<0){ filtroCat=''; selCat.value=''; }
   }
-  // ── Filtros de característica (tipo/tamanho/cor/material) ──
-  // As opções vêm dos itens da categoria escolhida (ou de todos, se nenhuma).
-  const _baseCat=estoque.filter(e=>!filtroCat || (e.cat||'').trim()===filtroCat);
-  function _popFiltro(idSel, campo, rotulo){
-    const sel=document.getElementById(idSel); if(!sel) return '';
-    const atual=sel.value;
-    const opts=[...new Set(_baseCat.map(e=>(e[campo]||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-    let val=atual;
-    if(val && opts.indexOf(val)<0){ val=''; }
-    sel.innerHTML=`<option value="">${rotulo}</option>`+opts.map(o=>`<option${o===val?' selected':''}>${o}</option>`).join('');
-    sel.value=val;
-    // esconde o filtro se não há nenhum valor pra escolher
-    sel.style.display = opts.length ? '' : 'none';
-    return val;
-  }
-  const fTipo=_popFiltro('estoque-filtro-tipo','tipo','Todos os tipos');
-  const fTam =_popFiltro('estoque-filtro-tam','tam','Todos os tamanhos');
-  const fCor =_popFiltro('estoque-filtro-cor','cor','Todas as cores');
-  const fMat =_popFiltro('estoque-filtro-mat','mat','Todos os materiais');
+  // ── Filtros de característica (digitados) — casam com o campo OU o nome do item ──
+  const _norm=s=>(s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+  const _gv=id=>{const el=document.getElementById(id);return el?_norm(el.value):'';};
+  const fTipo=_gv('estoque-ftxt-tipo'), fTam=_gv('estoque-ftxt-tam'), fCor=_gv('estoque-ftxt-cor'), fMat=_gv('estoque-ftxt-mat');
   const _btnLimpar=document.getElementById('estoque-limpar-filtros');
   if(_btnLimpar) _btnLimpar.style.display=(filtroCat||fTipo||fTam||fCor||fMat||_buscaEstoque)?'inline-block':'none';
-  const _bqEst=(_buscaEstoque||'').trim().toLowerCase();
+  const _bqEst=_norm(_buscaEstoque);
+  const _match=(e,txt,campo)=>!txt || _norm(e[campo]).indexOf(txt)>=0 || _norm(e.nome).indexOf(txt)>=0;
   const _lista=estoque.filter(e=>(!filtroCat || (e.cat||'').trim()===filtroCat)
-      && (!fTipo || (e.tipo||'').trim()===fTipo)
-      && (!fTam  || (e.tam||'').trim()===fTam)
-      && (!fCor  || (e.cor||'').trim()===fCor)
-      && (!fMat  || (e.mat||'').trim()===fMat)
-      && (!_bqEst || (e.nome||'').toLowerCase().indexOf(_bqEst)>=0)
+      && _match(e,fTipo,'tipo')
+      && _match(e,fTam,'tam')
+      && _match(e,fCor,'cor')
+      && _match(e,fMat,'mat')
+      && (!_bqEst || _norm(e.nome).indexOf(_bqEst)>=0)
       && (!_filtroBaixo || ((e.qtd||0)<=(e.min||0) && (e.min||0)>0))).slice().sort((a,b)=>(a.nome||'').localeCompare(b.nome||'','pt-BR'));
   const _atrTxt=e=>[e.tipo,e.tam,e.cor,e.mat].map(x=>(x||'').trim()).filter(Boolean).join(' · ');
   document.getElementById('estoque-list').innerHTML=_lista.length
@@ -8465,7 +8452,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v19/07-c11';
+    var ver='v19/07-c13';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -8548,109 +8535,4 @@ window.addEventListener('load', function(){ setTimeout(window._renderUltimaSync,
     }
     var atual = { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo, clientes:clientes, fornecedores:fornecedores, ativos:atvLocal, recorrentes:rcLocal };
     if(JSON.stringify(novo)===JSON.stringify(atual)) return;
-    _fbAplicando=true;
-    pedidos=novo.pedidos;            DB.set('pedidos', pedidos);
-    financeiro=novo.financeiro;      DB.set('fin', financeiro);
-    estoque=novo.estoque;            DB.set('est', estoque);
-    catalogo=novo.catalogo;          DB.set('cat', catalogo);
-    clientes=novo.clientes;          DB.set('clientes', clientes);
-    fornecedores=novo.fornecedores;  DB.set('fornecedores', fornecedores);
-    if(typeof recorrentes!=='undefined'){ recorrentes=novo.recorrentes; DB.set('recorrentes', recorrentes); }
-    if(typeof ativos!=='undefined'){ ativos=novo.ativos; DB.set('ativos', ativos); }
-    if(typeof _snapshot==='function') _snapshot();
-    if(typeof renderScreen==='function') renderScreen(typeof currentScreen!=='undefined'?currentScreen:'dashboard');
-    if(typeof toast==='function') toast('🔄 Atualizado (tempo real)');
-    if(window._marcarSync) window._marcarSync();
-    _fbAplicando=false;
-    var igualNuvem = JSON.stringify(novo)===JSON.stringify({pedidos:d.pedidos||[],financeiro:d.financeiro||[],estoque:d.estoque||[],catalogo:d.catalogo||[],clientes:d.clientes||[],fornecedores:d.fornecedores||[],recorrentes:d.recorrentes||[]});
-    if(!igualNuvem) _fbAgendarEnvio();
-  }
-
-  fdoc.onSnapshot(function(snap){
-    if(!snap || !snap.exists) return;
-    if(snap.metadata && snap.metadata.hasPendingWrites) return; // eco da própria gravação
-    var data = snap.data();
-    if(!data) return;
-    try{
-      var d = data.payload ? JSON.parse(data.payload) : null;
-      if(d) _aplicarRemotoFB(d);
-    }catch(e){ console.warn('[Firebase] payload inválido', e); }
-  }, function(err){ console.warn('[Firebase] onSnapshot erro', err); });
-
-  function _fbEnviar(){
-    if(!_fbReady) return;
-    if((pedidos.length+financeiro.length+estoque.length)===0) return; // nunca grava app vazio
-    var data = { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo, clientes:clientes, fornecedores:fornecedores, ativos:(typeof ativos!=='undefined'?ativos:[]), recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[]), _tumbas:(typeof tumbas!=='undefined'?tumbas:[]) };
-    fdoc.set({ payload: JSON.stringify(data), updatedAt: Date.now() }).then(function(){ if(window._marcarSync) window._marcarSync(); }).catch(function(e){ console.warn('[Firebase] envio erro', e); });
-  }
-  function _fbAgendarEnvio(){ clearTimeout(_fbTimer); _fbTimer=setTimeout(_fbEnviar, 1200); }
-
-  if(typeof save==='function'){
-    var _saveAntesFB = save;
-    save = function(){ _saveAntesFB(); if(!_fbAplicando) _fbAgendarEnvio(); };
-  }
-  window.addEventListener('load', function(){ setTimeout(_fbEnviar, 3500); });
-  window._fbForcarEnvio = _fbEnviar;
-})();
-</script>
-
-<!-- ════════ SYNC DE FOTOS (Firestore, plano gratuito) — Claude jun/2026 ════════
-     Cada foto vira um documento em tiasu_fotos/{idDoProduto} (campo b64).
-     As fotos continuam no localStorage (rápido) e agora também sobem/baixam,
-     pra aparecerem no celular e no computador. -->
-<script>
-(function(){
-  if(typeof firebase==='undefined'){ return; }
-  try{ if(!firebase.apps || !firebase.apps.length){ return; } }catch(e){ return; }
-  var _fotoCol;
-  try{ _fotoCol = firebase.firestore().collection('tiasu_fotos'); }catch(e){ return; }
-  var _aplicandoFoto=false, _primeiro=true;
-
-  // ENVIO: envolve o _setFoto pra subir/excluir a foto na nuvem
-  if(typeof _setFoto==='function'){
-    var _setFotoLocal=_setFoto;
-    _setFoto=function(id,dataURL){
-      _setFotoLocal(id,dataURL);
-      if(_aplicandoFoto || !id) return;
-      try{
-        if(dataURL){ _fotoCol.doc(String(id)).set({b64:dataURL, updatedAt:Date.now()}).catch(function(){}); }
-        else { _fotoCol.doc(String(id)).delete().catch(function(){}); }
-      }catch(e){ console.warn('[Fotos] envio falhou', e); }
-    };
-  }
-
-  // RECEBIMENTO: escuta as fotos da nuvem em tempo real
-  _fotoCol.onSnapshot(function(snap){
-    var mudou=false;
-    snap.docChanges().forEach(function(ch){
-      if(ch.doc.metadata && ch.doc.metadata.hasPendingWrites) return; // eco da própria gravação
-      var id=ch.doc.id;
-      if(ch.type==='removed'){
-        if(_fotos[id]){ delete _fotos[id]; mudou=true; }
-      } else {
-        var d=ch.doc.data();
-        if(d && d.b64 && _fotos[id]!==d.b64){ _fotos[id]=d.b64; mudou=true; }
-      }
-    });
-    if(mudou){
-      _aplicandoFoto=true;
-      try{ _salvarFotosLS(); }catch(e){}
-      _aplicandoFoto=false;
-      try{ if(typeof currentScreen!=='undefined' && currentScreen==='preco' && typeof renderCatalogo==='function') renderCatalogo(); }catch(e){}
-      try{ if(typeof _editandoProdutoId!=='undefined' && _editandoProdutoId && typeof _renderFotoPreview==='function'){ _fotoAtual=_getFoto(_editandoProdutoId)||_fotoAtual; _renderFotoPreview(); } }catch(e){}
-    }
-    // Na 1ª vez: sobe as fotos locais que ainda NÃO estão na nuvem (migração, sem sobrescrever)
-    if(_primeiro){
-      _primeiro=false;
-      try{
-        var nuvem={}; snap.forEach(function(doc){ nuvem[doc.id]=1; });
-        Object.keys(_fotos||{}).forEach(function(id){
-          if(_fotos[id] && !nuvem[id]){ try{ _fotoCol.doc(String(id)).set({b64:_fotos[id], updatedAt:Date.now()}).catch(function(){}); }catch(e){} }
-        });
-      }catch(e){}
-    }
-  }, function(err){ console.warn('[Fotos] onSnapshot erro', err); });
-})();
-</script>
-</body>
-</html>
+    _fbApli
