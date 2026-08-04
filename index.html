@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
 <meta name="theme-color" content="#FF1F78"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -562,6 +562,9 @@ html, body {
   width: 100%;
 }
 .material-row .mat-qtd { text-align: center; }
+/* evita que a linha estoure e corte colunas (checkbox de cor / botao) no celular */
+.material-row input, .ficha-item-row input { min-width: 0; }
+.material-row > *, .ficha-item-row > * { min-width: 0; }
 .mat-badge {
   font-size: 14px; display:flex; align-items:center; justify-content:center;
   cursor: default;
@@ -920,6 +923,7 @@ html, body {
         <button onclick="reconciliarPedidos()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--cyan);color:var(--cyan-d);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>Reconciliar pedidos</button>
         <button onclick="sincronizarBaixasEntregues()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--pink);color:var(--pink);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg>Baixar pedidos entregues</button>
         <button onclick="importarEstoquePlanilha()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--cyan);color:var(--cyan-d);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 21h14"/></svg>Importar estoque da planilha</button>
+        <button onclick="preencherAtributosAuto()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--cyan);color:var(--cyan-d);margin-top:4px;margin-left:6px;display:inline-flex;align-items:center;gap:5px">🏷️ Preencher características (auto)</button>
         <button onclick="abrirAtivos()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--purple);color:var(--purple);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>Equipamentos & Ativos</button>
       </div>
       <div id="estoque-alertas"></div>
@@ -2744,6 +2748,46 @@ function _limparFiltrosEstoque(){
   _buscaEstoque=''; _filtroBaixo=false;
   renderEstoque();
 }
+
+// ── AUTO-PREENCHER características (Tipo/Tamanho/Cor/Material) a partir do NOME ──
+// Só preenche campos VAZIOS — nunca sobrescreve o que você editou manualmente.
+var _AT_CORES=['verde bandeira','verde agua','verde militar','verde limao','verde claro','verde escuro','verde menta','verde tiffany','azul royal','azul marinho','azul bebe','azul claro','azul escuro','azul tiffany','azul serenity','azul turquesa','azul bic','rosa bebe','rosa claro','rosa pink','rosa cha','rosa antigo','rosa gold','rosa bb','rosa neon','rosa chiclete','off white','branco neve','rose gold','ouro rosa','vermelho ferrari','cinza chumbo','amarelo bebe','lilas claro','vermelha','vermelho','amarela','amarelo','laranja','dourada','dourado','prateada','prateado','turquesa','magenta','fucsia','pessego','salmao','caramelo','terracota','mostarda','lavanda','champagne','champanhe','tiffany','bordo','marrom','violeta','pink','nude','bege','creme','vinho','coral','menta','azul','verde','preta','preto','branca','branco','prata','roxa','roxo','lilas','rosa','cinza','ouro','gold','uva'];
+var _AT_TIPOS=['cromado','cromada','metalizado','metalizada','metalico','metalica','perolado','perolada','confete','transparente','cristal','candy','macaron','fosco','fosca','glitter','neon','baby','liso','lisa','led','bubble','redondo','coracao'];
+var _AT_MAT=['gorgurao','organza','veludo','cetim','voil','juta','sisal','microfibra','poliester','algodao','feltro','tecido','couro','corda','mdf','vinil','adesivo','acrilico','ceramica','ceramico','porcelana','cardstock','cartao','papel','latex','foil','eva','tnt','madeira','isopor','biscuit','resina'];
+var _AT_PRETTY={'verde agua':'Verde Água','verde limao':'Verde Limão','azul bebe':'Azul Bebê','rosa bebe':'Rosa Bebê','amarelo bebe':'Amarelo Bebê','rosa bb':'Rosa BB','rosa cha':'Rosa Chá','lilas claro':'Lilás Claro','salmao':'Salmão','pessego':'Pêssego','fucsia':'Fúcsia','lilas':'Lilás','bordo':'Bordô','uva':'Uva','metalico':'Metálico','metalica':'Metálica','coracao':'Coração','gorgurao':'Gorgurão','ceramica':'Cerâmica','ceramico':'Cerâmico','latex':'Látex','acrilico':'Acrílico','cartao':'Cartão','algodao':'Algodão','poliester':'Poliéster','mdf':'MDF','tnt':'TNT','eva':'EVA','led':'LED','voil':'Voil'};
+function _normAtr(s){return (s||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+function _inferirAtributos(nome){
+  var raw=(nome||'').toString();
+  var n=' '+_normAtr(raw).replace(/[^a-z0-9",]+/g,' ').replace(/\s+/g,' ')+' ';
+  var out={tipo:'',tam:'',cor:'',mat:''};
+  function achar(lista){for(var i=0;i<lista.length;i++){var t=lista[i];if(n.indexOf(' '+t+' ')>=0||n.indexOf(' '+t+',')>=0)return t;}return '';}
+  function label(tok){return _AT_PRETTY[tok]||tok.replace(/\b\w/g,function(c){return c.toUpperCase();});}
+  var m;
+  if((m=raw.match(/\b\d+\s*[xX]\s*\d+(?:\s*[xX]\s*\d+)?\s*(?:cm|mm|m)?\b/))){out.tam=m[0].toUpperCase().replace(/\s+/g,'');}
+  else if((m=_normAtr(raw).match(/\b(\d+[.,]?\d*)\s*(mm|cm|ml|kg|g|l|m|pol|polegadas?)\b/))){out.tam=(m[1]+m[2]).toUpperCase();}
+  else if(/\b(bal[aã]o|bexiga|bal[oõ]es)\b/.test(_normAtr(raw))&&(m=_normAtr(raw).match(/\b(4|5|9|10|11|12|16|18|24|36|40)\b/))){out.tam=m[1]+'"';}
+  var t=achar(_AT_TIPOS); if(t) out.tipo=label(t);
+  var c=achar(_AT_CORES); if(c) out.cor=label(c);
+  var mat=achar(_AT_MAT); if(mat) out.mat=label(mat);
+  return out;
+}
+function preencherAtributosAuto(){
+  if(typeof estoque==='undefined'||!estoque||!estoque.length){ toast('Nenhum item no estoque.'); return; }
+  var mudancas=[], campos=0;
+  estoque.forEach(function(e){
+    var inf=_inferirAtributos(e.nome), novos={}, mudou=false;
+    ['tipo','tam','cor','mat'].forEach(function(k){ if(!((e[k]||'').toString().trim()) && inf[k]){ novos[k]=inf[k]; mudou=true; campos++; } });
+    if(mudou) mudancas.push({e:e,novos:novos});
+  });
+  if(!mudancas.length){ toast('✅ Tudo certo — nada novo a preencher.'); return; }
+  var prev=mudancas.slice(0,8).map(function(m){ var d=['tipo','tam','cor','mat'].map(function(k){return m.novos[k];}).filter(Boolean).join(' · '); return '• '+m.e.nome+'  →  '+d; }).join('\n');
+  var msg='Preencher características de '+mudancas.length+' item(ns) ('+campos+' campos) lendo o nome?\n\nSó preenche o que está VAZIO (não apaga nada que você editou).\n\nExemplos:\n'+prev+(mudancas.length>8?('\n... e mais '+(mudancas.length-8)+' item(ns).'):'');
+  if(!confirm(msg)) return;
+  mudancas.forEach(function(m){ Object.keys(m.novos).forEach(function(k){ m.e[k]=m.novos[k]; }); });
+  save(); renderEstoque();
+  toast('✅ '+mudancas.length+' item(ns) preenchido(s) automaticamente!');
+}
+
 var _filtroBaixo=false;
 function _toggleFiltroBaixo(){ _filtroBaixo=!_filtroBaixo; renderEstoque(); }
 function renderEstoque() {
@@ -3129,7 +3173,7 @@ function renderCatalogo() {
    outro por inteiro (ignorando maiúsculas/acentos). Antes bastava o
    comecinho ser parecido, o que marcava como "coberto" coisa que não
    existe no estoque. Em caso de mais de um match, vale o mais específico. */
-function _normNome(s){ return (s||'').toLowerCase().trim().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' '); }
+function _normNome(s){ return (s||'').toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' '); }
 function _matchEstoque(nome){
   const n=_normNome(nome);
   if(!n) return null;
@@ -6113,12 +6157,15 @@ function _matSugerir(rowId){
   var inp=row.querySelector('.mat-nome'); if(!inp) return;
   var q=(inp.value||'').trim().toLowerCase();
   var box=document.getElementById('mat-sug-box');
-  if(!box){ box=document.createElement('div'); box.id='mat-sug-box'; box.style.cssText='position:fixed;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:99999;max-height:230px;overflow:auto'; document.body.appendChild(box); }
+  if(!box){ box=document.createElement('div'); box.id='mat-sug-box'; box.style.cssText='position:absolute;left:0;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:99999;max-height:230px;overflow:auto'; }
   if(q.length<2){ box.style.display='none'; return; }
   var matches=(estoque||[]).filter(function(e){ return (e.nome||'').toLowerCase().indexOf(q)>=0; }).slice(0,15);
   if(!matches.length){ box.style.display='none'; return; }
-  var r=inp.getBoundingClientRect();
-  box.style.left=r.left+'px'; box.style.top=(r.bottom+2)+'px'; box.style.width=r.width+'px';
+  row.style.position='relative';
+  if(box.parentNode!==row) row.appendChild(box);
+  box.style.top=(inp.offsetTop+inp.offsetHeight+2)+'px';
+  box.style.left=inp.offsetLeft+'px';
+  box.style.width=inp.offsetWidth+'px';
   box.style.display='block';
   box.innerHTML=matches.map(function(e){
     return '<div onmousedown="_matEscolher(\''+rowId+'\',\''+e.id+'\')" style="padding:9px 11px;font-size:12px;cursor:pointer;border-bottom:1px solid #f3f3f3">'+(e.nome||'')+' · '+(e.qtd||0)+' '+(e.un||'un')+' em estoque</div>';
@@ -6211,7 +6258,7 @@ function salvarProduto(){
 function popularCatalogoSelect(){
   const sel=document.getElementById('p-catalogo-sel'); if(!sel) return;
   sel.innerHTML='<option value="">— escolher produto pronto —</option>'+
-    catalogo.map(function(p){return '<option value="'+p.id+'">'+p.nome+' · '+fmt(p.preco)+'</option>';}).join('');
+    catalogo.slice().sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'','pt-BR');}).map(function(p){return '<option value="'+p.id+'">'+p.nome+' · '+fmt(p.preco)+'</option>';}).join('');
 }
 function _ehConsumo(nome){ var it=(typeof _estoqueAchaPorNome==='function')?_estoqueAchaPorNome(nome):null; return !!(it && it.consumo); }
 function puxarProdutoCatalogo(id){
@@ -7178,7 +7225,7 @@ var _editandoProdutoId = null;
 function renderCatalogo(){
   var el=document.getElementById('catalogo-list'); if(!el) return;
   if(!catalogo.length){ el.innerHTML=empty('🏷️','Catálogo vazio','Calcule um preço acima e salve'); return; }
-  el.innerHTML=catalogo.map(function(p){
+  el.innerHTML=catalogo.slice().sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'','pt-BR');}).map(function(p){
     return '<div class="list-item" style="cursor:pointer" onclick="editarProdutoCatalogo(\''+p.id+'\')">'+
       '<div class="li-icon" style="background:var(--yellow-l)">🏷️</div>'+
       '<div class="li-info">'+
@@ -8452,7 +8499,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v19/07-c13';
+    var ver='v19/07-c14';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -8535,4 +8582,4 @@ window.addEventListener('load', function(){ setTimeout(window._renderUltimaSync,
     }
     var atual = { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo, clientes:clientes, fornecedores:fornecedores, ativos:atvLocal, recorrentes:rcLocal };
     if(JSON.stringify(novo)===JSON.stringify(atual)) return;
-    _fbApli
+    _fbApli        
