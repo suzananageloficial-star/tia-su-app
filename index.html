@@ -8719,7 +8719,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v15/08-c4';
+    var ver='v15/08-c5';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -8872,9 +8872,10 @@ else appLockInit();
   window._fbPush=function(){
     try{
       if(!window._fbOn || !fdoc || !firebase.auth().currentUser) return;
-      var ts=parseFloat(localStorage.getItem('ts_ultimaSync')||'0')||Date.now();
+      var ts=Date.now();
+      localStorage.setItem('ts_ultimaSync', String(ts));
       fdoc.set({ payload: JSON.stringify(_dadosLocais()), updatedAt: ts })
-        .then(function(){ if(ts>_lastApplied) _lastApplied=ts; })
+        .then(function(){ if(typeof window._renderUltimaSync==='function') window._renderUltimaSync(); })
         .catch(function(e){ console.warn('[FB] push', e); });
     }catch(e){ console.warn('[FB] push ex', e); }
   };
@@ -8883,11 +8884,11 @@ else appLockInit();
   function _aplicarRemoto(d){
     if(!d || !d.payload) return;
     var rup=parseFloat(d.updatedAt||0);
-    if(!(rup>_lastApplied)) return;              // remoto não é mais novo → NÃO aplica (protege o local)
+    var localTs=parseFloat(localStorage.getItem('ts_ultimaSync')||'0')||0;
+    if(!(rup>localTs)) return;                    // remoto não é mais novo que o local → NÃO aplica (protege o local)
     var data; try{ data=JSON.parse(d.payload); }catch(e){ return; }
     var temDados=(data.pedidos&&data.pedidos.length)||(data.financeiro&&data.financeiro.length)||(data.estoque&&data.estoque.length);
     if(!temDados) return;                         // segurança: nunca aplica vazio
-    _lastApplied=rup;
     pedidos=data.pedidos||[]; financeiro=data.financeiro||[]; estoque=data.estoque||[];
     catalogo=data.catalogo||[]; clientes=data.clientes||[];
     if(typeof fornecedores!=='undefined') fornecedores=data.fornecedores||[];
@@ -8912,10 +8913,16 @@ else appLockInit();
       if(user){
         var ov=document.getElementById('app-lock'); if(ov) ov.style.display='none';
         if(fdoc){
-          fdoc.onSnapshot(function(snap){ try{ if(snap.exists) _aplicarRemoto(snap.data()); }catch(e){} },
-                          function(err){ console.warn('[FB] snapshot', err); });
+          fdoc.onSnapshot(function(snap){
+            try{
+              if(!snap.exists){ window._fbPush(); return; }            // nuvem vazia → sobe o local
+              var d=snap.data(); var rup=parseFloat(d.updatedAt||0);
+              var localTs=parseFloat(localStorage.getItem('ts_ultimaSync')||'0')||0;
+              if(rup>localTs){ _aplicarRemoto(d); }                    // nuvem mais nova → aplica neste aparelho
+              else if(localTs>rup){ window._fbPush(); }                 // local mais novo → sobe pra nuvem
+            }catch(e){ console.warn('[FB] snapshot', e); }
+          }, function(err){ console.warn('[FB] snapshot', err); });
         }
-        setTimeout(window._fbPush, 800); // garante que a nuvem receba os dados atuais deste aparelho
       }
     });
   }catch(e){ console.warn('[FB] auth watch', e); }
