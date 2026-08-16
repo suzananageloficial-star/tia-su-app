@@ -2140,13 +2140,14 @@ function renderDashboard() {
     proximas.forEach(p => {
       const diasRestantes = Math.ceil((p.dt - hoje7) / 86400000);
       const cor = diasRestantes === 0 ? '#EF4444' : diasRestantes <= 2 ? '#F59E0B' : '#22C55E';
+      const bg  = diasRestantes === 0 ? '#FDECEC' : diasRestantes <= 2 ? '#FEF6E6' : '#EAF7EF';
       const label = diasRestantes === 0 ? 'HOJE' : diasRestantes === 1 ? 'AMANHÃ' : `em ${diasRestantes} dias`;
-      proximasHTML += `<div onclick="editarPedido('${p.id}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #f0f0f0;cursor:pointer">
-        <div>
+      proximasHTML += `<div onclick="editarPedido('${p.id}')" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;margin-bottom:7px;background:${bg};border-left:4px solid ${cor};border-radius:10px;cursor:pointer">
+        <div style="min-width:0">
           <div style="font-weight:700;font-size:13px;color:var(--brown)">${p.cliente||'—'}</div>
-          <div style="font-size:11px;color:#888">${p.itens&&p.itens.length?p.itens[0].nome:(p.produto||'—')}</div>
+          <div style="font-size:11px;color:#8a8078;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.itens&&p.itens.length?p.itens[0].nome:(p.produto||'—')}</div>
         </div>
-        <span style="background:${cor}22;color:${cor};border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;white-space:nowrap">${label}</span>
+        <span style="background:#fff;color:${cor};border:1px solid ${cor}66;border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700;white-space:nowrap;flex:0 0 auto">${label}</span>
       </div>`;
     });
   }
@@ -7003,9 +7004,9 @@ function confirmarCompraItem_OLD_DESATIVADA(){
 
 
 <style>
-/* coluna extra de unidade nas linhas de material do pedido */
-.material-row{ grid-template-columns: 1fr 50px 26px 22px 22px !important; }
-.material-row .mat-un{ font-size:10px; color:var(--gray-d); text-align:center; white-space:nowrap; }
+/* linha de material do pedido: nome · qtd · R$ (largo) · status · excluir */
+.material-row{ grid-template-columns: 1fr 34px 112px 18px 14px !important; }
+.material-row .mat-un{ display:none !important; }
 </style>
 <script>
 /* DICA DE UNIDADE NO PEDIDO E NA FICHA (Claude jun/2026) */
@@ -8715,7 +8716,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v15/08-c8';
+    var ver='v15/08-c9';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
