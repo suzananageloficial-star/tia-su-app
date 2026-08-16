@@ -547,7 +547,7 @@ html, body {
 
 .material-row {
   display: grid;
-  grid-template-columns: 1fr 40px 88px 18px 16px;
+  grid-template-columns: 1fr 34px 106px 18px 14px;
   gap: 5px;
   align-items: center;
   background: var(--gray-l);
@@ -3294,10 +3294,10 @@ function precoMaterial(nome){
 function autoPreencherPrecoMaterial(rowId){
   const row = document.getElementById(rowId); if(!row) return;
   const campo = row.querySelector('.mat-valor'); if(!campo) return;
-  if (campo.value && parseFloat(campo.value) > 0) return;
+  if (campo.value && window._parseMoeda(campo.value) > 0) return;
   const nome = row.querySelector('.mat-nome')?.value || '';
   const p = precoMaterial(nome);
-  if (p > 0) campo.value = p.toFixed(2);
+  if (p > 0) campo.value = window._moedaBR(p);
 }
 // Ao digitar/escolher o nome: atualiza status, puxa preço e recalcula
 function matNomeInput(rowId){
@@ -3305,12 +3305,18 @@ function matNomeInput(rowId){
   autoPreencherPrecoMaterial(rowId);
   calcularGastoReal();
 }
+// ── Dinheiro (BR): formatar, ler e mascarar enquanto digita ──
+window._moedaBR = function(n){ n=parseFloat(n); if(isNaN(n)) n=0; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+window._parseMoeda = function(s){ s=(''+(s==null?'':s)).replace(/\./g,'').replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; };
+// Ao digitar: mantém só números e monta o valor pelos centavos (direita → esquerda)
+window._maskMoeda = function(inp){ if(!inp) return; var d=(inp.value||'').replace(/\D/g,''); inp.value = d ? window._moedaBR(parseInt(d,10)/100) : ''; if(typeof calcularGastoReal==='function') calcularGastoReal(); };
+
 // Soma qtd × valor de todos os materiais = gasto real do pedido
 function calcularGastoReal(){
   let total = 0;
   document.querySelectorAll('#p-materiais-lista .material-row').forEach(function(row){
     const q = parseFloat(row.querySelector('.mat-qtd')?.value) || 0;
-    const v = parseFloat(row.querySelector('.mat-valor')?.value) || 0;
+    const v = window._parseMoeda(row.querySelector('.mat-valor')?.value);
     total += q * v;
   });
   total = Math.round(total * 100) / 100;
@@ -6524,7 +6530,7 @@ function coletarMateriaisPedido(){
   rows.forEach(function(row){
     const tipo=row.dataset.tipo||'normal';
     const qtd=parseFloat((row.querySelector('.mat-qtd')||{}).value)||0;
-    const valor=parseFloat((row.querySelector('.mat-valor')||{}).value)||0;
+    const valor=window._parseMoeda((row.querySelector('.mat-valor')||{}).value);
     if(tipo==='balao' || tipo==='fita'){
       const sel=row.querySelector('.mat-sel'); const id=sel?sel.value:'';
       const it=estoque.find(function(e){return e.id===id;});
@@ -7043,12 +7049,12 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId,valor){
     row.dataset.status=_ok0?'coberto':'pendente';
     var optionsHtml='<option value="">'+emo+' escolher cor — '+sz+'</option>'+
       opts.map(function(e){return '<option value="'+e.id+'" '+(selId===e.id?'selected':'')+'>'+e.nome+' · '+(e.qtd||0)+' em estoque</option>';}).join('');
-    var _v0=(valor!=='')?valor:((selItem&&parseFloat(selItem.preco)>0)?parseFloat(selItem.preco).toFixed(2):'');
+    var _v0=(valor!=='')?window._moedaBR(valor):((selItem&&parseFloat(selItem.preco)>0)?window._moedaBR(selItem.preco):'');
     row.innerHTML=
       '<select class="mat-sel" onchange="_balaoSelecionado(\''+rowId+'\')">'+optionsHtml+'</select>'+
       '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" oninput="_balaoSelecionado(\''+rowId+'\');calcularGastoReal()">'+
       '<span class="mat-un">'+(selItem?(selItem.un||'un'):'un')+'</span>'+
-      '<label class="mat-valor-box"><span class="pfx">R$</span><input type="number" class="mat-valor" value="'+_v0+'" min="0" step="0.01" placeholder="0,00" title="Valor por unidade (puxa do item escolhido)" oninput="calcularGastoReal()"></label>'+
+      '<label class="mat-valor-box"><span class="pfx">R$</span><input type="text" inputmode="decimal" class="mat-valor" value="'+_v0+'" placeholder="0,00" title="Valor por unidade (puxa do item escolhido)" oninput="_maskMoeda(this)"></label>'+
       '<span class="mat-badge" title="'+tipo+'">'+(selId?(_ok0?'🟢':'🟡'):emo)+'</span>'+
       '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove();calcularGastoReal()">✕</button>';
   } else {
@@ -7059,7 +7065,7 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId,valor){
       '<input type="text" class="mat-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Buscar material (qualquer parte do nome)" autocomplete="off" oninput="atualizarStatusMaterial(\''+rowId+'\');_updMatUn(\''+rowId+'\');_matSugerir(\''+rowId+'\');autoPreencherPrecoMaterial(\''+rowId+'\');calcularGastoReal()" onchange="_maybeConvertColor(\''+rowId+'\')" onblur="_matSugFechar()">'+
       '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" placeholder="Qtd" oninput="atualizarStatusMaterial(\''+rowId+'\');calcularGastoReal()">'+
       '<span class="mat-un">'+_unidadeDoNome(nome)+'</span>'+
-      '<label class="mat-valor-box"><span class="pfx">R$</span><input type="number" class="mat-valor" value="'+(valor!==''?valor:'')+'" min="0" step="0.01" placeholder="0,00" title="Valor por unidade (puxa da última despesa)" oninput="calcularGastoReal()"></label>'+
+      '<label class="mat-valor-box"><span class="pfx">R$</span><input type="text" inputmode="decimal" class="mat-valor" value="'+(valor!==''?window._moedaBR(valor):'')+'" placeholder="0,00" title="Valor por unidade (puxa da última despesa)" oninput="_maskMoeda(this)"></label>'+
       '<span class="mat-badge" title="'+statusFinal+'">'+icon+'</span>'+
       '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove();calcularGastoReal()">✕</button>';
   }
@@ -7080,7 +7086,7 @@ function _balaoSelecionado(rowId){
   var un=row.querySelector('.mat-un'); if(un) un.textContent=it?(it.un||'un'):'';
   // puxa o valor do item escolhido (só se ainda não tiver valor digitado)
   var vv=row.querySelector('.mat-valor');
-  if(vv && it && parseFloat(it.preco)>0 && !(parseFloat(vv.value)>0)) vv.value=parseFloat(it.preco).toFixed(2);
+  if(vv && it && parseFloat(it.preco)>0 && !(window._parseMoeda(vv.value)>0)) vv.value=window._moedaBR(it.preco);
   if(typeof calcularGastoReal==='function') calcularGastoReal();
 }
 
@@ -8708,7 +8714,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v15/08-c6';
+    var ver='v15/08-c7';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
