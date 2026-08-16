@@ -1865,7 +1865,11 @@ function save() {
   DB.set('cat',     catalogo);
   DB.set('ativos',  ativos);
   DB.set('lista_compras', listaCompras);
-  // Agenda sync em nuvem após 1.5s (debounce)
+  // Carimba a data/hora da última alteração (mostrada no rodapé em FERRAMENTAS)
+  if (typeof window._marcarSync === 'function') window._marcarSync();
+  // Sync em tempo real (Firebase, com login) — envia esta alteração pra nuvem
+  if (typeof window._fbPushDebounced === 'function') window._fbPushDebounced();
+  // Agenda backup no Google Sheets após 1.5s (debounce)
   if (SYNC_URL) {
     clearTimeout(syncTimer);
     syncTimer = setTimeout(syncToCloud, 1500);
@@ -8715,7 +8719,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v15/08-c2';
+    var ver='v15/08-c4';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -8751,17 +8755,32 @@ function _updSenhaLabel(){
 }
 function appLockInit(){
   _updSenhaLabel();
-  if(_temSenhaApp()){
-    var ov=document.getElementById('app-lock');
-    if(ov){ ov.style.display='flex';
-      setTimeout(function(){ var i=document.getElementById('app-lock-input'); if(i) i.focus(); },200);
-    }
+  // Com login de nuvem: mostra a tela; se já houver sessão salva, o onAuthStateChanged do
+  // Firebase esconde sozinho. Sem Firebase (offline/sem SDK), cai na senha local se houver.
+  var ov=document.getElementById('app-lock');
+  var precisa = (typeof window!=='undefined' && window._fbOn) || _temSenhaApp();
+  if(ov && precisa){ ov.style.display='flex';
+    setTimeout(function(){ var i=document.getElementById('app-lock-input'); if(i) i.focus(); },200);
   }
 }
 async function appLockTryUnlock(){
   var inp=document.getElementById('app-lock-input'); var err=document.getElementById('app-lock-err');
   var val=(inp&&inp.value||'').trim();
   if(!val){ if(err) err.textContent='Digite a senha.'; return; }
+  // 1) Login na nuvem (habilita o sync em tempo real). onAuthStateChanged esconde a tela.
+  if(typeof window._fbLogin==='function' && window._fbOn){
+    if(err) err.textContent='Entrando...';
+    var r=await window._fbLogin(val);
+    if(r&&r.ok){ if(inp) inp.value=''; if(err) err.textContent=''; return; }
+    // sem internet → tenta senha local (se ela tiver configurado uma)
+    if(r && (r.err==='offline' || (''+r.err).indexOf('network')>=0)){
+      var hh=await _hashPin(val);
+      if(hh===localStorage.getItem('ts_app_lock')){ var o=document.getElementById('app-lock'); if(o)o.style.display='none'; if(inp)inp.value=''; if(err)err.textContent=''; return; }
+      if(err) err.textContent='Sem internet. Conecte para entrar a 1ª vez.'; if(inp){inp.value='';inp.focus();} return;
+    }
+    if(err) err.textContent='Senha incorreta.'; if(inp){ inp.value=''; inp.focus(); } return;
+  }
+  // 2) Fallback total: senha local (quando não há Firebase)
   var h=await _hashPin(val);
   if(h===localStorage.getItem('ts_app_lock')){
     var ov=document.getElementById('app-lock'); if(ov) ov.style.display='none';
@@ -8811,8 +8830,96 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
 else appLockInit();
 </script>
 
-<!-- Firebase de sincronização em tempo real DESLIGADO por segurança (link público).
-     A sincronização passou a ser somente pelo Google Sheets, protegida por token.
-     O final do arquivo também foi reparado (estava truncado). -->
+<!-- ════════ SYNC EM TEMPO REAL SEGURO — Firebase + LOGIN (Claude ago/2026) ════════
+     Só sincroniza para quem entra com a senha (Firebase Auth). A senha NÃO fica no código.
+     Firestore travado por regra no UID da Suzana. Trava anti-perda: remoto só é aplicado
+     se for MAIS NOVO que o local (compara updatedAt). Google Sheets continua como backup. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+(function(){
+  var cfg={apiKey:"AIzaSyAA-AfwpP4hljctN7FVfX_dC3_oG2J6Fjk",authDomain:"tia-su-app.firebaseapp.com",projectId:"tia-su-app",storageBucket:"tia-su-app.firebasestorage.app",messagingSenderId:"1077661946608",appId:"1:1077661946608:web:cda968c2e8049e253ea835"};
+  var EMAIL="tiasu.baloesepersonalizados@gmail.com";
+  var fdoc=null, _pushTimer=null;
+  var _lastApplied=parseFloat(localStorage.getItem('ts_ultimaSync')||'0')||0;
+  window._fbOn=false;
+  try{
+    if(typeof firebase==='undefined') throw new Error('SDK Firebase nao carregou');
+    firebase.initializeApp(cfg);
+    try{ firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
+    fdoc=firebase.firestore().collection('tiasu').doc('dados');
+    window._fbOn=true;
+    console.log('[FB] pronto');
+  }catch(e){ console.warn('[FB] init falhou:', e); }
+
+  window._fbLogin=function(senha){
+    return new Promise(function(res){
+      if(!window._fbOn){ res({ok:false,err:'offline'}); return; }
+      firebase.auth().signInWithEmailAndPassword(EMAIL,(senha||'').trim())
+        .then(function(){ res({ok:true}); })
+        .catch(function(e){ res({ok:false,err:(e&&e.code)||'erro'}); });
+    });
+  };
+  window._fbLogout=function(){ try{ if(window._fbOn) firebase.auth().signOut(); }catch(e){} };
+
+  function _dadosLocais(){
+    return { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo,
+      clientes:clientes, fornecedores:(typeof fornecedores!=='undefined'?fornecedores:[]),
+      ativos:(typeof ativos!=='undefined'?ativos:[]), listaCompras:(typeof listaCompras!=='undefined'?listaCompras:[]),
+      recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[]) };
+  }
+  window._fbPush=function(){
+    try{
+      if(!window._fbOn || !fdoc || !firebase.auth().currentUser) return;
+      var ts=parseFloat(localStorage.getItem('ts_ultimaSync')||'0')||Date.now();
+      fdoc.set({ payload: JSON.stringify(_dadosLocais()), updatedAt: ts })
+        .then(function(){ if(ts>_lastApplied) _lastApplied=ts; })
+        .catch(function(e){ console.warn('[FB] push', e); });
+    }catch(e){ console.warn('[FB] push ex', e); }
+  };
+  window._fbPushDebounced=function(){ clearTimeout(_pushTimer); _pushTimer=setTimeout(window._fbPush,1200); };
+
+  function _aplicarRemoto(d){
+    if(!d || !d.payload) return;
+    var rup=parseFloat(d.updatedAt||0);
+    if(!(rup>_lastApplied)) return;              // remoto não é mais novo → NÃO aplica (protege o local)
+    var data; try{ data=JSON.parse(d.payload); }catch(e){ return; }
+    var temDados=(data.pedidos&&data.pedidos.length)||(data.financeiro&&data.financeiro.length)||(data.estoque&&data.estoque.length);
+    if(!temDados) return;                         // segurança: nunca aplica vazio
+    _lastApplied=rup;
+    pedidos=data.pedidos||[]; financeiro=data.financeiro||[]; estoque=data.estoque||[];
+    catalogo=data.catalogo||[]; clientes=data.clientes||[];
+    if(typeof fornecedores!=='undefined') fornecedores=data.fornecedores||[];
+    if(typeof ativos!=='undefined') ativos=data.ativos||[];
+    if(typeof listaCompras!=='undefined') listaCompras=data.listaCompras||[];
+    if(typeof recorrentes!=='undefined') recorrentes=data.recorrentes||[];
+    try{
+      DB.set('pedidos',pedidos); DB.set('fin',financeiro); DB.set('est',estoque);
+      DB.set('cat',catalogo); DB.set('clientes',clientes);
+      if(typeof fornecedores!=='undefined') DB.set('fornecedores',fornecedores);
+      if(typeof ativos!=='undefined') DB.set('ativos',ativos);
+      DB.set('lista_compras',(typeof listaCompras!=='undefined'?listaCompras:[]));
+    }catch(e){}
+    localStorage.setItem('ts_ultimaSync', String(rup));
+    if(typeof renderScreen==='function' && typeof currentScreen!=='undefined'){ try{ renderScreen(currentScreen); }catch(e){} }
+    if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
+    if(typeof toast==='function') toast('🔄 Atualizado da nuvem');
+  }
+
+  try{
+    firebase.auth().onAuthStateChanged(function(user){
+      if(user){
+        var ov=document.getElementById('app-lock'); if(ov) ov.style.display='none';
+        if(fdoc){
+          fdoc.onSnapshot(function(snap){ try{ if(snap.exists) _aplicarRemoto(snap.data()); }catch(e){} },
+                          function(err){ console.warn('[FB] snapshot', err); });
+        }
+        setTimeout(window._fbPush, 800); // garante que a nuvem receba os dados atuais deste aparelho
+      }
+    });
+  }catch(e){ console.warn('[FB] auth watch', e); }
+})();
+</script>
 </body>
 </html>
