@@ -547,22 +547,44 @@ html, body {
 
 .material-row {
   display: grid;
-  grid-template-columns: 1fr 40px 30px 58px 18px 20px;
-  gap: 4px;
+  grid-template-columns: 1fr 24px;
+  gap: 7px 6px;
+  align-items: center;
+  background: var(--gray-l);
+  border-radius: 10px;
+  padding: 8px 9px;
+}
+.material-row .mat-sub {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 56px auto minmax(96px,1fr) 22px;
+  gap: 8px;
   align-items: center;
 }
-.material-row .mat-valor { text-align: right; }
-.material-row input {
-  padding: 7px 8px;
-  border: 1.5px solid var(--gray);
-  border-radius: var(--radius-xs);
-  font-family: var(--font-main);
-  font-size: 11px;
-  color: var(--brown);
-  background: var(--gray-l);
-  width: 100%;
+.material-row .mat-nome, .material-row .mat-sel {
+  padding: 8px; border: 1.5px solid var(--gray); border-radius: 8px;
+  background: #fff; font-family: var(--font-main); font-size: 12px; color: var(--brown);
+  width: 100%; box-sizing: border-box;
 }
-.material-row .mat-qtd { text-align: center; }
+.material-row .mat-qtd {
+  text-align: center; padding: 7px 4px; border: 1.5px solid var(--gray); border-radius: 8px;
+  background: #fff; font-family: var(--font-main); font-size: 12px; color: var(--brown);
+  width: 100%; box-sizing: border-box;
+}
+.material-row .mat-un { font-size: 11px; color: var(--gray-d); white-space: nowrap; }
+.material-row .mat-valor-box {
+  display: flex; align-items: center; gap: 4px;
+  background: #fff; border: 1.5px solid var(--cyan); border-radius: 8px; padding: 5px 8px;
+}
+.material-row .mat-valor-box .pfx { font-size: 11px; font-weight: 700; color: var(--cyan-d); }
+.material-row .mat-valor {
+  border: none; outline: none; background: transparent; width: 100%;
+  text-align: right; font-family: var(--font-main); font-size: 13px; color: var(--brown); padding: 0;
+}
+.material-row .material-del {
+  background: none; border: none; color: var(--gray-d); font-size: 17px; line-height: 1;
+  cursor: pointer; padding: 0; justify-self: center;
+}
 /* evita que a linha estoure e corte colunas (checkbox de cor / botao) no celular */
 .material-row input, .ficha-item-row input { min-width: 0; }
 .material-row > *, .ficha-item-row > * { min-width: 0; }
@@ -1408,7 +1430,7 @@ html, body {
         </div>
         <datalist id="estoque-datalist"></datalist>
         <div id="p-materiais-lista" style="display:flex;flex-direction:column;gap:6px"></div>
-        <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">Colunas: material · qtd · R$/un. O R$/un puxa sozinho da última despesa desse material (dá pra ajustar). 🟡 Pendente = ainda não comprado | 🟢 Coberto = já no estoque.</div>
+        <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">Em cada material: nome em cima; embaixo a quantidade, a unidade e o <b>R$ (valor por unidade)</b> — que puxa sozinho da última despesa, mas dá pra digitar/ajustar. 🟡 Pendente = ainda não comprado | 🟢 Coberto = já no estoque.</div>
       </div>
     </div>
     <div class="form-actions" style="flex-direction:column;gap:6px">
@@ -7026,23 +7048,27 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId,valor){
       opts.map(function(e){return '<option value="'+e.id+'" '+(selId===e.id?'selected':'')+'>'+e.nome+' · '+(e.qtd||0)+' em estoque</option>';}).join('');
     var _v0=(valor!=='')?valor:((selItem&&parseFloat(selItem.preco)>0)?parseFloat(selItem.preco).toFixed(2):'');
     row.innerHTML=
-      '<select class="mat-sel" onchange="_balaoSelecionado(\''+rowId+'\')" style="padding:8px;border:1px solid #eee;border-radius:8px;font-size:12px">'+optionsHtml+'</select>'+
-      '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" oninput="_balaoSelecionado(\''+rowId+'\');calcularGastoReal()" style="padding:8px;border:1px solid #eee;border-radius:8px;text-align:center;font-size:12px">'+
-      '<span class="mat-un">'+(selItem?(selItem.un||'un'):'')+'</span>'+
-      '<input type="number" class="mat-valor" value="'+_v0+'" min="0" step="0.01" placeholder="R$/un" title="Valor por unidade (puxa do item escolhido)" oninput="calcularGastoReal()">'+
-      '<span class="mat-badge" title="'+tipo+'">'+(selId?(_ok0?'🟢':'🟡'):emo)+'</span>'+
-      '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove();calcularGastoReal()">✕</button>';
+      '<select class="mat-sel" onchange="_balaoSelecionado(\''+rowId+'\')">'+optionsHtml+'</select>'+
+      '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove();calcularGastoReal()">✕</button>'+
+      '<div class="mat-sub">'+
+        '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" oninput="_balaoSelecionado(\''+rowId+'\');calcularGastoReal()">'+
+        '<span class="mat-un">'+(selItem?(selItem.un||'un'):'un')+'</span>'+
+        '<label class="mat-valor-box"><span class="pfx">R$</span><input type="number" class="mat-valor" value="'+_v0+'" min="0" step="0.01" placeholder="0,00" title="Valor por unidade (puxa do item escolhido)" oninput="calcularGastoReal()"></label>'+
+        '<span class="mat-badge" title="'+tipo+'">'+(selId?(_ok0?'🟢':'🟡'):emo)+'</span>'+
+      '</div>';
   } else {
     var statusFinal=status==='coberto'?'coberto':(typeof checarEstoqueNome==='function'?checarEstoqueNome(nome,qtd):'pendente');
     row.dataset.status=statusFinal; if(itemId) row.dataset.itemId=itemId;
     var icon=statusFinal==='coberto'?'🟢':'🟡';
     row.innerHTML=
       '<input type="text" class="mat-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Buscar material (qualquer parte do nome)" autocomplete="off" oninput="atualizarStatusMaterial(\''+rowId+'\');_updMatUn(\''+rowId+'\');_matSugerir(\''+rowId+'\');autoPreencherPrecoMaterial(\''+rowId+'\');calcularGastoReal()" onchange="_maybeConvertColor(\''+rowId+'\')" onblur="_matSugFechar()">'+
-      '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" placeholder="Qtd" oninput="atualizarStatusMaterial(\''+rowId+'\');calcularGastoReal()">'+
-      '<span class="mat-un">'+_unidadeDoNome(nome)+'</span>'+
-      '<input type="number" class="mat-valor" value="'+(valor!==''?valor:'')+'" min="0" step="0.01" placeholder="R$/un" title="Valor por unidade (puxa da última despesa)" oninput="calcularGastoReal()">'+
-      '<span class="mat-badge" title="'+statusFinal+'">'+icon+'</span>'+
-      '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove();calcularGastoReal()">✕</button>';
+      '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove();calcularGastoReal()">✕</button>'+
+      '<div class="mat-sub">'+
+        '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" placeholder="Qtd" oninput="atualizarStatusMaterial(\''+rowId+'\');calcularGastoReal()">'+
+        '<span class="mat-un">'+_unidadeDoNome(nome)+'</span>'+
+        '<label class="mat-valor-box"><span class="pfx">R$</span><input type="number" class="mat-valor" value="'+(valor!==''?valor:'')+'" min="0" step="0.01" placeholder="0,00" title="Valor por unidade (puxa da última despesa)" oninput="calcularGastoReal()"></label>'+
+        '<span class="mat-badge" title="'+statusFinal+'">'+icon+'</span>'+
+      '</div>';
   }
   lista.appendChild(row);
   if(valor===''||valor==null){ if(typeof autoPreencherPrecoMaterial==='function') autoPreencherPrecoMaterial(rowId); }
@@ -8689,7 +8715,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v19/07-c14';
+    var ver='v15/08-c2';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
