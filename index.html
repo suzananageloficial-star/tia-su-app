@@ -9,7 +9,13 @@
 <meta name="apple-mobile-web-app-title" content="Tia Sú"/>
 <title>Tia Sú — Balões & Personalizados</title>
 <link rel="manifest" href="manifest.json"/>
-<link rel="apple-touch-icon" href="icon-192.png"/>
+<link rel="apple-touch-icon" href="apple-touch-icon.png"/>
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"/>
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="application-name" content="Tia Sú"/>
+<meta name="description" content="Gestão de pedidos, estoque, clientes e financeiro da Tia Sú."/>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <style>
 :root {
@@ -1057,6 +1063,16 @@ html, body {
       <div style="height:80px"></div>
     </div>
 
+    <!-- TRÁFEGO PAGO -->
+    <div id="screen-trafego" class="screen">
+      <div class="page-header">
+        <div class="page-title"><svg viewBox="0 0 24 24" style="color:#F76B15"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>Tráfego Pago</div>
+        <div class="page-sub">Quanto o anúncio custa e quanto ele traz de volta</div>
+      </div>
+      <div id="trafego-body"></div>
+      <div style="height:80px"></div>
+    </div>
+
     <!-- PRECIFICAÇÃO -->
     <div id="screen-preco" class="screen">
       <div class="page-header">
@@ -1243,6 +1259,10 @@ html, body {
       <span class="nav-icon" style="color:#875BF7"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><rect x="7" y="11" width="3" height="7"/><rect x="12" y="7" width="3" height="11"/><rect x="17" y="14" width="3" height="4"/></svg></span>
       <span class="nav-label">Relat.</span>
     </button>
+    <button class="nav-item" onclick="navigate('trafego')" id="nav-trafego">
+      <span class="nav-icon" style="color:#F76B15"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></span>
+      <span class="nav-label">Tráfego</span>
+    </button>
 
     <!-- Rodapé da sidebar (desktop) -->
     <div id="sidebar-footer" style="margin-top:auto;padding:10px 8px;border-top:1px solid var(--gray-l);display:flex;flex-direction:column;gap:6px">
@@ -1259,6 +1279,9 @@ html, body {
       </button>
       <button onclick="openSyncConfig()" style="display:flex;align-items:center;gap:8px;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;width:100%;text-align:left">
         <span>☁️</span><span>Configurar sync</span>
+      </button>
+      <button id="btn-instalar-side" onclick="instalarApp()" style="display:flex;align-items:center;gap:8px;background:var(--pink);color:#fff;border:none;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;width:100%;text-align:left">
+        <span>📲</span><span>Instalar app</span>
       </button>
     </div>
   </nav>
@@ -1295,11 +1318,11 @@ html, body {
       <div id="cliente-historico" style="display:none;background:#f8f8f8;border-radius:8px;padding:8px 12px;margin-bottom:8px"></div>
       <div class="form-group">
         <label class="form-label">WhatsApp</label>
-        <input class="form-input" id="p-whats" placeholder="(51) 9xxxx-xxxx" type="tel">
+        <input class="form-input" id="p-whats" name="p-whats-num" placeholder="(51) 9xxxx-xxxx" type="tel" autocomplete="off" data-lpignore="true" data-form-type="other" data-1p-ignore>
       </div>
       <div class="form-group">
         <label class="form-label">Produto / Evento *</label>
-        <input class="form-input" id="p-produto" placeholder="Ex: Kit aniversário unicórnio">
+        <input class="form-input" id="p-produto" name="p-produto-desc" placeholder="Ex: Kit aniversário unicórnio" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" data-1p-ignore>
       </div>
       <div class="form-group" id="puxar-catalogo-group">
         <label class="form-label">📚 Puxar do catálogo</label>
@@ -1376,6 +1399,19 @@ html, body {
           <option>Cartão débito</option><option>Dinheiro</option>
           <option>Transferência</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Como me achou?</label>
+        <select class="form-select" id="p-origem">
+          <option value="">— não sei / não perguntei —</option>
+          <option value="Anúncio">Anúncio pago (Meta)</option>
+          <option value="Instagram">Instagram (sem anúncio)</option>
+          <option value="Indicação">Indicação de cliente</option>
+          <option value="Cliente antigo">Já era cliente</option>
+          <option value="WhatsApp/Status">WhatsApp / Status</option>
+          <option value="Outro">Outro</option>
+        </select>
+        <div style="font-size:10px;color:var(--gray-d);margin-top:3px">Pergunte no atendimento: <b>"como você me achou?"</b> — é o que faz a tela Tráfego funcionar.</div>
       </div>
       <div class="form-group">
         <label class="form-label">Personalização / Observações</label>
@@ -1741,6 +1777,13 @@ html, body {
       <div style="font-size:10px;color:var(--gray-d);margin-top:8px;text-align:center;line-height:1.5">⬆️ <b>Enviar</b> = manda DESTE aparelho pra nuvem<br>⬇️ <b>Baixar</b> = traz a nuvem pra ESTE aparelho</div>
       <div style="font-size:10px;color:var(--gray-d);margin-top:10px;text-align:center" id="ultimo-sync-txt"></div>
 
+      <!-- Instalar app -->
+      <div id="bloco-instalar" style="margin-top:14px;border-top:1px solid var(--gray);padding-top:12px">
+        <p style="font-size:11px;font-weight:700;color:var(--brown);margin-bottom:8px">📲 App na tela inicial</p>
+        <button class="btn btn-pink btn-sm" style="width:100%" onclick="instalarApp()">📲 Instalar o app Tia Sú</button>
+        <p id="instalar-hint" style="font-size:10px;color:var(--gray-d);margin-top:6px">Abre igual a um aplicativo, com ícone na tela do celular e funcionando offline.</p>
+      </div>
+
       <!-- Backup local -->
       <div style="margin-top:14px;border-top:1px solid var(--gray);padding-top:12px">
         <p style="font-size:11px;font-weight:700;color:var(--brown);margin-bottom:8px">💾 Backup local (arquivo .json)</p>
@@ -1959,6 +2002,7 @@ function renderScreen(s) {
   if (s==='clientes')   { sincronizarTodosClientes(); }
   if (s==='fornecedores') renderFornecedores();
   if (s==='relatorios')   renderRelatorios();
+  if (s==='trafego')      renderTrafego();
 }
 
 // ── FAB ───────────────────────────────────────────────────────
@@ -2363,6 +2407,7 @@ function salvarPedido() {
     dataEntrega:document.getElementById('p-data').value,
     status:     document.getElementById('p-status').value,
     pgto:       document.getElementById('p-pgto').value,
+    origem:     document.getElementById('p-origem') ? document.getElementById('p-origem').value : '',
     obs:        document.getElementById('p-obs').value,
     itens:      itensColetados,
     materiais:  materiaisColetados,
@@ -2464,6 +2509,7 @@ function editarPedido(id) {
   document.getElementById('p-data').value     = p.dataEntrega||'';
   document.getElementById('p-status').value   = p.status||'Novo';
   document.getElementById('p-pgto').value     = p.pgto||'PIX';
+  if (document.getElementById('p-origem')) document.getElementById('p-origem').value = p.origem||'';
   document.getElementById('p-obs').value      = p.obs||'';
   document.getElementById('p-custo').value    = p.custo||'';
   setTimeout(calcularLucro, 60);
@@ -3279,7 +3325,7 @@ function autoPreencherPrecoMaterial(rowId){
   if (campo.value && window._parseMoeda(campo.value) > 0) return;
   const nome = row.querySelector('.mat-nome')?.value || '';
   const p = precoMaterial(nome);
-  if (p > 0) campo.value = window._moedaBR(p);
+  if (p > 0){ row.dataset.matUnit = String(p); window._matAtualizaTotal(row); }
 }
 // Ao digitar/escolher o nome: atualiza status, puxa preço e recalcula
 function matNomeInput(rowId){
@@ -3291,15 +3337,15 @@ function matNomeInput(rowId){
 window._moedaBR = function(n){ n=parseFloat(n); if(isNaN(n)) n=0; return n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); };
 window._parseMoeda = function(s){ s=(''+(s==null?'':s)).replace(/\./g,'').replace(',','.'); var n=parseFloat(s); return isNaN(n)?0:n; };
 // Ao digitar: mantém só números e monta o valor pelos centavos (direita → esquerda)
-window._maskMoeda = function(inp){ if(!inp) return; var d=(inp.value||'').replace(/\D/g,''); inp.value = d ? window._moedaBR(parseInt(d,10)/100) : ''; if(typeof calcularGastoReal==='function') calcularGastoReal(); };
+window._maskMoeda = function(inp){ if(!inp) return; var d=(inp.value||'').replace(/\D/g,''); inp.value = d ? window._moedaBR(parseInt(d,10)/100) : ''; var _r=inp.closest?inp.closest('.material-row'):null; if(_r){ var _q=parseFloat((_r.querySelector('.mat-qtd')||{}).value)||0; var _t=window._parseMoeda(inp.value); _r.dataset.matUnit=(_q>0)?String(_t/_q):String(_t); } if(typeof calcularGastoReal==='function') calcularGastoReal(); };
+// Mostra no campo o TOTAL da linha (unitário guardado × quantidade)
+window._matAtualizaTotal = function(row){ if(!row) return; if(typeof row==='string') row=document.getElementById(row); if(!row) return; var vv=row.querySelector('.mat-valor'); if(!vv) return; var u=parseFloat(row.dataset.matUnit); var q=parseFloat((row.querySelector('.mat-qtd')||{}).value)||0; if(!isNaN(u)) vv.value=(u>0)?window._moedaBR(u*q):''; };
 
 // Soma qtd × valor de todos os materiais = gasto real do pedido
 function calcularGastoReal(){
   let total = 0;
   document.querySelectorAll('#p-materiais-lista .material-row').forEach(function(row){
-    const q = parseFloat(row.querySelector('.mat-qtd')?.value) || 0;
-    const v = window._parseMoeda(row.querySelector('.mat-valor')?.value);
-    total += q * v;
+    total += window._parseMoeda(row.querySelector('.mat-valor')?.value);
   });
   total = Math.round(total * 100) / 100;
   const disp = document.getElementById('p-gasto-real');
@@ -4082,23 +4128,86 @@ if('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(()=>{});
 }
 
-// ── INSTALL PROMPT ────────────────────────────────────────────
-let deferredPrompt;
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault(); deferredPrompt = e;
-  setTimeout(() => {
-    if(deferredPrompt) {
-      const b = document.createElement('div');
-      b.style.cssText='position:fixed;bottom:calc(64px + 16px + env(safe-area-inset-bottom));left:16px;right:16px;background:var(--brown);color:white;padding:12px 16px;border-radius:14px;font-size:13px;z-index:50;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);max-width:448px;margin:0 auto';
-      b.innerHTML='<span style="font-size:20px">🎈</span><span style="flex:1">Instalar o app Tia Sú na sua tela inicial?</span><button onclick="installApp()" style="background:var(--pink);color:white;border:none;padding:6px 14px;border-radius:20px;cursor:pointer;font-weight:700;font-size:12px">Instalar</button><button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:18px">✕</button>';
-      document.body.appendChild(b);
-    }
+// ── INSTALAR O APP (PWA) ──────────────────────────────────────
+let deferredPrompt = null;
+
+// já está rodando instalado?
+function _appInstalado(){
+  return window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true;
+}
+function _ehIOS(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// mostra/esconde os botões de instalar conforme a situação
+function _atualizarBotoesInstalar(){
+  var instalado = _appInstalado();
+  ['btn-instalar-side','bloco-instalar'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = instalado ? 'none' : '';
+  });
+  var hint = document.getElementById('instalar-hint');
+  if(hint && !instalado && _ehIOS()){
+    hint.innerHTML = 'No iPhone: toque em <b>Compartilhar</b> (⬆️) na barra do Safari e escolha <b>Adicionar à Tela de Início</b>.';
+  }
+}
+
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  deferredPrompt = e;
+  _atualizarBotoesInstalar();
+  // convite discreto só na primeira vez (e só se ainda não instalou)
+  if(localStorage.getItem('tiasu_convite_instalar') === 'nao') return;
+  setTimeout(function(){
+    if(!deferredPrompt || _appInstalado()) return;
+    var b = document.createElement('div');
+    b.id = 'banner-instalar';
+    b.style.cssText='position:fixed;bottom:calc(64px + 16px + env(safe-area-inset-bottom));left:16px;right:16px;background:var(--brown);color:white;padding:12px 16px;border-radius:14px;font-size:13px;z-index:50;display:flex;align-items:center;gap:10px;box-shadow:0 4px 20px rgba(0,0,0,0.2);max-width:448px;margin:0 auto';
+    b.innerHTML='<span style="font-size:20px">🎈</span><span style="flex:1">Instalar o app Tia Sú na sua tela inicial?</span>'
+      +'<button onclick="instalarApp()" style="background:var(--pink);color:white;border:none;padding:6px 14px;border-radius:20px;cursor:pointer;font-weight:700;font-size:12px">Instalar</button>'
+      +'<button onclick="localStorage.setItem(\'tiasu_convite_instalar\',\'nao\');this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,0.6);cursor:pointer;font-size:18px">✕</button>';
+    document.body.appendChild(b);
   }, 3000);
 });
 
-function installApp() {
-  if(deferredPrompt){deferredPrompt.prompt();deferredPrompt=null;}
+window.addEventListener('appinstalled', function(){
+  deferredPrompt = null;
+  var b = document.getElementById('banner-instalar'); if(b) b.remove();
+  _atualizarBotoesInstalar();
+  if(typeof toast==='function') toast('🎉 App instalado! Procure o ícone da Tia Sú na tela do celular.');
+});
+
+function instalarApp(){
+  var b = document.getElementById('banner-instalar'); if(b) b.remove();
+  if(_appInstalado()){
+    if(typeof toast==='function') toast('✅ O app já está instalado neste aparelho.');
+    return;
+  }
+  if(deferredPrompt){
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(function(){ deferredPrompt = null; });
+    return;
+  }
+  // sem prompt automático → explica como fazer na mão
+  var msg = _ehIOS()
+    ? 'Para instalar no iPhone/iPad:\n\n1. Abra este app no Safari\n2. Toque em Compartilhar (⬆️) na barra de baixo\n3. Escolha "Adicionar à Tela de Início"\n4. Toque em "Adicionar"'
+    : 'Para instalar:\n\n• Celular Android (Chrome): toque nos 3 pontinhos ⋮ → "Instalar app" ou "Adicionar à tela inicial"\n• Computador (Chrome/Edge): clique no ícone de instalar ⊕ na barra de endereço, ao lado da estrelinha';
+  alert(msg);
 }
+// compatibilidade com o nome antigo
+function installApp(){ instalarApp(); }
+
+// atalho do ícone do app: abrir direto em "Novo pedido"
+window.addEventListener('load', function(){
+  _atualizarBotoesInstalar();
+  try{
+    if(new URLSearchParams(location.search).get('acao') === 'novo-pedido'){
+      setTimeout(function(){ if(typeof openModal==='function') openModal('modal-pedido', true); }, 1200);
+    }
+  }catch(e){}
+});
 
 
 // Dismiss splash after load
@@ -4227,6 +4336,145 @@ function destroyChart(id) {
   if (_charts[id]) { try { _charts[id].destroy(); } catch(e) {} delete _charts[id]; }
 }
 
+
+// ── TRÁFEGO PAGO ─────────────────────────────────────────────
+var _trafMes = new Date().getMonth();
+var _trafAno = new Date().getFullYear();
+var CAT_ANUNCIO = 'Marketing/Anúncios';
+var _TRAF_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function _trafData(v){
+  if(!v) return null;
+  try{
+    var d = (typeof v === 'string' && v.length <= 10) ? new Date(v+'T12:00') : new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  }catch(e){ return null; }
+}
+function _trafNoMes(v){
+  var d = _trafData(v);
+  return !!d && d.getMonth() === _trafMes && d.getFullYear() === _trafAno;
+}
+function filtrarTrafego(){
+  var m = document.getElementById('traf-mes'), a = document.getElementById('traf-ano');
+  if(m) _trafMes = parseInt(m.value);
+  if(a) _trafAno = parseInt(a.value);
+  renderTrafego();
+}
+
+function renderTrafego(){
+  var body = document.getElementById('trafego-body');
+  if(!body) return;
+
+  // ---- gasto com anúncio no mês (categoria Marketing/Anúncios) ----
+  var gasto = (financeiro||[])
+    .filter(function(f){ return f && f.cat === CAT_ANUNCIO && f.tipo !== 'Receita' && _trafNoMes(f.data); })
+    .reduce(function(s,f){ return s + (parseFloat(f.valor)||0); }, 0);
+
+  // ---- pedidos do mês ----
+  var pedMes    = (pedidos||[]).filter(function(p){ return _trafNoMes(p.criadoEm || p.dataEntrega); });
+  var deAnuncio = pedMes.filter(function(p){ return p.origem === 'Anúncio'; });
+  var semOrigem = pedMes.filter(function(p){ return !p.origem; }).length;
+
+  var fatAnuncio  = deAnuncio.reduce(function(s,p){ return s + (parseFloat(p.valor)||0); }, 0);
+  var custoMat    = deAnuncio.reduce(function(s,p){ return s + (parseFloat(p.custoReal)||parseFloat(p.custo)||0); }, 0);
+  var roas        = gasto > 0 ? (fatAnuncio / gasto) : 0;
+  var custoVenda  = deAnuncio.length > 0 ? (gasto / deAnuncio.length) : 0;
+  var lucroLiq    = fatAnuncio - custoMat - gasto;
+
+  // ---- diagnóstico ----
+  var diagCor='#8A7A70', diagBg='#F5F1ED', diagTit='Sem dados suficientes', diagTxt='Lance o gasto do anúncio no Financeiro (categoria "'+CAT_ANUNCIO+'") e marque a origem dos pedidos.';
+  if (gasto > 0 && deAnuncio.length === 0) {
+    diagCor='#D92D20'; diagBg='#FEF3F2'; diagTit='Gastou e não vendeu';
+    diagTxt='Você investiu '+fmt(gasto)+' e nenhum pedido deste mês está marcado como vindo de anúncio. Ou o anúncio não converteu, ou você não marcou a origem no pedido.';
+  } else if (gasto > 0 && roas >= 3) {
+    diagCor='#15803D'; diagBg='#EAF6EA'; diagTit='Está valendo a pena';
+    diagTxt='Cada R$ 1 investido voltou '+roas.toFixed(1).replace('.',',')+'. Pode aumentar a verba em 20% no próximo mês — nunca dobre de uma vez.';
+  } else if (gasto > 0 && roas >= 1) {
+    diagCor='#B54708'; diagBg='#FFF6E8'; diagTit='Se paga, mas apertado';
+    diagTxt='O anúncio cobre o próprio custo, mas sobra pouco. Troque o criativo antes de aumentar a verba — verba maior em criativo cansado só encarece.';
+  } else if (gasto > 0) {
+    diagCor='#D92D20'; diagBg='#FEF3F2'; diagTit='Está pagando pra vender';
+    diagTxt='O faturamento vindo de anúncio ('+fmt(fatAnuncio)+') é menor que o gasto ('+fmt(gasto)+'). Pause e troque o criativo antes de gastar mais.';
+  }
+
+  // ---- origens ----
+  var mapa = {};
+  pedMes.forEach(function(p){
+    var o = p.origem || '(não informado)';
+    if(!mapa[o]) mapa[o] = { n:0, fat:0 };
+    mapa[o].n++;
+    mapa[o].fat += (parseFloat(p.valor)||0);
+  });
+  var listaOrig = Object.keys(mapa).map(function(k){ return { nome:k, n:mapa[k].n, fat:mapa[k].fat }; })
+                        .sort(function(a,b){ return b.fat - a.fat; });
+  var totFat = listaOrig.reduce(function(s,o){ return s + o.fat; }, 0);
+
+  // ---- seletores ----
+  var selMes = '<select id="traf-mes" onchange="filtrarTrafego()" style="flex:1;padding:9px;border:1.5px solid var(--gray-l);border-radius:10px;font-size:13px;font-weight:600;background:#fff">';
+  for (var i=0;i<12;i++) selMes += '<option value="'+i+'"'+(i===_trafMes?' selected':'')+'>'+_TRAF_MESES[i]+'</option>';
+  selMes += '</select>';
+  var anoAtual = new Date().getFullYear();
+  var selAno = '<select id="traf-ano" onchange="filtrarTrafego()" style="width:100px;padding:9px;border:1.5px solid var(--gray-l);border-radius:10px;font-size:13px;font-weight:600;background:#fff">';
+  for (var y=anoAtual-2; y<=anoAtual+1; y++) selAno += '<option value="'+y+'"'+(y===_trafAno?' selected':'')+'>'+y+'</option>';
+  selAno += '</select>';
+
+  function kpi(bg, cor, label, valor, sub){
+    return '<div style="background:'+bg+';border-radius:12px;padding:12px;text-align:center">'
+         + '<div style="font-size:9px;color:#8A7A70;font-weight:700;letter-spacing:.3px">'+label+'</div>'
+         + '<div style="font-size:16px;font-weight:800;color:'+cor+';margin-top:2px">'+valor+'</div>'
+         + (sub ? '<div style="font-size:9px;color:#A08D80;margin-top:1px">'+sub+'</div>' : '')
+         + '</div>';
+  }
+
+  var html = '';
+  html += '<div style="display:flex;gap:8px;margin-bottom:14px">'+selMes+selAno+'</div>';
+
+  html += '<div style="background:'+diagBg+';border-left:4px solid '+diagCor+';border-radius:10px;padding:12px 14px;margin-bottom:14px">'
+        + '<div style="font-size:13px;font-weight:800;color:'+diagCor+'">'+diagTit+'</div>'
+        + '<div style="font-size:12px;color:#5C4B42;margin-top:3px;line-height:1.45">'+diagTxt+'</div></div>';
+
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
+        + kpi('#FFF4EC','#B54708','GASTO COM ANÚNCIO', fmt(gasto), 'no mês')
+        + kpi('#EAF6EA','#15803D','FATUROU DE ANÚNCIO', fmt(fatAnuncio), deAnuncio.length+' pedido(s)')
+        + '</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'
+        + kpi('#F5F1ED', roas>=3?'#15803D':(roas>=1?'#B54708':'#D92D20'), 'ROAS', (roas>0? roas.toFixed(1).replace('.',',')+'x' : '—'), 'meta: 3x')
+        + kpi('#F5F1ED','#2B2320','CUSTO POR VENDA', (custoVenda>0? fmt(custoVenda) : '—'), '')
+        + kpi('#F5F1ED', lucroLiq>=0?'#15803D':'#D92D20', 'LUCRO LÍQUIDO', fmt(lucroLiq), 'já tirando tudo')
+        + '</div>';
+
+  if (semOrigem > 0) {
+    html += '<div style="background:#FFF9E6;border:1px solid #F2D98C;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#7A5B12;line-height:1.45">'
+          + '<b>'+semOrigem+' pedido(s) deste mês sem origem preenchida.</b><br>'
+          + 'Abra o pedido e preencha "Como me achou?" — sem isso o ROAS acima fica menor que a realidade.</div>';
+  }
+
+  html += '<div class="card" style="margin-bottom:14px"><div class="card-body">'
+        + '<div style="font-size:12px;font-weight:800;color:#2B2320;margin-bottom:9px">DE ONDE VIERAM OS PEDIDOS</div>';
+  if (listaOrig.length === 0) {
+    html += '<div style="font-size:12px;color:#8A7A70">Nenhum pedido registrado neste mês.</div>';
+  } else {
+    listaOrig.forEach(function(o){
+      var pct = totFat > 0 ? (o.fat/totFat*100) : 0;
+      var cor = o.nome === 'Anúncio' ? '#F76B15' : (o.nome === '(não informado)' ? '#C4B8B0' : '#875BF7');
+      html += '<div style="margin-bottom:9px">'
+            + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">'
+            + '<span style="font-weight:700;color:#2B2320">'+o.nome+' <span style="font-weight:400;color:#8A7A70">('+o.n+')</span></span>'
+            + '<span style="font-weight:700;color:'+cor+'">'+fmt(o.fat)+'</span></div>'
+            + '<div style="background:#F0EAE5;border-radius:99px;height:6px;overflow:hidden">'
+            + '<div style="background:'+cor+';height:6px;width:'+pct.toFixed(1)+'%"></div></div></div>';
+    });
+  }
+  html += '</div></div>';
+
+  html += '<div style="background:#F8F5F1;border-radius:10px;padding:11px 13px;font-size:11.5px;color:#6D5D54;line-height:1.5">'
+        + '<b>Como alimentar esta tela:</b><br>'
+        + '1. No pedido, preencha <b>"Como me achou?"</b> — pergunte no atendimento.<br>'
+        + '2. No Financeiro, lance o gasto do anúncio como <b>Despesa Variável → '+CAT_ANUNCIO+'</b>.<br>'
+        + '3. Lance o valor <b>total pago</b> (mídia + 13,8% de imposto), não só a mídia.</div>';
+
+  body.innerHTML = html;
+}
 
 // ── RELATÓRIOS ───────────────────────────────────────────────
 let _relMes = new Date().getMonth();
@@ -6367,7 +6615,9 @@ function _matEscolher(rowId, itemId){
   if(typeof _maybeConvertColor==='function') _maybeConvertColor(rowId);
 }
 function _matSugFechar(){ var box=document.getElementById('mat-sug-box'); if(box) setTimeout(function(){ box.style.display='none'; },200); }
-function _ehFita(nome){ return /cetim|voal|gorgur|vin[ií]l|confete|\bfita\b/i.test(nome||''); }
+// papel poli sujinho (e similares): também entra no seletor de cor (ago/2026)
+function _ehPapelCor(nome){ return /papel\s*poli|sujinho/i.test(nome||''); }
+function _ehFita(nome){ return _ehPapelCor(nome) || /cetim|voal|gorgur|vin[ií]l|confete|\bfita\b/i.test(nome||''); }
 // Serviços (não vão pro estoque nem pra lista de compras; contam só na precificação)
 function _ehServico(nome){ return /impress|m[ãa]o\s*de\s*obra|servi[çc]o|h[eé]lio|\bfrete\b/i.test(nome||''); }
 function matchFita(estoqueName, baseText){
@@ -6512,11 +6762,14 @@ function coletarMateriaisPedido(){
   rows.forEach(function(row){
     const tipo=row.dataset.tipo||'normal';
     const qtd=parseFloat((row.querySelector('.mat-qtd')||{}).value)||0;
-    const valor=window._parseMoeda((row.querySelector('.mat-valor')||{}).value);
+    const _tot=window._parseMoeda((row.querySelector('.mat-valor')||{}).value);
+    const _u=parseFloat(row.dataset.matUnit);
+    const valor = !isNaN(_u) ? _u : (qtd>0 ? _tot/qtd : _tot);
     if(tipo==='balao' || tipo==='fita'){
       const sel=row.querySelector('.mat-sel'); const id=sel?sel.value:'';
       const it=estoque.find(function(e){return e.id===id;});
-      const nome=it?it.nome:((tipo==='fita'?'Fita ':'Balao ')+(row.dataset.balaoSize||''));
+      const _sz=row.dataset.balaoSize||'';
+      const nome=it?it.nome:((tipo==='fita'?(_ehPapelCor(_sz)?'':'Fita '):'Balao ')+_sz);
       if(qtd>0) mats.push({id:row.dataset.matId||uid(),nome:nome,qtd:qtd,valor:valor,status:it?'coberto':'pendente',itemId:id||null,tipo:tipo,size:row.dataset.balaoSize||''});
     } else {
       const nv=((row.querySelector('.mat-nome')||{}).value||'').trim();
@@ -7019,7 +7272,7 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId,valor){
   var _sz0=size||nome, _isFita0=_ehFita(_sz0), _isBal0=(tipo==='balao'||_ehBalao(_sz0))&&!_isFita0&&!_naoEBalao(_sz0);
   if(_isFita0 || _isBal0){
     var sz=_sz0; row.dataset.balaoSize=sz;
-    var ehFit=_isFita0; var emo=ehFit?'🎨':'🎈';
+    var ehFit=_isFita0; var emo=ehFit?(_ehPapelCor(sz)?'📄':'🎨'):'🎈';
     row.dataset.tipo=ehFit?'fita':'balao';
     var opts=ehFit
       ? estoque.filter(function(e){return _ehFita(e.nome)&&matchFita(e.nome,sz);})
@@ -7032,7 +7285,9 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId,valor){
     row.dataset.status=_ok0?'coberto':'pendente';
     var optionsHtml='<option value="">'+emo+' escolher cor — '+sz+'</option>'+
       opts.map(function(e){return '<option value="'+e.id+'" '+(selId===e.id?'selected':'')+'>'+e.nome+' · '+(e.qtd||0)+' em estoque</option>';}).join('');
-    var _v0=(valor!=='')?window._moedaBR(valor):((selItem&&parseFloat(selItem.preco)>0)?window._moedaBR(selItem.preco):'');
+    var _u0=(valor!=='')?parseFloat(valor):((selItem&&parseFloat(selItem.preco)>0)?parseFloat(selItem.preco):NaN);
+    if(!isNaN(_u0)) row.dataset.matUnit=String(_u0);
+    var _v0=(!isNaN(_u0))?window._moedaBR(_u0*(parseFloat(qtd)||0)):'';
     row.innerHTML=
       '<select class="mat-sel" onchange="_balaoSelecionado(\''+rowId+'\')">'+optionsHtml+'</select>'+
       '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" oninput="_balaoSelecionado(\''+rowId+'\');calcularGastoReal()">'+
@@ -7044,11 +7299,12 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId,valor){
     var statusFinal=status==='coberto'?'coberto':(typeof checarEstoqueNome==='function'?checarEstoqueNome(nome,qtd):'pendente');
     row.dataset.status=statusFinal; if(itemId) row.dataset.itemId=itemId;
     var icon=statusFinal==='coberto'?'🟢':'🟡';
+    if(valor!==''&&valor!=null) row.dataset.matUnit=String(valor);
     row.innerHTML=
       '<input type="text" class="mat-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Buscar material (qualquer parte do nome)" autocomplete="off" oninput="atualizarStatusMaterial(\''+rowId+'\');_updMatUn(\''+rowId+'\');_matSugerir(\''+rowId+'\');autoPreencherPrecoMaterial(\''+rowId+'\');calcularGastoReal()" onchange="_maybeConvertColor(\''+rowId+'\')" onblur="_matSugFechar()">'+
-      '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" placeholder="Qtd" oninput="atualizarStatusMaterial(\''+rowId+'\');calcularGastoReal()">'+
+      '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" placeholder="Qtd" oninput="atualizarStatusMaterial(\''+rowId+'\');window._matAtualizaTotal(\''+rowId+'\');calcularGastoReal()">'+
       '<span class="mat-un">'+_unidadeDoNome(nome)+'</span>'+
-      '<label class="mat-valor-box"><span class="pfx">R$</span><input type="text" inputmode="decimal" class="mat-valor" value="'+(valor!==''?window._moedaBR(valor):'')+'" placeholder="0,00" title="Valor por unidade (puxa da última despesa)" oninput="_maskMoeda(this)"></label>'+
+      '<label class="mat-valor-box"><span class="pfx">R$</span><input type="text" inputmode="decimal" class="mat-valor" value="'+((valor!==''&&valor!=null)?window._moedaBR((parseFloat(valor)||0)*(parseFloat(qtd)||0)):'')+'" placeholder="0,00" title="Valor TOTAL do material (qtd × unitário)" oninput="_maskMoeda(this)"></label>'+
       '<span class="mat-badge" title="'+statusFinal+'">'+icon+'</span>'+
       '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove();calcularGastoReal()">✕</button>';
   }
@@ -7064,12 +7320,13 @@ function _balaoSelecionado(rowId){
   var need=parseFloat((row.querySelector('.mat-qtd')||{}).value)||0;
   var temEst=it && (parseFloat(it.qtd)||0)>=need && (parseFloat(it.qtd)||0)>0;
   row.dataset.status=temEst?'coberto':'pendente';
-  var emo=(row.dataset.tipo==='fita'?'🎨':'🎈');
+  var emo=(row.dataset.tipo==='fita'?(_ehPapelCor(row.dataset.balaoSize||'')?'📄':'🎨'):'🎈');
   var badge=row.querySelector('.mat-badge'); if(badge) badge.textContent=it?(temEst?'🟢':'🟡'):emo;
   var un=row.querySelector('.mat-un'); if(un) un.textContent=it?(it.un||'un'):'';
   // puxa o valor do item escolhido (só se ainda não tiver valor digitado)
   var vv=row.querySelector('.mat-valor');
-  if(vv && it && parseFloat(it.preco)>0 && !(window._parseMoeda(vv.value)>0)) vv.value=window._moedaBR(it.preco);
+  if(it && parseFloat(it.preco)>0 && !(parseFloat(row.dataset.matUnit)>0)) row.dataset.matUnit=String(parseFloat(it.preco));
+  window._matAtualizaTotal(row);
   if(typeof calcularGastoReal==='function') calcularGastoReal();
 }
 
@@ -8697,7 +8954,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v15/08-c11';
+    var ver='v16/08-c12';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
