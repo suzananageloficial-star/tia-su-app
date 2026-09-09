@@ -832,8 +832,10 @@ html, body {
   }
 }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Bibliotecas guardadas junto com o app (pasta lib), nao mais baixadas de servidor de terceiro.
+     Assim graficos, Excel e PDF continuam funcionando mesmo se a internet ou a CDN cair. -->
+<script src="lib/chart.umd.min.js"></script>
+<script src="lib/xlsx.full.min.js"></script>
 </head>
 <body>
 <style>
@@ -1082,7 +1084,7 @@ html, body {
     <!-- TRÁFEGO PAGO -->
     <div id="screen-trafego" class="screen">
       <div class="page-header">
-        <div class="page-title"><svg viewBox="0 0 24 24" style="color:#F76B15"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>Tráfego Pago</div>
+        <div class="page-title"><svg viewBox="0 0 24 24" style="color:var(--orange)"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>Tráfego Pago</div>
         <div class="page-sub">Quanto o anúncio custa e quanto ele traz de volta</div>
       </div>
       <div id="trafego-body"></div>
@@ -1284,7 +1286,7 @@ html, body {
       <span class="nav-label">Relat.</span>
     </button>
     <button class="nav-item" onclick="navigate('trafego')" id="nav-trafego">
-      <span class="nav-icon" style="color:#F76B15"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></span>
+      <span class="nav-icon" style="color:var(--orange)"><svg viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg></span>
       <span class="nav-label">Tráfego</span>
     </button>
 
@@ -1480,7 +1482,7 @@ html, body {
         </div>
         <datalist id="estoque-datalist"></datalist>
         <div id="p-materiais-lista" style="display:flex;flex-direction:column;gap:6px"></div>
-        <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">Cada linha: material · qtd · <b>R$ por unidade</b> (puxa da última despesa, dá pra ajustar) · status. <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#F79009"/></svg> Pendente = ainda não comprado | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#12B76A"/></svg> Coberto = já no estoque.</div>
+        <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">Cada linha: material · qtd · <b>R$ por unidade</b> (puxa da última despesa, dá pra ajustar) · status. <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#F79009"/></svg> Pendente = ainda não comprado | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#12B76A"/></svg> Coberto = já no estoque | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#0BA5EC"/></svg> Serviço (impressão, mão de obra, hélio, frete) = conta no custo, mas <b>não vai pra lista de compras</b>.</div>
       </div>
     </div>
     <div class="form-actions" style="flex-direction:column;gap:6px">
@@ -1903,6 +1905,51 @@ let pedidos      = DB.get('pedidos');
 let financeiro   = DB.get('fin');
 let estoque      = DB.get('est');
 let catalogo     = DB.get('cat');
+
+/* ═══════════════════════════════════════════════════════════════════
+   TELA OCUPADA — nada redesenha por cima de quem está trabalhando.
+
+   A sincronização (relógio de 60s, voltar ao app, e o Firebase em tempo
+   real) troca as listas e redesenha a tela. Se isso acontece no meio de
+   um cadastro, o que foi digitado se perde — e para quem usa parece
+   simplesmente que "a tela fechou sozinha".
+
+   Ocupada é: formulário aberto OU cursor dentro de um campo. O segundo
+   caso cobre as telas que editam sem modal, como a Precificação.
+
+   Quem for redesenhar sozinho passa o trabalho por _aplicarQuandoLivre:
+   roda na hora se dá, espera se não dá.
+   ═══════════════════════════════════════════════════════════════════ */
+window._telaOcupada = function(){
+  try{
+    if(document.querySelector('.modal-overlay.open')) return true;
+    var a = document.activeElement;
+    if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== 'hidden') return true;
+  }catch(e){}
+  return false;
+};
+
+/* Guarda só a ÚLTIMA pendência: cada mesclagem já traz o estado completo,
+   então a mais recente é a única que interessa. */
+window._pendenteQuandoLivre = null;
+
+window._aplicarQuandoLivre = function(fn){
+  if(typeof fn !== 'function') return;
+  if(!window._telaOcupada()){ try{ fn(); }catch(e){} return; }
+  window._pendenteQuandoLivre = fn;
+};
+
+window._drenarQuandoLivre = function(){
+  if(!window._pendenteQuandoLivre) return;
+  if(window._telaOcupada()) return;
+  var fn = window._pendenteQuandoLivre;
+  window._pendenteQuandoLivre = null;   // limpa ANTES, senão ela se re-agenda
+  try{ fn(); }catch(e){}
+};
+
+/* Rede de segurança: nem todo formulário fecha passando pelo closeModal
+   (tirar o cursor de um campo não fecha nada). */
+setInterval(window._drenarQuandoLivre, 3000);
 let clientes     = DB.get('clientes');
 let fornecedores = DB.get('fornecedores');
 let ativos       = DB.get('ativos');
@@ -2061,11 +2108,22 @@ function openModal(id, isNew) {
   if (isNew) resetModal(id);
   const el = document.getElementById(id);
   el.classList.add('open');
-  // Formulários onde NÃO se fecha ao clicar no fundo (evita perder o que digitou)
-  if (id !== 'modal-pedido' && id !== 'modal-fin' && id !== 'modal-apikey') {
-    el.onclick = e => { if(e.target===e.currentTarget) closeModal(id); };
+  /* ─────────────────────────────────────────────────────────────────
+     Fechar ao clicar no fundo NUNCA vale para um formulário.
+
+     A regra existia como uma lista de três nomes, e os outros nove modais
+     com campos ficaram de fora — cada um uma chance de perder o que já
+     tinha sido digitado com um clique fora do lugar. Aconteceu no app da
+     Laura (mesmo código de origem) e foi corrigido lá em 06/09/2026.
+
+     A decisão agora é pelo CONTEÚDO, não por nome: tem campo para
+     preencher, só fecha pelo botão. Modal novo já nasce protegido.
+     ───────────────────────────────────────────────────────────────── */
+  var _temCampos = !!el.querySelector('input:not([type="hidden"]), select, textarea');
+  if (_temCampos) {
+    el.onclick = null;               // só fecha pelo botão
   } else {
-    el.onclick = null; // só fecha pelo botão Fechar
+    el.onclick = e => { if(e.target===e.currentTarget) closeModal(id); };
   }
   if(id==='modal-pedido'){ var _pk=document.getElementById('p-cliente-picker'); if(_pk) _pk.style.display='none'; setTimeout(popularCatalogoSelect,60); setTimeout(popularDatalistClientes,60); }
   if(id==='modal-fin'){ if(isNew){ _estLinhas=[]; } setTimeout(_popularCategoriasFin,30); }
@@ -2073,6 +2131,9 @@ function openModal(id, isNew) {
 }
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
+  /* Fechou o formulário: se a nuvem trouxe novidade enquanto ela trabalhava,
+     é agora que ela entra. Ver o bloco TELA OCUPADA. */
+  if (window._drenarQuandoLivre) window._drenarQuandoLivre();
 }
 function resetModal(id) {
   const form = document.getElementById(id).querySelectorAll('input,select,textarea');
@@ -3364,15 +3425,28 @@ function checarEstoqueNome(nome, qtd) {
 }
 
 // Atualiza badge em tempo real quando o usuário digita nome ou quantidade
+// Serviço pelo NOME (impressão, mão de obra, hélio, frete): conta no custo, não vai pra lista de compras
+window._ehServicoNome = function(nome){ return /impress|m[ãa]o\s*de\s*obra|servi[çc]o|h[eé]lio|\bfrete\b/i.test(nome||''); };
+// Bolinha de status do material: verde=coberto, amarela=pendente (comprar), azul=serviço (não compra)
+window._matDot = function(status){
+  var cor = status==='coberto' ? '#12B76A' : (status==='servico' ? '#0BA5EC' : '#F79009');
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="'+cor+'"/></svg>';
+};
 function atualizarStatusMaterial(rowId) {
   const row = document.getElementById(rowId);
   if (!row) return;
   const nome   = row.querySelector('.mat-nome')?.value || '';
   const qtd    = parseFloat(row.querySelector('.mat-qtd')?.value) || 1;
+  const badge = row.querySelector('.mat-badge');
+  // Serviço (impressão, mão de obra, hélio, frete): conta no custo, mas não vai pra lista de compras
+  if (window._ehServicoNome(nome)) {
+    row.dataset.status = 'servico';
+    if (badge) { badge.innerHTML = window._matDot('servico'); badge.title = 'Serviço — conta no custo, não vai pra lista de compras'; }
+    return;
+  }
   const status = checarEstoqueNome(nome, qtd);
   row.dataset.status = status;
-  const badge = row.querySelector('.mat-badge');
-  if (badge) { badge.textContent = status === 'coberto' ? '🟢' : '🟡'; badge.title = status; }
+  if (badge) { badge.innerHTML = window._matDot(status); badge.title = status; }
 }
 
 // ── CUSTO REAL: puxa o preço unitário do material do estoque (que veio da última despesa) ──
@@ -4225,6 +4299,25 @@ function handleImport(e) {
 // ── SERVICE WORKER ────────────────────────────────────────────
 if('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(()=>{});
+
+  /* Quando uma versão nova assume o controle, a tela ainda está rodando o
+     código velho — sem recarregar, a correção publicada não aparece.
+     Mas NUNCA por cima de um formulário aberto: espera a tela ficar livre.
+     Ver o bloco TELA OCUPADA, no começo do arquivo. */
+  const _tinhaControlador = !!navigator.serviceWorker.controller;
+  let _jaRecarregou = false;
+  function _recarregarQuandoDerCerto(){
+    if(_jaRecarregou) return;
+    var ocupada = window._telaOcupada ? window._telaOcupada()
+                                      : !!document.querySelector('.modal-overlay.open');
+    if(ocupada){ setTimeout(_recarregarQuandoDerCerto, 1500); return; }
+    _jaRecarregou = true;
+    location.reload();
+  }
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(!_tinhaControlador || _jaRecarregou) return;
+    _recarregarQuandoDerCerto();
+  });
 }
 
 // ── INSTALAR O APP (PWA) ──────────────────────────────────────
@@ -4441,6 +4534,22 @@ var _trafMes = new Date().getMonth();
 var _trafAno = new Date().getFullYear();
 var CAT_ANUNCIO = 'Marketing/Anúncios';
 var _TRAF_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+var TETO_TRAF_PADRAO = 350;
+
+function _trafTeto(){
+  var v = parseFloat(localStorage.getItem('ts_traf_teto'));
+  return (isNaN(v) || v < 0) ? TETO_TRAF_PADRAO : v;
+}
+function definirTetoTrafego(){
+  var atual = _trafTeto();
+  var novo = prompt('Quanto você aceita PAGAR de anúncio por mês?\n(valor total: mídia + 13,8% de imposto)', atual);
+  if (novo === null) return;
+  novo = parseFloat(String(novo).replace(',','.'));
+  if (isNaN(novo) || novo < 0) { toast('Valor inválido'); return; }
+  localStorage.setItem('ts_traf_teto', novo);
+  renderTrafego();
+  toast('Teto do mês: ' + fmt(novo));
+}
 
 function _trafData(v){
   if(!v) return null;
@@ -4481,18 +4590,21 @@ function renderTrafego(){
   var lucroLiq    = fatAnuncio - custoMat - gasto;
 
   // ---- diagnóstico ----
-  var diagCor='#8A7A70', diagBg='#F5F1ED', diagTit='Sem dados suficientes', diagTxt='Lance o gasto do anúncio no Financeiro (categoria "'+CAT_ANUNCIO+'") e marque a origem dos pedidos.';
+  var diagCor='var(--gray-d)', diagBg='var(--gray-l)', diagTit='Sem dados suficientes', diagTxt='Lance o gasto do anúncio no Financeiro (categoria "'+CAT_ANUNCIO+'") e marque a origem dos pedidos.';
   if (gasto > 0 && deAnuncio.length === 0) {
-    diagCor='#D92D20'; diagBg='#FEF3F2'; diagTit='Gastou e não vendeu';
+    diagCor='var(--red)'; diagBg='var(--red-l)'; diagTit='Gastou e não vendeu';
     diagTxt='Você investiu '+fmt(gasto)+' e nenhum pedido deste mês está marcado como vindo de anúncio. Ou o anúncio não converteu, ou você não marcou a origem no pedido.';
   } else if (gasto > 0 && roas >= 3) {
-    diagCor='#15803D'; diagBg='#EAF6EA'; diagTit='Está valendo a pena';
-    diagTxt='Cada R$ 1 investido voltou '+roas.toFixed(1).replace('.',',')+'. Pode aumentar a verba em 20% no próximo mês — nunca dobre de uma vez.';
+    diagCor='var(--green)'; diagBg='var(--green-l)'; diagTit='Está valendo a pena';
+    diagTxt='Cada R$ 1 investido voltou '+roas.toFixed(1).replace('.',',')+'. '
+          + (gasto >= _trafTeto()*0.9
+              ? 'Você já está no teto que definiu ('+fmt(_trafTeto())+'). Só aumente se decidir subir o teto de propósito — e no máximo 20% de uma vez.'
+              : 'Pode aumentar a verba em 20% no próximo mês — nunca dobre de uma vez, e nunca passe do teto.');
   } else if (gasto > 0 && roas >= 1) {
-    diagCor='#B54708'; diagBg='#FFF6E8'; diagTit='Se paga, mas apertado';
+    diagCor='var(--orange)'; diagBg='var(--orange-l)'; diagTit='Se paga, mas apertado';
     diagTxt='O anúncio cobre o próprio custo, mas sobra pouco. Troque o criativo antes de aumentar a verba — verba maior em criativo cansado só encarece.';
   } else if (gasto > 0) {
-    diagCor='#D92D20'; diagBg='#FEF3F2'; diagTit='Está pagando pra vender';
+    diagCor='var(--red)'; diagBg='var(--red-l)'; diagTit='Está pagando pra vender';
     diagTxt='O faturamento vindo de anúncio ('+fmt(fatAnuncio)+') é menor que o gasto ('+fmt(gasto)+'). Pause e troque o criativo antes de gastar mais.';
   }
 
@@ -4519,54 +4631,81 @@ function renderTrafego(){
 
   function kpi(bg, cor, label, valor, sub){
     return '<div style="background:'+bg+';border-radius:12px;padding:12px;text-align:center">'
-         + '<div style="font-size:9px;color:#8A7A70;font-weight:700;letter-spacing:.3px">'+label+'</div>'
+         + '<div style="font-size:9px;color:var(--gray-d);font-weight:700;letter-spacing:.3px">'+label+'</div>'
          + '<div style="font-size:16px;font-weight:800;color:'+cor+';margin-top:2px">'+valor+'</div>'
-         + (sub ? '<div style="font-size:9px;color:#A08D80;margin-top:1px">'+sub+'</div>' : '')
+         + (sub ? '<div style="font-size:9px;color:var(--gray-d);margin-top:1px">'+sub+'</div>' : '')
          + '</div>';
   }
 
   var html = '';
   html += '<div style="display:flex;gap:8px;margin-bottom:14px">'+selMes+selAno+'</div>';
 
+  // ---- teto do mês ----
+  var teto    = _trafTeto();
+  var pctTeto = teto > 0 ? (gasto / teto * 100) : 0;
+  var sobra   = teto - gasto;
+  var corTeto = pctTeto >= 100 ? 'var(--red)' : (pctTeto >= 80 ? 'var(--orange)' : 'var(--green)');
+  var msgTeto = teto === 0
+      ? 'Sem teto definido. Toque em Alterar para colocar um limite.'
+      : (pctTeto >= 100
+          ? 'ESTOUROU o teto em ' + fmt(gasto - teto) + '. Pause os anúncios agora.'
+          : (pctTeto >= 80
+              ? 'Quase no teto — sobram só ' + fmt(sobra) + '.'
+              : 'Ainda pode gastar ' + fmt(sobra) + ' este mês.'));
+
+  html += '<div style="background:#fff;border:1.5px solid var(--gray-l);border-radius:12px;padding:12px 14px;margin-bottom:14px">'
+        + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
+        + '<span style="font-size:10px;color:var(--gray-d);font-weight:700;letter-spacing:.3px">TETO DO MÊS</span>'
+        + '<span style="font-size:11px;font-weight:700;color:var(--purple);cursor:pointer" onclick="definirTetoTrafego()">Alterar</span>'
+        + '</div>'
+        + '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">'
+        + '<span style="font-size:17px;font-weight:800;color:'+corTeto+'">'+fmt(gasto)+'</span>'
+        + '<span style="font-size:12px;color:var(--gray-d)">de '+fmt(teto)+' &nbsp;<b style="color:'+corTeto+'">'+pctTeto.toFixed(0)+'%</b></span>'
+        + '</div>'
+        + '<div style="background:var(--gray-l);border-radius:99px;height:8px;overflow:hidden">'
+        + '<div style="background:'+corTeto+';height:8px;width:'+Math.min(pctTeto,100).toFixed(1)+'%"></div></div>'
+        + '<div style="font-size:11px;color:'+corTeto+';font-weight:600;margin-top:6px">'+msgTeto+'</div>'
+        + '</div>';
+
   html += '<div style="background:'+diagBg+';border-left:4px solid '+diagCor+';border-radius:10px;padding:12px 14px;margin-bottom:14px">'
         + '<div style="font-size:13px;font-weight:800;color:'+diagCor+'">'+diagTit+'</div>'
-        + '<div style="font-size:12px;color:#5C4B42;margin-top:3px;line-height:1.45">'+diagTxt+'</div></div>';
+        + '<div style="font-size:12px;color:var(--brown);margin-top:3px;line-height:1.45">'+diagTxt+'</div></div>';
 
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
-        + kpi('#FFF4EC','#B54708','GASTO COM ANÚNCIO', fmt(gasto), 'no mês')
-        + kpi('#EAF6EA','#15803D','FATUROU DE ANÚNCIO', fmt(fatAnuncio), deAnuncio.length+' pedido(s)')
+        + kpi('var(--orange-l)','var(--orange)','GASTO COM ANÚNCIO', fmt(gasto), 'no mês')
+        + kpi('var(--green-l)','var(--green)','FATUROU DE ANÚNCIO', fmt(fatAnuncio), deAnuncio.length+' pedido(s)')
         + '</div>';
   html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'
-        + kpi('#F5F1ED', roas>=3?'#15803D':(roas>=1?'#B54708':'#D92D20'), 'ROAS', (roas>0? roas.toFixed(1).replace('.',',')+'x' : '—'), 'meta: 3x')
-        + kpi('#F5F1ED','#2B2320','CUSTO POR VENDA', (custoVenda>0? fmt(custoVenda) : '—'), '')
-        + kpi('#F5F1ED', lucroLiq>=0?'#15803D':'#D92D20', 'LUCRO LÍQUIDO', fmt(lucroLiq), 'já tirando tudo')
+        + kpi('var(--gray-l)', roas>=3?'var(--green)':(roas>=1?'var(--orange)':'var(--red)'), 'ROAS', (roas>0? roas.toFixed(1).replace('.',',')+'x' : '—'), 'meta: 3x')
+        + kpi('var(--gray-l)','var(--brown)','CUSTO POR VENDA', (custoVenda>0? fmt(custoVenda) : '—'), '')
+        + kpi('var(--gray-l)', lucroLiq>=0?'var(--green)':'var(--red)', 'LUCRO LÍQUIDO', fmt(lucroLiq), 'já tirando tudo')
         + '</div>';
 
   if (semOrigem > 0) {
-    html += '<div style="background:#FFF9E6;border:1px solid #F2D98C;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#7A5B12;line-height:1.45">'
+    html += '<div style="background:#FFF9E6;border:1px solid var(--yellow);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--brown);line-height:1.45">'
           + '<b>'+semOrigem+' pedido(s) deste mês sem origem preenchida.</b><br>'
           + 'Abra o pedido e preencha "Como me achou?" — sem isso o ROAS acima fica menor que a realidade.</div>';
   }
 
   html += '<div class="card" style="margin-bottom:14px"><div class="card-body">'
-        + '<div style="font-size:12px;font-weight:800;color:#2B2320;margin-bottom:9px">DE ONDE VIERAM OS PEDIDOS</div>';
+        + '<div style="font-size:12px;font-weight:800;color:var(--brown);margin-bottom:9px">DE ONDE VIERAM OS PEDIDOS</div>';
   if (listaOrig.length === 0) {
-    html += '<div style="font-size:12px;color:#8A7A70">Nenhum pedido registrado neste mês.</div>';
+    html += '<div style="font-size:12px;color:var(--gray-d)">Nenhum pedido registrado neste mês.</div>';
   } else {
     listaOrig.forEach(function(o){
       var pct = totFat > 0 ? (o.fat/totFat*100) : 0;
-      var cor = o.nome === 'Anúncio' ? '#F76B15' : (o.nome === '(não informado)' ? '#C4B8B0' : '#875BF7');
+      var cor = o.nome === 'Anúncio' ? 'var(--orange)' : (o.nome === '(não informado)' ? 'var(--gray)' : 'var(--purple)');
       html += '<div style="margin-bottom:9px">'
             + '<div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">'
-            + '<span style="font-weight:700;color:#2B2320">'+o.nome+' <span style="font-weight:400;color:#8A7A70">('+o.n+')</span></span>'
+            + '<span style="font-weight:700;color:var(--brown)">'+o.nome+' <span style="font-weight:400;color:var(--gray-d)">('+o.n+')</span></span>'
             + '<span style="font-weight:700;color:'+cor+'">'+fmt(o.fat)+'</span></div>'
-            + '<div style="background:#F0EAE5;border-radius:99px;height:6px;overflow:hidden">'
+            + '<div style="background:var(--gray-l);border-radius:99px;height:6px;overflow:hidden">'
             + '<div style="background:'+cor+';height:6px;width:'+pct.toFixed(1)+'%"></div></div></div>';
     });
   }
   html += '</div></div>';
 
-  html += '<div style="background:#F8F5F1;border-radius:10px;padding:11px 13px;font-size:11.5px;color:#6D5D54;line-height:1.5">'
+  html += '<div style="background:var(--gray-l);border-radius:10px;padding:11px 13px;font-size:11.5px;color:var(--gray-d);line-height:1.5">'
         + '<b>Como alimentar esta tela:</b><br>'
         + '1. No pedido, preencha <b>"Como me achou?"</b> — pergunte no atendimento.<br>'
         + '2. No Financeiro, lance o gasto do anúncio como <b>Despesa Variável → '+CAT_ANUNCIO+'</b>.<br>'
@@ -6408,7 +6547,7 @@ function reconstruirListaCompras() {
   pedidos
     .filter(p => p.status !== 'Entregue' && p.status !== 'Cancelado')
     .forEach(p => {
-      (p.materiais || []).filter(m => m.status === 'pendente' && !_ehConsumo(m.nome)).forEach(mat => {
+      (p.materiais || []).filter(m => m.status === 'pendente' && !_ehConsumo(m.nome) && !window._ehServicoNome(m.nome)).forEach(mat => {
         const key = (mat.nome || '').toLowerCase().trim();
         if (!key) return;
         if (!mapa[key]) mapa[key] = { nome: mat.nome, qtdTotal: 0, pedidos: [] };
@@ -6534,11 +6673,27 @@ function exportarExcel() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────
-renderDashboard();
-document.getElementById('f-data').value = today();
+/* ───────────────────────────────────────────────────────────────────
+   Desenhar o Dashboard AQUI quebrava o app.
 
-// Init lista de compras badge
-reconstruirListaCompras();
+   Este ponto fica no meio do arquivo, e o Dashboard usa coisas que só
+   nascem bem mais abaixo (_filtroMes, _MESES_PT, _seletorMesHTML...).
+   Resultado: "ReferenceError: _filtroMes is not defined" a cada abertura,
+   e — pior — o erro interrompia as linhas seguintes deste mesmo bloco.
+   A data do formulário ficava vazia e a lista de compras não era montada,
+   sem nenhuma mensagem que ligasse uma coisa à outra.
+
+   A correção não é mudar as variáveis de lugar uma a uma (fiz isso e o
+   erro só andou para a próxima peça que faltava): é esperar o arquivo
+   inteiro terminar de carregar antes de desenhar qualquer tela.
+   ─────────────────────────────────────────────────────────────────── */
+function _iniciarTelas(){
+  try{ renderDashboard(); }catch(e){ console.error('Dashboard:', e); }
+  try{ var _fd = document.getElementById('f-data'); if(_fd) _fd.value = today(); }catch(e){}
+  try{ reconstruirListaCompras(); }catch(e){ console.error('Lista de compras:', e); }
+}
+if (document.readyState === 'complete') _iniciarTelas();
+else window.addEventListener('load', _iniciarTelas);
 
 // Init sync status
 if (SYNC_URL) {
@@ -6950,7 +7105,7 @@ function renderMateriaisPedido(materiais){
   lista.innerHTML='';
   (materiais||[]).forEach(function(m){
     const nome=m.nome||((estoque.find(function(e){return e.id===m.itemId;})||{}).nome)||'';
-    if(typeof _ehServico==='function' && _ehServico(nome)) return; // serviço (impressão, mão de obra...): não entra no pedido
+    // serviços (impressão, mão de obra...) CONTAM no custo → mantidos no pedido (só não vão pra lista de compras)
     adicionarMaterialPedido(nome,m.qtd,m.status||'pendente',m.id,m.tipo||'normal',m.size||'',m.itemId||'',(m.valor!=null&&m.valor!=='')?m.valor:'');
   });
 }
@@ -7468,16 +7623,18 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId,valor){
       '<span class="mat-badge" title="'+tipo+'">'+(selId?(_ok0?'🟢':'🟡'):emo)+'</span>'+
       '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove();calcularGastoReal()">✕</button>';
   } else {
-    var statusFinal=status==='coberto'?'coberto':(typeof checarEstoqueNome==='function'?checarEstoqueNome(nome,qtd):'pendente');
+    var _serv=window._ehServicoNome(nome);
+    var statusFinal=(status==='servico'||_serv)?'servico':(status==='coberto'?'coberto':(typeof checarEstoqueNome==='function'?checarEstoqueNome(nome,qtd):'pendente'));
     row.dataset.status=statusFinal; if(itemId) row.dataset.itemId=itemId;
-    var icon=statusFinal==='coberto'?'<svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#12B76A"/></svg>':'<svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#F79009"/></svg>';
+    var icon=window._matDot(statusFinal);
+    var _badgeTitle=statusFinal==='servico'?'Serviço — conta no custo, não vai pra lista de compras':statusFinal;
     if(valor!==''&&valor!=null) row.dataset.matUnit=String(valor);
     row.innerHTML=
       '<input type="text" class="mat-nome" value="'+nome.replace(/"/g,'&quot;')+'" placeholder="Buscar material (qualquer parte do nome)" autocomplete="off" oninput="atualizarStatusMaterial(\''+rowId+'\');_updMatUn(\''+rowId+'\');_matSugerir(\''+rowId+'\');autoPreencherPrecoMaterial(\''+rowId+'\');calcularGastoReal()" onchange="_maybeConvertColor(\''+rowId+'\')" onblur="_matSugFechar()">'+
       '<input type="number" class="mat-qtd" value="'+qtd+'" min="0.1" step="0.1" placeholder="Qtd" oninput="atualizarStatusMaterial(\''+rowId+'\');window._matAtualizaTotal(\''+rowId+'\');calcularGastoReal()">'+
       '<span class="mat-un">'+_unidadeDoNome(nome)+'</span>'+
       '<label class="mat-valor-box"><span class="pfx">R$</span><input type="text" inputmode="decimal" class="mat-valor" value="'+((valor!==''&&valor!=null)?window._moedaBR((parseFloat(valor)||0)*(parseFloat(qtd)||0)):'')+'" placeholder="0,00" title="Valor TOTAL do material (qtd × unitário)" oninput="_maskMoeda(this)"></label>'+
-      '<span class="mat-badge" title="'+statusFinal+'">'+icon+'</span>'+
+      '<span class="mat-badge" title="'+_badgeTitle+'">'+icon+'</span>'+
       '<button class="material-del" onclick="document.getElementById(\''+rowId+'\').remove();calcularGastoReal()">✕</button>';
   }
   lista.appendChild(row);
@@ -7998,9 +8155,9 @@ function _ensureJsPDF(){
   return new Promise(function(resolve,reject){
     if(window.jspdf && window.jspdf.jsPDF){ resolve(window.jspdf.jsPDF); return; }
     var s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.src='lib/jspdf.umd.min.js';
     s.onload=function(){ if(window.jspdf&&window.jspdf.jsPDF) resolve(window.jspdf.jsPDF); else reject(new Error('Gerador de PDF não carregou')); };
-    s.onerror=function(){ reject(new Error('Falha ao baixar o gerador de PDF (precisa de internet)')); };
+    s.onerror=function(){ reject(new Error('Falha ao carregar o gerador de PDF (arquivo lib/jspdf.umd.min.js)')); };
     document.head.appendChild(s);
   });
 }
@@ -8716,16 +8873,21 @@ async function autoPull(){
     const mudouLocal = JSON.stringify(novo) !== JSON.stringify(atual);
     const igualNuvem = JSON.stringify(novo) === JSON.stringify({ pedidos:d.pedidos||[], financeiro:d.financeiro||[], estoque:d.estoque||[], catalogo:d.catalogo||[], clientes:d.clientes||[], fornecedores:d.fornecedores||[], recorrentes:d.recorrentes||[] });
     if (mudouLocal) {
-      pedidos      = novo.pedidos;      DB.set('pedidos',      pedidos);
-      financeiro   = novo.financeiro;   DB.set('fin',          financeiro);
-      estoque      = novo.estoque;      DB.set('est',          estoque);
-      catalogo     = novo.catalogo;     DB.set('cat',          catalogo);
-      clientes     = novo.clientes;     DB.set('clientes',     clientes);
-      fornecedores = novo.fornecedores; DB.set('fornecedores', fornecedores);
-      if (typeof recorrentes!=='undefined') { recorrentes = novo.recorrentes; DB.set('recorrentes', recorrentes); }
-      _snapshot(); // o que veio da mesclagem não é alteração local
-      renderScreen(currentScreen);
-      toast('🔄 Atualizado da nuvem');
+      /* Com formulário aberto isto ESPERA. Trocar as listas e redesenhar no
+         meio de um cadastro apaga o que a pessoa digitou, sem aviso nenhum.
+         Ver o bloco TELA OCUPADA, no começo do arquivo. */
+      window._aplicarQuandoLivre(function(){
+        pedidos      = novo.pedidos;      DB.set('pedidos',      pedidos);
+        financeiro   = novo.financeiro;   DB.set('fin',          financeiro);
+        estoque      = novo.estoque;      DB.set('est',          estoque);
+        catalogo     = novo.catalogo;     DB.set('cat',          catalogo);
+        clientes     = novo.clientes;     DB.set('clientes',     clientes);
+        fornecedores = novo.fornecedores; DB.set('fornecedores', fornecedores);
+        if (typeof recorrentes!=='undefined') { recorrentes = novo.recorrentes; DB.set('recorrentes', recorrentes); }
+        _snapshot(); // o que veio da mesclagem não é alteração local
+        renderScreen(currentScreen);
+        toast('🔄 Atualizado da nuvem');
+      });
     }
     if (!igualNuvem) _setDirty(true); // este lado tem coisas que a nuvem não tem → envia a união no próximo ciclo
     lastSync = new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
@@ -9198,7 +9360,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v22/08-c23';
+    var ver='v08/09-c26';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9369,23 +9531,30 @@ else appLockInit();
     var data; try{ data=JSON.parse(d.payload); }catch(e){ return; }
     var temDados=(data.pedidos&&data.pedidos.length)||(data.financeiro&&data.financeiro.length)||(data.estoque&&data.estoque.length);
     if(!temDados) return;                         // segurança: nunca aplica vazio
-    pedidos=data.pedidos||[]; financeiro=data.financeiro||[]; estoque=data.estoque||[];
-    catalogo=data.catalogo||[]; clientes=data.clientes||[];
-    if(typeof fornecedores!=='undefined') fornecedores=data.fornecedores||[];
-    if(typeof ativos!=='undefined') ativos=data.ativos||[];
-    if(typeof listaCompras!=='undefined') listaCompras=data.listaCompras||[];
-    if(typeof recorrentes!=='undefined') recorrentes=data.recorrentes||[];
-    try{
-      DB.set('pedidos',pedidos); DB.set('fin',financeiro); DB.set('est',estoque);
-      DB.set('cat',catalogo); DB.set('clientes',clientes);
-      if(typeof fornecedores!=='undefined') DB.set('fornecedores',fornecedores);
-      if(typeof ativos!=='undefined') DB.set('ativos',ativos);
-      DB.set('lista_compras',(typeof listaCompras!=='undefined'?listaCompras:[]));
-    }catch(e){}
-    localStorage.setItem('ts_ultimaSync', String(rup));
-    if(typeof renderScreen==='function' && typeof currentScreen!=='undefined'){ try{ renderScreen(currentScreen); }catch(e){} }
-    if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
-    if(typeof toast==='function') toast('🔄 Atualizado da nuvem');
+
+    /* Com formulário aberto isto ESPERA. Este caminho é o mais traiçoeiro dos
+       três: o Firebase avisa em tempo real, ou seja, dispara no instante em
+       que o outro aparelho salva — bem no meio de um cadastro aqui.
+       Ver o bloco TELA OCUPADA, no começo do arquivo. */
+    window._aplicarQuandoLivre(function(){
+      pedidos=data.pedidos||[]; financeiro=data.financeiro||[]; estoque=data.estoque||[];
+      catalogo=data.catalogo||[]; clientes=data.clientes||[];
+      if(typeof fornecedores!=='undefined') fornecedores=data.fornecedores||[];
+      if(typeof ativos!=='undefined') ativos=data.ativos||[];
+      if(typeof listaCompras!=='undefined') listaCompras=data.listaCompras||[];
+      if(typeof recorrentes!=='undefined') recorrentes=data.recorrentes||[];
+      try{
+        DB.set('pedidos',pedidos); DB.set('fin',financeiro); DB.set('est',estoque);
+        DB.set('cat',catalogo); DB.set('clientes',clientes);
+        if(typeof fornecedores!=='undefined') DB.set('fornecedores',fornecedores);
+        if(typeof ativos!=='undefined') DB.set('ativos',ativos);
+        DB.set('lista_compras',(typeof listaCompras!=='undefined'?listaCompras:[]));
+      }catch(e){}
+      localStorage.setItem('ts_ultimaSync', String(rup));
+      if(typeof renderScreen==='function' && typeof currentScreen!=='undefined'){ try{ renderScreen(currentScreen); }catch(e){} }
+      if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
+      if(typeof toast==='function') toast('🔄 Atualizado da nuvem');
+    });
   }
 
   try{
