@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Catálogo de balões da Tia Sú: buquês de formatura, aniversário, cestas e decoração de festa, com o valor de cada um.">
+<meta name="theme-color" content="#FF1F78">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Balões da Tia Sú">
+<meta property="og:description" content="Buquês de formatura, aniversário, cestas e decoração de festa. O valor está embaixo de cada foto.">
+<meta property="og:image" content="https://suzananageloficial-star.github.io/tia-su-app/catalogo/fotos/b03.jpg">
+<meta property="og:url" content="https://suzananageloficial-star.github.io/tia-su-app/catalogo/">
+<link rel="icon" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<style>
+  :root{color-scheme:light dark}
+  html,body{margin:0}
+  img{max-width:100%}
+  [hidden]{display:none!important}
+</style>
+<title>Balões da Tia Sú</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap">
+
+<style>
+:root{
+  --pink:#FF1F78;
+  --blue:#17B4E0;
+  --yellow:#FFC61A;
+  --ink:#2A1826;
+  --ink-soft:#6B5566;
+  --paper:#FFFFFF;
+  --surface:#FBF3F7;
+  --surface-2:#F6ECF2;
+  --line:#EEDDE8;
+  --shadow:0 14px 34px rgba(42,24,38,.13);
+  --shadow-lift:0 24px 48px rgba(255,31,120,.20);
+  --sky-a:rgba(255,31,120,.10);
+  --sky-b:rgba(23,180,224,.10);
+  --sky-c:rgba(255,198,26,.14);
+  --chip-off:#FFFFFF;
+  --r-card:20px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#FBEFF6;
+    --ink-soft:#B399AC;
+    --paper:#17101C;
+    --surface:#1F1626;
+    --surface-2:#271C30;
+    --line:#372A42;
+    --shadow:0 14px 34px rgba(0,0,0,.5);
+    --shadow-lift:0 24px 48px rgba(255,31,120,.30);
+    --sky-a:rgba(255,31,120,.16);
+    --sky-b:rgba(23,180,224,.14);
+    --sky-c:rgba(255,198,26,.12);
+    --chip-off:#271C30;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#FBEFF6;
+  --ink-soft:#B399AC;
+  --paper:#17101C;
+  --surface:#1F1626;
+  --surface-2:#271C30;
+  --line:#372A42;
+  --shadow:0 14px 34px rgba(0,0,0,.5);
+  --shadow-lift:0 24px 48px rgba(255,31,120,.30);
+  --sky-a:rgba(255,31,120,.16);
+  --sky-b:rgba(23,180,224,.14);
+  --sky-c:rgba(255,198,26,.12);
+  --chip-off:#271C30;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Nunito","Segoe UI",system-ui,sans-serif;
+  font-size:17px;
+  line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 22px}
+
+/* ---------- Abertura ---------- */
+.hero{
+  position:relative;overflow:hidden;padding:46px 0 40px;text-align:center;
+  background:#EAF9FC url("fundo-tiasu.jpg") center/cover no-repeat;
+  color:#2A1826;
+}
+.hero .wrap{position:relative}
+.logo{width:min(230px,54vw);height:auto;display:block;margin:0 auto 10px}
+.eyebrow{
+  font-family:"Nunito",sans-serif;font-weight:800;font-size:.72rem;letter-spacing:.22em;
+  text-transform:uppercase;color:#0E8FB4;margin:0 0 6px;
+}
+h1{
+  font-family:"Baloo 2","Nunito",sans-serif;font-weight:800;
+  font-size:clamp(2.3rem,6.4vw,3.5rem);line-height:1.05;margin:0;
+  text-wrap:balance;letter-spacing:-.01em;
+}
+h1 em{font-style:normal;color:var(--pink)}
+.lede{max-width:52ch;margin:12px auto 0;color:#5B4557;font-size:1.06rem}
+.hero-cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:22px}
+
+.btn{
+  display:inline-flex;align-items:center;gap:9px;border-radius:999px;
+  font-family:"Baloo 2",sans-serif;font-weight:700;font-size:1rem;
+  padding:12px 24px;text-decoration:none;border:2px solid transparent;
+  transition:transform .16s ease, box-shadow .16s ease;
+}
+.btn-zap{background:var(--pink);color:#fff;box-shadow:0 8px 20px rgba(255,31,120,.32)}
+.btn-insta{background:rgba(255,255,255,.92);color:#2A1826;border-color:rgba(255,255,255,.95)}
+.btn:hover{transform:translateY(-2px)}
+.btn:focus-visible,.chip:focus-visible,.card:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+
+/* ---------- Filtros ---------- */
+.filters{
+  position:sticky;top:0;z-index:20;background:var(--paper);
+  border-bottom:1px solid var(--line);padding:12px 0;
+}
+.filters-inner{display:flex;gap:9px;flex-wrap:wrap;align-items:center;justify-content:center}
+.chip{
+  font-family:"Nunito",sans-serif;font-weight:700;font-size:.86rem;
+  padding:8px 16px;border-radius:999px;cursor:pointer;
+  background:var(--chip-off);color:var(--ink);
+  border:1.5px solid var(--line);
+  display:inline-flex;align-items:center;gap:8px;
+  transition:background .15s ease,color .15s ease,border-color .15s ease;
+}
+.chip .dot{width:9px;height:9px;border-radius:50%;background:var(--c,var(--pink));flex:none}
+.chip[aria-pressed="true"]{background:var(--c,var(--pink));border-color:var(--c,var(--pink));color:#fff}
+.chip[aria-pressed="true"] .dot{background:rgba(255,255,255,.85)}
+.chip .n{font-weight:600;opacity:.62;font-variant-numeric:tabular-nums}
+
+/* ---------- Galeria ---------- */
+.gallery{padding:30px 0 8px}
+.grid{columns:3;column-gap:18px}
+@media (max-width:900px){.grid{columns:2}}
+@media (max-width:540px){.grid{columns:1}}
+
+.card{
+  break-inside:avoid;display:block;width:100%;margin:0 0 18px;padding:0;
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-card);
+  overflow:hidden;cursor:zoom-in;text-align:left;color:inherit;font:inherit;
+  box-shadow:var(--shadow);
+  transition:transform .22s cubic-bezier(.2,.8,.3,1), box-shadow .22s ease;
+}
+.card:hover{transform:translateY(-6px);box-shadow:var(--shadow-lift)}
+.card img{display:block;width:100%;height:auto;background:var(--surface-2)}
+.card figcaption{padding:13px 15px 15px;display:flex;gap:10px;align-items:flex-start}
+.pin{width:11px;height:11px;border-radius:50%;margin-top:7px;flex:none;background:var(--c)}
+.cap-text{min-width:0;flex:1}
+.cap-kind{
+  display:block;font-size:.68rem;font-weight:800;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--c);margin-bottom:2px;
+}
+.cap-desc{display:block;font-size:.93rem;line-height:1.42;color:var(--ink-soft)}
+.preco{
+  font-family:"Baloo 2",sans-serif;font-weight:700;font-size:1.06rem;
+  color:var(--ink);white-space:nowrap;margin-top:14px;
+  font-variant-numeric:tabular-nums;
+}
+.preco small{display:block;font-family:"Nunito",sans-serif;font-weight:700;
+  font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-soft);margin-bottom:-3px}
+
+/* ---------- Como encomendar ---------- */
+.how{background:var(--surface);border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  margin-top:26px;padding:42px 0 46px}
+.how h2,.contact h2{
+  font-family:"Baloo 2",sans-serif;font-weight:800;font-size:clamp(1.6rem,3.6vw,2.1rem);
+  margin:0 0 6px;text-align:center;text-wrap:balance;
+}
+.how .sub{text-align:center;color:var(--ink-soft);margin:0 auto 28px;max-width:46ch}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media (max-width:760px){.steps{grid-template-columns:1fr}}
+.step{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:20px 20px 22px}
+.step .num{
+  font-family:"Baloo 2",sans-serif;font-weight:800;font-size:1.05rem;
+  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  background:var(--c);color:#fff;margin-bottom:11px;
+}
+.step h3{font-family:"Baloo 2",sans-serif;font-weight:700;font-size:1.12rem;margin:0 0 5px}
+.step p{margin:0;color:var(--ink-soft);font-size:.96rem}
+.nota{text-align:center;color:var(--ink-soft);font-size:.9rem;margin:22px auto 0;max-width:56ch}
+
+/* ---------- Contato ---------- */
+.contact{padding:46px 0 54px;text-align:center}
+.contact .sub{color:var(--ink-soft);margin:0 auto 22px;max-width:48ch}
+.handle{
+  font-family:"Baloo 2",sans-serif;font-weight:700;color:var(--blue);
+  display:block;margin-top:20px;font-size:1.02rem;text-decoration:none;
+}
+.sign{margin-top:26px;font-size:.82rem;color:var(--ink-soft);letter-spacing:.04em}
+
+/* ---------- Lightbox ---------- */
+.lb{
+  position:fixed;inset:0;z-index:60;background:rgba(20,10,18,.93);
+  display:none;align-items:center;justify-content:center;padding:26px;
+}
+.lb[open-state="1"]{display:flex}
+.lb img{max-width:100%;max-height:78vh;border-radius:14px;display:block;box-shadow:0 26px 60px rgba(0,0,0,.6)}
+.lb-cap{
+  color:#fff;font-size:.95rem;text-align:center;margin-top:14px;max-width:52ch;
+  margin-left:auto;margin-right:auto;
+}
+.lb-cap b{font-family:"Baloo 2",sans-serif;display:block;color:var(--yellow);
+  font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;margin-bottom:3px}
+.lb-preco{font-family:"Baloo 2",sans-serif;font-weight:700;display:block;
+  font-size:1.3rem;color:#fff;margin-top:6px;font-variant-numeric:tabular-nums}
+.lb-nav{
+  position:absolute;top:50%;transform:translateY(-50%);
+  width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;
+  background:rgba(255,255,255,.14);color:#fff;font-size:1.5rem;line-height:1;
+  display:grid;place-items:center;
+}
+.lb-nav:hover{background:rgba(255,255,255,.26)}
+.lb-prev{left:14px}.lb-next{right:14px}
+.lb-close{position:absolute;top:14px;right:14px;width:44px;height:44px;border-radius:50%;
+  border:none;background:rgba(255,255,255,.14);color:#fff;font-size:1.5rem;cursor:pointer}
+.lb-close:hover{background:rgba(255,255,255,.26)}
+
+
+/* ---------- Area da Tia Su (edicao de precos) ---------- */
+.link-dona{
+  display:inline-block;margin-top:18px;font-size:.78rem;color:var(--ink-soft);
+  text-decoration:none;border-bottom:1px dotted var(--line);opacity:.75;
+}
+.link-dona:hover{opacity:1;color:var(--pink)}
+.ed{position:fixed;inset:0;z-index:70;background:rgba(20,10,18,.6);
+  display:none;align-items:flex-start;justify-content:center;padding:22px;overflow:auto}
+.ed[open-state="1"]{display:flex}
+.ed-box{
+  background:var(--paper);color:var(--ink);border-radius:22px;width:100%;max-width:560px;
+  padding:26px 26px 22px;box-shadow:0 28px 70px rgba(0,0,0,.4);margin:auto;
+}
+.ed-box h2{font-family:"Baloo 2",sans-serif;font-weight:800;font-size:1.5rem;margin:0 0 4px}
+.ed-box .ed-sub{color:var(--ink-soft);font-size:.92rem;margin:0 0 18px}
+.ed-campo{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.ed-campo label{font-size:.76rem;font-weight:800;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--ink-soft)}
+.ed-campo input{
+  font:inherit;font-size:1rem;padding:12px 14px;border-radius:12px;
+  border:1.5px solid var(--line);background:var(--surface);color:var(--ink);
+}
+.ed-lista{display:flex;flex-direction:column;gap:8px;max-height:46vh;overflow:auto;
+  margin:6px 0 18px;padding-right:4px}
+.ed-item{display:flex;align-items:center;gap:12px;background:var(--surface);
+  border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.ed-item img{width:44px;height:44px;object-fit:cover;border-radius:9px;flex:none}
+.ed-item .ed-nome{flex:1;font-size:.86rem;line-height:1.3;min-width:0}
+.ed-item input{width:108px;flex:none;font:inherit;font-weight:700;font-size:.95rem;
+  padding:9px 10px;border-radius:10px;border:1.5px solid var(--line);
+  background:var(--paper);color:var(--ink);text-align:right;font-variant-numeric:tabular-nums}
+.ed-acoes{display:flex;gap:10px;flex-wrap:wrap}
+.ed-btn{font-family:"Baloo 2",sans-serif;font-weight:700;font-size:1rem;
+  padding:12px 22px;border-radius:999px;border:none;cursor:pointer}
+.ed-salvar{background:var(--pink);color:#fff;flex:1}
+.ed-fechar{background:var(--surface);color:var(--ink);border:1.5px solid var(--line)}
+.ed-aviso{font-size:.88rem;margin:0 0 14px;padding:11px 14px;border-radius:12px;display:none}
+.ed-aviso[data-tipo="erro"]{display:block;background:#FFE8F0;color:#9B0B42}
+.ed-aviso[data-tipo="ok"]{display:block;background:#E4F7EC;color:#136B3A}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation:none !important;transition:none !important}
+  .card:hover{transform:none}
+}
+</style>
+
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <img class="logo" src="logo-tiasu.png" alt="Tia Sú — Balões e Personalizados">
+    <p class="eyebrow">Catálogo de trabalhos</p>
+    <h1>Cada balão leva <em>um nome</em> escrito à mão</h1>
+    <p class="lede">Buquês de formatura, aniversário, cestas e decoração de festa. Personalizados um a um, com as cores que a pessoa ama. <strong>O valor está embaixo de cada foto</strong>, a partir de R$ 69,90.</p>
+    <div class="hero-cta">
+      <a class="btn btn-zap" href="https://wa.me/5551920000199" target="_blank" rel="noopener">Pedir meu orçamento</a>
+      <a class="btn btn-insta" href="https://instagram.com/tiasu.baloesepersonalizados" target="_blank" rel="noopener">Ver no Instagram</a>
+    </div>
+  </div>
+</header>
+
+<nav class="filters" aria-label="Filtrar por ocasião">
+  <div class="wrap filters-inner" id="chips"></div>
+</nav>
+
+<main class="gallery">
+  <div class="wrap">
+    <div class="grid" id="grid"></div>
+  </div>
+</main>
+
+<section class="how">
+  <div class="wrap">
+    <h2>Como encomendar</h2>
+    <p class="sub">Todo pedido começa por uma conversa. Quanto mais cedo, melhor: datas de formatura e fim de semana enchem rápido.</p>
+    <div class="steps">
+      <article class="step" style="--c:var(--pink)">
+        <div class="num">1</div>
+        <h3>Escolha no catálogo</h3>
+        <p>Me mande a foto do que você gostou, a data e o nome que vai no balão. O valor de cada um está aqui em cima.</p>
+      </article>
+      <article class="step" style="--c:var(--blue)">
+        <div class="num">2</div>
+        <h3>Aprove a arte</h3>
+        <p>Envio a prévia do personalizado. Você confere o nome e a escrita antes de eu produzir.</p>
+      </article>
+      <article class="step" style="--c:var(--yellow)">
+        <div class="num">3</div>
+        <h3>Retire ou receba</h3>
+        <p>Monto o buquê no dia, para o balão chegar cheio e bonito na hora da entrega.</p>
+      </article>
+    </div>
+    <p class="nota">Arcos e decoração de festa são orçados por tamanho e local. Os valores do catálogo são o ponto de partida.</p>
+  </div>
+</section>
+
+<section class="contact">
+  <div class="wrap">
+    <h2>Vamos combinar o seu?</h2>
+    <p class="sub">Me manda a data e a ocasião que eu monto a ideia com você.</p>
+    <a class="btn btn-zap" href="https://wa.me/5551920000199" target="_blank" rel="noopener">Falar no WhatsApp</a>
+    <a class="handle" href="https://instagram.com/tiasu.baloesepersonalizados" target="_blank" rel="noopener">@tiasu.baloesepersonalizados</a>
+    <p class="sign">Tia Sú · Balões &amp; Personalizados · Transformando momentos em memórias</p>
+    <a class="link-dona" href="#editar" id="abrirEditor">Área da Tia Sú</a>
+  </div>
+</section>
+
+<div class="ed" id="ed" role="dialog" aria-modal="true" aria-label="Editar preços">
+  <div class="ed-box">
+    <h2>Seus preços</h2>
+    <p class="ed-sub" id="edSub">Entre com a mesma senha do seu app para alterar os valores.</p>
+    <p class="ed-aviso" id="edAviso"></p>
+
+    <div id="edLogin">
+      <div class="ed-campo">
+        <label for="edSenha">Senha do app</label>
+        <input type="password" id="edSenha" autocomplete="current-password" placeholder="a mesma do app de gestão">
+      </div>
+      <div class="ed-acoes">
+        <button class="ed-btn ed-salvar" id="edEntrar">Entrar</button>
+        <button class="ed-btn ed-fechar" id="edCancelar">Fechar</button>
+      </div>
+    </div>
+
+    <div id="edPainel" hidden>
+      <div class="ed-lista" id="edLista"></div>
+      <div class="ed-acoes">
+        <button class="ed-btn ed-salvar" id="edSalvar">Salvar preços</button>
+        <button class="ed-btn ed-fechar" id="edSair">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Foto ampliada">
+  <button class="lb-close" id="lbClose" aria-label="Fechar">&times;</button>
+  <button class="lb-nav lb-prev" id="lbPrev" aria-label="Foto anterior">&#8249;</button>
+  <button class="lb-nav lb-next" id="lbNext" aria-label="Próxima foto">&#8250;</button>
+  <div>
+    <img id="lbImg" src="" alt="">
+    <p class="lb-cap" id="lbCap"></p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.5/firebase-app-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.5/firebase-firestore-compat.js"></script>
+<script>
+const KINDS = {
+  formatura : { label:"Formatura",            color:"var(--blue)"   },
+  aniver    : { label:"Aniversário",          color:"var(--pink)"   },
+  cesta     : { label:"Cestas & presentes",   color:"var(--yellow)" },
+  festa     : { label:"Arcos e decoração",    color:"var(--ink)"    }
+};
+
+/* Para mudar um preço, altere só o número do fim da linha. */
+const FOTOS = [
+  ["b22","festa",    "Decoração completa de 60 anos: painel, arco e cilindros", 890],
+  ["b03","formatura","Buquê de formatura com base cromada rosé e dourada",       79.90],
+  ["b09","aniver",   "Buquê de aniversário em pink e prata com laço",            79.90],
+  ["b14","formatura","Estrela metalizada tiffany com capelo e base azul",        89.90],
+  ["b17","aniver",   "Balão gigante nude com base dourada e preta",              79.90],
+  ["b26","festa",    "Painel infantil com arco colorido em cinco cores",         390],
+  ["b01","formatura","Buquê de formatura com bubble confete e base azul e prata",79.90],
+  ["b20","cesta",    "Cesta de aniversário com caixa personalizada e bubble",    139.90],
+  ["b10","aniver",   "Bubble Happy Birthday com base dourada cromada",           79.90],
+  ["b18","formatura","Estrela de formatura em Direito, marsala e dourado",       89.90],
+  ["b05","aniver",   "Bubble de aniversário com base rosé e prata",              79.90],
+  ["b23","festa",    "Arco desconstruído em azul, dourado e off-white",          390],
+  ["b16","formatura","Buquê de formatura em marsala e rosé com folhagem",        79.90],
+  ["b02","aniver",   "Bubble de aniversário com base vermelha e rosé",           79.90],
+  ["b25","formatura","Bubble luminoso entregue no dia da colação",               89.90],
+  ["b07","aniver",   "Buquê de aniversário em preto e rosé",                     79.90],
+  ["b15","formatura","Buquê de formatura em vermelho e prata",                   79.90],
+  ["b21","cesta",    "Cesta de doces com bubble e caixa personalizada",          159.90],
+  ["b24","aniver",   "Bubble para casal em preto e dourado",                     79.90],
+  ["b11","formatura","Bubble de formatura com base azul marinho e prata",        69.90],
+  ["b19","aniver",   "Buquê de 100 dias em azul, vermelho e branco",             79.90],
+  ["b04","formatura","Estrela metalizada com capelo e base azul royal",          89.90],
+  ["b08","aniver",   "Bubble com confete e laço, base preta e rosé",             79.90],
+  ["b12","formatura","Bubble de formatura com base azul royal",                  69.90],
+  ["b27","formatura","Buquê de formatura em marsala com bubble personalizado",   79.90],
+  ["b13","formatura","Bubble de formatura com capelo e base preta",              69.90],
+  ["b06","formatura","Bubble personalizado de formatura para levar na mão",      69.90]
+];
+
+const reais = v => "R$ " + Number(v).toFixed(2).replace(".", ",");
+
+/* Preços salvos por você na tela "Área da Tia Sú". Enquanto não houver
+   nada salvo, valem os números da lista acima. */
+let PRECOS_SALVOS = {};
+const precoDe = (id, padrao) =>
+  (PRECOS_SALVOS[id] !== undefined && PRECOS_SALVOS[id] !== null) ? PRECOS_SALVOS[id] : padrao;
+
+/* ---- filtros ---- */
+const chipsEl = document.getElementById("chips");
+const gridEl  = document.getElementById("grid");
+let filtro = "todos";
+
+const contagem = k => FOTOS.filter(f => f[1] === k).length;
+
+function montarChips(){
+  const itens = [["todos","Tudo","var(--pink)",FOTOS.length]]
+    .concat(Object.keys(KINDS).map(k => [k, KINDS[k].label, KINDS[k].color, contagem(k)]));
+  chipsEl.innerHTML = itens.map(([id,label,cor,n]) => `
+    <button class="chip" data-k="${id}" style="--c:${cor}" aria-pressed="${id===filtro}">
+      <span class="dot"></span>${label}<span class="n">${n}</span>
+    </button>`).join("");
+  chipsEl.querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => {
+    filtro = b.dataset.k;
+    chipsEl.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", x.dataset.k === filtro));
+    montarGrid();
+  }));
+}
+
+function visiveis(){
+  return FOTOS.filter(f => filtro === "todos" || f[1] === filtro);
+}
+
+function montarGrid(){
+  const lista = visiveis();
+  gridEl.innerHTML = lista.map(([id,kind,desc,padrao],i) => {
+    const k = KINDS[kind], preco = precoDe(id, padrao);
+    return `<figure class="card" style="--c:${k.color}" tabindex="0" role="button" data-i="${i}"
+              aria-label="Ampliar foto: ${desc}, ${reais(preco)}">
+      <img src="fotos/${id}.jpg" alt="${desc}" loading="${i < 6 ? "eager" : "lazy"}" decoding="async">
+      <figcaption>
+        <span class="pin"></span>
+        <span class="cap-text">
+          <span class="cap-kind">${k.label}</span>
+          <span class="cap-desc">${desc}</span>
+        </span>
+        <span class="preco"><small>${kind === "festa" ? "a partir de" : "por"}</small>${reais(preco)}</span>
+      </figcaption>
+    </figure>`;
+  }).join("");
+  gridEl.querySelectorAll(".card").forEach(c => {
+    c.addEventListener("click", () => abrir(+c.dataset.i));
+    c.addEventListener("keydown", e => {
+      if(e.key === "Enter" || e.key === " "){ e.preventDefault(); abrir(+c.dataset.i); }
+    });
+  });
+}
+
+/* ---- lightbox ---- */
+const lb = document.getElementById("lb");
+const lbImg = document.getElementById("lbImg");
+const lbCap = document.getElementById("lbCap");
+let atual = 0, listaAberta = [];
+
+function abrir(i){
+  listaAberta = visiveis();
+  atual = i;
+  pintar();
+  lb.setAttribute("open-state","1");
+  document.body.style.overflow = "hidden";
+  document.getElementById("lbClose").focus();
+}
+function pintar(){
+  const [id,kind,desc,padrao] = listaAberta[atual];
+  const preco = precoDe(id, padrao);
+  lbImg.src = "fotos/" + id + ".jpg";
+  lbImg.alt = desc;
+  lbCap.innerHTML = "<b>" + KINDS[kind].label + "</b>" + desc
+    + '<span class="lb-preco">' + (kind === "festa" ? "a partir de " : "")
+    + reais(preco) + "</span>";
+}
+function fechar(){
+  lb.removeAttribute("open-state");
+  document.body.style.overflow = "";
+}
+function andar(d){
+  atual = (atual + d + listaAberta.length) % listaAberta.length;
+  pintar();
+}
+
+document.getElementById("lbClose").addEventListener("click", fechar);
+document.getElementById("lbPrev").addEventListener("click", e => { e.stopPropagation(); andar(-1); });
+document.getElementById("lbNext").addEventListener("click", e => { e.stopPropagation(); andar(1); });
+lb.addEventListener("click", e => { if(e.target === lb) fechar(); });
+document.addEventListener("keydown", e => {
+  if(!lb.hasAttribute("open-state")) return;
+  if(e.key === "Escape") fechar();
+  if(e.key === "ArrowLeft") andar(-1);
+  if(e.key === "ArrowRight") andar(1);
+});
+
+montarChips();
+montarGrid();
+
+/* ============================================================
+   Área da Tia Sú — os preços ficam no mesmo Firebase do seu app.
+   Quem abre o catálogo só lê. Para alterar, precisa da senha.
+   Se o Firebase não responder, o catálogo mostra os preços da
+   lista lá de cima e nada quebra.
+   ============================================================ */
+(function(){
+  const CFG = {
+    apiKey:"AIzaSyAA-AfwpP4hljctN7FVfX_dC3_oG2J6Fjk",
+    authDomain:"tia-su-app.firebaseapp.com",
+    projectId:"tia-su-app",
+    storageBucket:"tia-su-app.firebasestorage.app",
+    messagingSenderId:"1077661946608",
+    appId:"1:1077661946608:web:cda968c2e8049e253ea835"
+  };
+  const EMAIL = "tiasu.baloesepersonalizados@gmail.com";
+  let doc = null;
+
+  try {
+    if (typeof firebase === "undefined") throw new Error("SDK não carregou");
+    firebase.initializeApp(CFG);
+    doc = firebase.firestore().collection("tiasu_catalogo").doc("precos");
+    doc.get().then(snap => {
+      const dados = snap.exists && snap.data();
+      if (dados && dados.precos) { PRECOS_SALVOS = dados.precos; montarGrid(); }
+    }).catch(e => console.warn("[preços] não consegui ler da nuvem:", e.message));
+  } catch (e) {
+    console.warn("[preços] Firebase indisponível, usando os preços do arquivo:", e.message);
+  }
+
+  const ed      = document.getElementById("ed");
+  const aviso   = document.getElementById("edAviso");
+  const painel  = document.getElementById("edPainel");
+  const login   = document.getElementById("edLogin");
+  const lista   = document.getElementById("edLista");
+  const senhaEl = document.getElementById("edSenha");
+
+  function dizer(texto, tipo){
+    aviso.textContent = texto;
+    if (tipo) aviso.setAttribute("data-tipo", tipo); else aviso.removeAttribute("data-tipo");
+  }
+  function abrir(){
+    ed.setAttribute("open-state","1");
+    document.body.style.overflow = "hidden";
+    (painel.hidden ? senhaEl : lista).focus();
+  }
+  function fechar(){
+    ed.removeAttribute("open-state");
+    document.body.style.overflow = "";
+    if (location.hash === "#editar") history.replaceState(null,"",location.pathname);
+  }
+
+  function montarPainel(){
+    lista.innerHTML = FOTOS.map(([id,kind,desc,padrao]) => `
+      <div class="ed-item">
+        <img src="fotos/${id}.jpg" alt="">
+        <span class="ed-nome">${desc}</span>
+        <input type="number" step="0.01" min="0" data-id="${id}"
+               value="${precoDe(id,padrao)}" aria-label="Preço de ${desc}">
+      </div>`).join("");
+    login.hidden = true;
+    painel.hidden = false;
+    document.getElementById("edSub").textContent =
+      "Troque os valores e toque em Salvar. Muda na hora para quem abrir o link.";
+  }
+
+  const gatilho = document.getElementById("abrirEditor");
+  if (gatilho) gatilho.addEventListener("click", e => { e.preventDefault(); abrir(); });
+  if (location.hash === "#editar") abrir();
+  document.getElementById("edCancelar").addEventListener("click", fechar);
+  document.getElementById("edSair").addEventListener("click", fechar);
+  ed.addEventListener("click", e => { if (e.target === ed) fechar(); });
+
+  document.getElementById("edEntrar").addEventListener("click", () => {
+    if (!doc) { dizer("Não consegui falar com o Firebase. Tente de novo com internet.","erro"); return; }
+    const senha = (senhaEl.value || "").trim();
+    if (!senha) { dizer("Digite a senha do app.","erro"); return; }
+    dizer("Entrando...", "ok");
+    firebase.auth().signInWithEmailAndPassword(EMAIL, senha)
+      .then(() => { dizer("",null); montarPainel(); })
+      .catch(() => dizer("Senha não confere. É a mesma que você usa no app de gestão.","erro"));
+  });
+  senhaEl.addEventListener("keydown", e => {
+    if (e.key === "Enter") document.getElementById("edEntrar").click();
+  });
+
+  document.getElementById("edSalvar").addEventListener("click", () => {
+    const novos = {};
+    let erro = false;
+    lista.querySelectorAll("input[data-id]").forEach(inp => {
+      const v = parseFloat(inp.value);
+      if (isNaN(v) || v < 0) { erro = true; inp.style.borderColor = "var(--pink)"; return; }
+      inp.style.borderColor = "";
+      novos[inp.dataset.id] = Math.round(v * 100) / 100;
+    });
+    if (erro) { dizer("Tem valor em branco ou inválido. Confira os campos marcados.","erro"); return; }
+    dizer("Salvando...", "ok");
+    doc.set({ precos: novos, updatedAt: Date.now() })
+      .then(() => {
+        PRECOS_SALVOS = novos;
+        montarGrid();
+        dizer("Salvo. O catálogo já está com os novos valores.","ok");
+      })
+      .catch(e => dizer("Não deu para salvar: " + (e.code || e.message),"erro"));
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape" && ed.hasAttribute("open-state")) fechar();
+  });
+})();
+</script>
+
+</body>
+</html>
