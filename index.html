@@ -5845,6 +5845,11 @@ function gerarRecibo(id){
   L.push('Produto/Evento: '+(p.produto||'-'));
   L.push('Data de entrega: '+_dtBR(p.dataEntrega));
   L.push('Pagamento: '+(p.pgto||'PIX'));
+  // Observações: a imagem do recibo já mostrava, a página e o texto não.
+  // No celular a imagem não é gerada (a aba nova perde o app de origem) e
+  // o recibo sai pela página, por isso a observação sumia só lá.
+  var obs=(p.obs||'').trim();
+  if(obs) L.push('Observações: '+obs);
   if(p.itens&&p.itens.length){ L.push(''); L.push('Itens:'); p.itens.forEach(function(it){ L.push('- '+(it.nome||'')+' ('+(it.qtd||0)+' '+(it.un||'un')+') = '+fmt((it.qtd||0)*(it.preco||0))); }); }
   L.push('');
   L.push('Total: '+fmt(p.valor));
@@ -5873,6 +5878,7 @@ function gerarRecibo(id){
    +'.tt .e{font-size:11px;color:#aaa;margin-top:6px}.tt .d{font-size:16px;font-weight:700;color:#3a3a40}'
    +'.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 30px;margin-bottom:14px}'
    +'.f .k{font-size:10px;color:#c98aa5;letter-spacing:1px;text-transform:uppercase;font-weight:700}.f .v{font-size:14px;font-weight:600;color:#333;margin-top:2px}.full{grid-column:1/-1}'
+   +'.obs{background:#FFF9E6;border-radius:10px;padding:10px 14px;margin:0 0 16px}.obs .v{font-size:14px;color:#333;margin-top:4px;line-height:1.5;white-space:pre-line}'
    +'table.it{width:100%;border-collapse:collapse;margin:4px 0 16px}'
    +'table.it th{background:#FCE4EC;color:#C2185B;font-size:10px;text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:8px 10px}'
    +'table.it th.r,table.it td.r{text-align:right}table.it td{border-bottom:1px solid #f2f2f2;padding:8px 10px;font-size:14px}'
@@ -5898,6 +5904,7 @@ function gerarRecibo(id){
    +'<div class="f"><div class="k">Produto / Evento</div><div class="v">'+(p.produto||'-')+'</div></div>'
    +'<div class="f"><div class="k">Pagamento</div><div class="v">'+(p.pgto||'PIX')+'</div></div>'
    +'</div>'
+   +(obs?'<div class="f obs"><div class="k">Observações</div><div class="v">'+obs.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div></div>':'')
    + itHtml
    +'<div class="boxes">'
    +'<div class="box"><div class="l">Total</div><div class="v">'+fmt(p.valor)+'</div></div>'
@@ -9360,7 +9367,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v08/09-c26';
+    var ver='v15/09-c27';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
