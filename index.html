@@ -1482,7 +1482,7 @@ html, body {
         </div>
         <datalist id="estoque-datalist"></datalist>
         <div id="p-materiais-lista" style="display:flex;flex-direction:column;gap:6px"></div>
-        <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">Cada linha: material · qtd · <b>R$ por unidade</b> (puxa da última despesa, dá pra ajustar) · status. <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#F79009"/></svg> Pendente = ainda não comprado | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#12B76A"/></svg> Coberto = já no estoque | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#0BA5EC"/></svg> Serviço (impressão, mão de obra, hélio, frete) = conta no custo, mas <b>não vai pra lista de compras</b>.</div>
+        <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">Cada linha: material · qtd · <b>R$ por unidade</b> (puxa da última despesa, dá pra ajustar) · status. <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#F79009"/></svg> Pendente = ainda não comprado | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#12B76A"/></svg> Coberto = já no estoque | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#0BA5EC"/></svg> Serviço (impressão, mão de obra, hélio, frete) = conta no custo. Marque <b>comprar</b> no que precisa ser comprado: é isso que monta a tela Compras.</div>
       </div>
     </div>
     <div class="form-actions" style="flex-direction:column;gap:6px">
@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v17/09-c31';
+    var ver='v17/09-c32';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9526,7 +9526,8 @@ else appLockInit();
 
 <!-- ════════ APP ENXUTO: LINHAS DO PEDIDO + ITENS AVULSOS (Claude 17/09/2026) ════════ -->
 <style>
-#nav-estoque,#nav-compras{display:none!important}
+/* Estoque virou PRODUTOS (abre o cadastro de itens e preços).
+   Compras voltou, agora como a lista do que foi marcado nos pedidos. */
 #p-linhas-botoes{margin-bottom:10px}
 .ln-botoes{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .ln-bt{border:1.5px solid var(--pink);background:#fff;color:var(--pink);border-radius:18px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer}
@@ -9546,6 +9547,15 @@ else appLockInit();
 .ln-cor-box{display:flex;gap:6px;align-items:center;margin-top:4px}
 .ln-cor{flex:1;border:1px solid #e7d3dd;border-radius:8px;padding:7px;font-size:12px;background:#fff}
 .ln-auto{font-size:11px;color:#7a6a70;background:#fff;border-radius:8px;padding:6px 8px;margin-top:4px;line-height:1.4}
+.ln-padrao{width:100%;margin-top:6px;border:1.5px dashed var(--pink);background:#fff;color:var(--pink);border-radius:9px;padding:7px;font-size:11px;font-weight:700;cursor:pointer}
+.material-row .mat-comprar{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--gray-d);font-weight:700;cursor:pointer;margin-top:2px}
+.material-row .mat-comprar input{width:16px;height:16px;accent-color:#F79009}
+.cp-card{background:#fff;border:1px solid #eee;border-radius:12px;padding:12px;margin-bottom:10px}
+.cp-linha{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f4f4f6;font-size:13px}
+.cp-linha:last-child{border-bottom:none}
+.cp-nome{flex:1}
+.cp-qtd{font-weight:700;white-space:nowrap}
+.cp-val{color:var(--gray-d);white-space:nowrap;font-size:12px}
 .le-ajuda{font-size:11px;color:var(--gray-d);line-height:1.5;margin-bottom:10px}
 .le-card{border:1px solid #eee;border-radius:12px;padding:10px;margin-bottom:10px;background:#fff}
 .le-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
@@ -9612,7 +9622,7 @@ else appLockInit();
      linha de Materiais do pedido, para aparecer na comanda de produção e
      ser somado uma vez só.                                             */
   function gTamanho(){ return {nome:'Tamanho', varios:false, mostrarNome:false, opcoes:[{nome:'Individual',custo:0},{nome:'Duplo',custo:0,vezes:2}]}; }
-  function gPires(){ return {nome:'Pires', varios:false, mostrarNome:true, opcoes:[{nome:'Madeira',custo:0},{nome:'Cerâmica',custo:0}]}; }
+  function gPires(){ return {nome:'Pires', varios:false, mostrarNome:true, opcoes:[{nome:'Madeira',custo:0},{nome:'Coração madeira',custo:0},{nome:'Cerâmica',custo:0}]}; }
   function gItem(nome, filtro){ return {nome:nome, tipo:'item', filtro:filtro||'', opcoes:[]}; }
   function gLista(nome, sugestoes){ return {nome:nome, tipo:'lista', filtro:'', opcoes:(sugestoes||[]).map(function(n){ return {nome:n}; })}; }
   function gCores(){ return {nome:'Cores', tipo:'cores', opcoes:[]}; }
@@ -9644,7 +9654,7 @@ else appLockInit();
       gCores(), gItem('Fita de cetim','fita de cetim')]}
   ];
   var IDS_PADRAO=LINHAS_PADRAO.map(function(l){ return l.id; });
-  var ESTRUTURA=2;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
+  var ESTRUTURA=3;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
 
   /* ── dados ─────────────────────────────────────────────────────── */
   window._seedLinhas=function(){
@@ -9659,11 +9669,18 @@ else appLockInit();
         return;
       }
       if((atual.estrutura||0) >= ESTRUTURA) return;
-      // linha antiga: ganha os campos novos, mas guarda os custos já digitados
-      var custos={};
-      (atual.grupos||[]).forEach(function(g){ (g.opcoes||[]).forEach(function(o){ if(parseFloat(o.custo)>0) custos[g.nome+'|'+o.nome]=parseFloat(o.custo); }); });
-      atual.grupos=copia(d.grupos);
-      (atual.grupos||[]).forEach(function(g){ (g.opcoes||[]).forEach(function(o){ var c=custos[g.nome+'|'+o.nome]; if(c>0) o.custo=c; }); });
+      /* Linha antiga ganha o que é novo SEM perder o que ela mexeu: grupo
+         que já existe mantém nome, filtro e custos, e só recebe as opções
+         que faltavam. Grupo que ela criou continua onde está. */
+      atual.grupos=atual.grupos||[];
+      copia(d.grupos).forEach(function(novo, pos){
+        var velho=atual.grupos.filter(function(g){ return g && g.nome===novo.nome; })[0];
+        if(!velho){ atual.grupos.splice(Math.min(pos, atual.grupos.length), 0, novo); return; }
+        if(novo.tipo && !velho.tipo) velho.tipo=novo.tipo;
+        (novo.opcoes||[]).forEach(function(o){
+          if(!(velho.opcoes||[]).some(function(x){ return x.nome===o.nome; })){ velho.opcoes=velho.opcoes||[]; velho.opcoes.push(o); }
+        });
+      });
       atual.estrutura=ESTRUTURA; mexeu++;
     });
     if(mexeu){ try{ DB.set('cat', catalogo); }catch(e){} }
@@ -9935,6 +9952,8 @@ else appLockInit();
     if(insumos.length){
       html+='<div class="ln-auto">Entram sozinhos: '+insumos.map(function(x){ return esc(x.n); }).join(' · ')+'</div>';
     }
+    // guardar esta montagem como a que já vem marcada da próxima vez
+    html+='<button type="button" class="ln-padrao" data-padrao="1">Salvar esta montagem como padrão do '+esc(l.nome)+'</button>';
     if(!html) html='<div class="le-ajuda" style="margin:0">Esta linha ainda não tem campos. Configure em Precificação, Linhas do pedido.</div>';
     p.innerHTML=html+'<div class="ln-custo"></div>';
     var dl=document.getElementById('ts-cores-datalist');
@@ -9997,11 +10016,33 @@ else appLockInit();
   }
   function preencherProduto(nome){ var el=document.getElementById('p-produto'); if(el && !el.value.trim()) el.value=nome; }
 
+  /* PADRÃO DO KIT (pedido da Suzana em 17/09): guarda a montagem atual na
+     linha, e todo kit novo já nasce com ela marcada. Não mexe em pedido
+     salvo, e a cor do balão fica de fora: cor é de cada pedido.        */
+  function salvarPadrao(row){
+    var l=porId(row.dataset.linhaId); if(!l) return;
+    var sel=selDe(row), padrao={};
+    (l.grupos||[]).forEach(function(g){
+      if(g.tipo==='cores') return;
+      var v=sel[g.nome]; if(v && v.length) padrao[g.nome]=copia(v);
+    });
+    if(sel['__papel']) padrao['__papel']=sel['__papel'];
+    var quantos=0; for(var k in padrao) quantos++;
+    if(!quantos){ toast('Marque o que vai no kit antes de salvar o padrão'); return; }
+    if(!confirm('Salvar esta montagem como padrão do "'+l.nome+'"?\n\nTodo '+l.nome+' novo já vem com ela marcada. Os pedidos já salvos não mudam.')) return;
+    l.padrao=padrao; save();
+    toast('Padrão do '+l.nome+' salvo');
+    renderPainel(row);
+  }
+  window._padraoDaLinha=function(l){ return (l && l.padrao) ? copia(l.padrao) : {}; };
+
   window._addLinhaPedido=function(linhaId, salvo){
     var li=lista(); if(!li) return;
     var l=porId(linhaId);
-    var sel=(salvo && salvo.opcoes) || {};
-    adicionarItemPedido(salvo ? salvo.nome : (l ? l.nome : ''), salvo ? salvo.qtd : 1, salvo ? salvo.preco : '', salvo ? salvo.un : 'un');
+    // kit novo já nasce com a montagem padrão que ela salvou
+    var sel=(salvo && salvo.opcoes) || window._padraoDaLinha(l);
+    var nomeIni = salvo ? salvo.nome : (l ? window._nomeLinha(l, sel) : '');
+    adicionarItemPedido(nomeIni, salvo ? salvo.qtd : 1, salvo ? salvo.preco : '', salvo ? salvo.un : 'un');
     var row=li.lastElementChild; if(!row) return;
     row.dataset.linhaId=linhaId;
     row.dataset.opcoes=JSON.stringify(sel);
@@ -10010,8 +10051,9 @@ else appLockInit();
     if(l){
       var painel=document.createElement('div'); painel.className='linha-painel'; painel.dataset.for=row.id;
       painel.addEventListener('click', function(ev){
-        var b=ev.target.closest('.ln-chip, .ln-x'); if(!b) return;
+        var b=ev.target.closest('.ln-chip, .ln-x, .ln-padrao'); if(!b) return;
         ev.preventDefault();
+        if(b.dataset.padrao!=null){ salvarPadrao(row); return; }
         if(b.dataset.papel!=null){ var s=selDe(row); s['__papel']=b.dataset.papel; mudou(row, s); return; }
         if(b.dataset.add!=null){ addItem(row, b.dataset.g, b.dataset.add, 1); return; }
         if(b.dataset.cor!=null){ tiraCor(row, b.dataset.g, b.dataset.cor); return; }
@@ -10192,13 +10234,19 @@ else appLockInit();
     if(aba==='i'){
       var busca=(rasc.busca||'').toLowerCase();
       var itens=rasc.itens.filter(function(x){ return !busca || x.nome.toLowerCase().indexOf(busca)>=0; });
-      box.innerHTML='<div class="le-ajuda">Tudo o que já está cadastrado, em ordem alfabética: o estoque antigo e os avulsos das compras. O preço é <b>por unidade</b>. Quem multiplica pela quantidade é o pedido.</div>'
-        +'<div class="le-row"><input type="text" id="le-busca" value="'+esc(rasc.busca||'')+'" placeholder="Buscar item" style="flex:1"></div>'
-        +'<div class="le-mini" style="margin-bottom:6px">'+itens.length+' itens'+(busca?(' de '+rasc.itens.length):'')+'</div>'
+      box.innerHTML='<div class="le-ajuda">Tudo o que está cadastrado, em ordem alfabética: os produtos do estoque antigo e os avulsos das compras. Dá para <b>corrigir o nome</b>, ajustar o <b>preço por unidade</b> e excluir o que não usa mais. Quem multiplica pela quantidade é o pedido.</div>'
+        +'<div class="le-row"><input type="text" id="le-busca" value="'+esc(rasc.busca||'')+'" placeholder="Buscar produto" style="flex:1"></div>'
+        +'<div class="le-mini" style="margin-bottom:6px">'+itens.length+' produtos'+(busca?(' de '+rasc.itens.length):'')+'</div>'
         + itens.map(function(x){
-            return '<div class="le-row"><span class="le-mini" style="flex:1;white-space:normal;font-weight:600;color:#444">'+esc(x.nome)+'</span>'
-              +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-k="r.custo" data-ri="'+rasc.itens.indexOf(x)+'" value="'+num(x.custo)+'" placeholder="0,00" style="width:90px"></div>';
-          }).join('');
+            var ri=rasc.itens.indexOf(x);
+            return '<div class="le-card" style="padding:8px">'
+              +'<div class="le-row"><input type="text" data-k="r.nome" data-ri="'+ri+'" value="'+esc(x.nome)+'" style="flex:1;font-weight:600">'
+              +'<button type="button" class="le-x" data-act="delr" data-ri="'+ri+'" title="Excluir produto">×</button></div>'
+              +'<div class="le-row" style="margin-bottom:0"><span class="le-mini" style="flex:1">'+esc(x.cat||'sem categoria')+'</span>'
+              +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-k="r.custo" data-ri="'+ri+'" value="'+num(x.custo)+'" placeholder="0,00" style="width:90px"></div>'
+              +'</div>';
+          }).join('')
+        + '<button type="button" class="le-add" data-act="addr">+ novo produto</button>';
       var b=document.getElementById('le-busca');
       if(b) b.addEventListener('input', function(){ rasc.busca=b.value; desenhar(); setTimeout(function(){ var n=document.getElementById('le-busca'); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } },0); });
       return;
@@ -10259,6 +10307,7 @@ else appLockInit();
     switch(k){
       case 'g.filtro': if(G) G.filtro=val; break;
       case 'r.custo': if(R){ R.custo=R2(val); R.mexido=true; } break;
+      case 'r.nome': if(R){ R.nome=val; R.mexido=true; } break;
       case 'l.nome': if(L) L.nome=val; break;
       case 'l.ativo': if(L) L.ativo=val; break;
       case 'l.custoBase': if(L) L.custoBase=R2(val); break;
@@ -10288,6 +10337,14 @@ else appLockInit();
       case 'delg': if(L && confirm('Excluir este grupo de opções?')) L.grupos.splice(gi,1); break;
       case 'addo': if(L && L.grupos[gi]){ L.grupos[gi].opcoes=L.grupos[gi].opcoes||[]; L.grupos[gi].opcoes.push({nome:'', custo:0}); } break;
       case 'delo': if(L && L.grupos[gi]) L.grupos[gi].opcoes.splice(oi,1); break;
+      case 'addr': rasc.itens.unshift({id:'', nome:'', custo:0, cat:'Produto', un:'un', mexido:true, novo:true}); rasc.busca=''; break;
+      case 'delr':
+        var pr=rasc.itens[idx(b,'ri')];
+        if(pr && confirm('Excluir o produto "'+(pr.nome||'sem nome')+'" do cadastro? Os pedidos já salvos não mudam.')){
+          if(pr.id) rasc.removidosR.push(pr.id);
+          rasc.itens.splice(idx(b,'ri'),1);
+        }
+        break;
       case 'adda': rasc.avulsos.push({id:uid(), avulso:true, nome:'', cat:'Avulso', un:'un', custo:0, matCusto:0, preco:0, mg:0}); break;
       case 'dela': if(rasc.avulsos[ai] && confirm('Excluir o avulso "'+(rasc.avulsos[ai].nome||'sem nome')+'"? Pedidos já salvos não mudam.')){ rasc.removidosA.push(rasc.avulsos[ai].id); rasc.avulsos.splice(ai,1); } break;
       default: return;
@@ -10296,7 +10353,7 @@ else appLockInit();
   }
   window._abrirLinhas=function(){
     window._seedItens(); window._seedLinhas(); criarModal();
-    rasc={linhas:copia(linhas()), avulsos:copia(avulsos()), itens:copia(window._registroItens()), busca:'', removidosL:[], removidosA:[]};
+    rasc={linhas:copia(linhas()), avulsos:copia(avulsos()), itens:copia(window._registroItens()), busca:'', removidosL:[], removidosA:[], removidosR:[]};
     aba='l'; desenhar();
     openModal('modal-linhas');
   };
@@ -10318,12 +10375,45 @@ else appLockInit();
       if(!A.nome){ if(i>=0) rasc.removidosA.push(A.id); return; }
       if(i>=0) catalogo[i]=Object.assign({}, catalogo[i], A); else catalogo.push(A);
     });
-    // preços digitados na aba Itens e preços voltam para onde o item mora
+    /* aba Produtos: nome e preço voltam para onde o produto mora, e o
+       nome novo é reescrito nas linhas para não quebrar o vínculo */
+    function renomearNasLinhas(de, para){
+      linhas().forEach(function(L){
+        (L.grupos||[]).forEach(function(g){
+          (g.opcoes||[]).forEach(function(o){ if(o.nome===de) o.nome=para; });
+        });
+        if(L.padrao) Object.keys(L.padrao).forEach(function(k){
+          L.padrao[k]=(L.padrao[k]||[]).map(function(v){
+            if(typeof v==='string') return v===de?para:v;
+            if(v && v.n===de) v.n=para;
+            return v;
+          });
+        });
+      });
+    }
     (rasc.itens||[]).filter(function(x){ return x.mexido; }).forEach(function(x){
+      var nome=(x.nome||'').trim();
+      if(x.novo){
+        if(!nome) return;
+        var id='it_'+nome.toLowerCase().replace(/[^a-z0-9]+/g,'_').slice(0,44);
+        if((typeof estoque!=='undefined'?estoque:[]).some(function(y){ return y && y.id===id; })) return;
+        estoque.push({ id:id, nome:nome, cat:x.cat||'Produto', un:x.un||'un', qtd:0, min:0, preco:R2(x.custo), forn:'' });
+        return;
+      }
       var e=(typeof estoque!=='undefined'?estoque:[]).filter(function(y){ return y && y.id===x.id; })[0];
-      if(e){ e.preco=R2(x.custo); return; }
+      if(e){
+        if(nome && nome!==e.nome){ renomearNasLinhas(e.nome, nome); e.nome=nome; }
+        e.preco=R2(x.custo); return;
+      }
       var a=catalogo.filter(function(p){ return p && p.id===x.id; })[0];
-      if(a){ a.custo=R2(x.custo); a.matCusto=a.custo; }
+      if(a){
+        if(nome && nome!==a.nome){ renomearNasLinhas(a.nome, nome); a.nome=nome; }
+        a.custo=R2(x.custo); a.matCusto=a.custo;
+      }
+    });
+    (rasc.removidosR||[]).forEach(function(id){
+      if(typeof estoque!=='undefined') estoque=estoque.filter(function(y){ return !(y && y.id===id); });
+      catalogo=catalogo.filter(function(p){ return !(p && p.id===id && p.avulso); });
     });
     var fora=rasc.removidosL.concat(rasc.removidosA);
     if(fora.length) catalogo=catalogo.filter(function(p){ return !(p && fora.indexOf(p.id)>=0); });
@@ -10332,6 +10422,98 @@ else appLockInit();
     if(typeof renderCatalogo==='function') try{ renderCatalogo(); }catch(e){}
     toast('Linhas e avulsos salvos');
   };
+
+  /* ── CAIXINHA "COMPRAR" NO MATERIAL (pedido da Suzana, 17/09) ──────
+     Cada material do pedido ganha uma marca. O que ela marcar vira a
+     lista da tela Compras, agrupada por item e mostrando de quais
+     pedidos veio. Antes a lista era montada sozinha pelo status do
+     material; agora quem manda é a marca dela.                        */
+  var addMatOrig=window.adicionarMaterialPedido;
+  window.adicionarMaterialPedido=function(){
+    addMatOrig.apply(this, arguments);
+    var row=document.querySelector('#p-materiais-lista .material-row:last-child');
+    if(row && !row.querySelector('.mat-comprar')){
+      var lb=document.createElement('label'); lb.className='mat-comprar'; lb.title='Entra na lista de compras';
+      lb.innerHTML='<input type="checkbox"><span>comprar</span>';
+      row.appendChild(lb);
+    }
+  };
+  var coletarMatOrig=window.coletarMateriaisPedido;
+  window.coletarMateriaisPedido=function(){
+    var mats=coletarMatOrig.apply(this, arguments);
+    var marca={};
+    document.querySelectorAll('#p-materiais-lista .material-row').forEach(function(r){
+      var c=r.querySelector('.mat-comprar input');
+      if(r.dataset.matId) marca[r.dataset.matId]=!!(c && c.checked);
+    });
+    mats.forEach(function(m){ if(marca[m.id]) m.comprar=true; });
+    return mats;
+  };
+  var renderMatOrig=window.renderMateriaisPedido;
+  window.renderMateriaisPedido=function(materiais){
+    renderMatOrig.apply(this, arguments);
+    (materiais||[]).forEach(function(m){
+      if(!m || !m.comprar) return;
+      var r=document.querySelector('#p-materiais-lista .material-row[data-mat-id="'+m.id+'"]');
+      var c=r && r.querySelector('.mat-comprar input'); if(c) c.checked=true;
+    });
+  };
+  window.reconstruirListaCompras=function(){
+    var mapa={};
+    (pedidos||[]).filter(function(p){ return p && p.status!=='Entregue' && p.status!=='Cancelado'; }).forEach(function(p){
+      (p.materiais||[]).filter(function(m){ return m && m.comprar; }).forEach(function(mat){
+        var key=String(mat.nome||'').toLowerCase().trim(); if(!key) return;
+        if(!mapa[key]) mapa[key]={ nome:mat.nome, qtdTotal:0, pedidos:[] };
+        mapa[key].qtdTotal += (parseFloat(mat.qtd)||1);
+        if(mapa[key].pedidos.indexOf(p.id)<0) mapa[key].pedidos.push(p.id);
+      });
+    });
+    var novo=[];
+    for(var k in mapa){
+      var ex=(typeof listaCompras!=='undefined'?listaCompras:[]).filter(function(i){
+        return String(i.nome||'').toLowerCase().trim()===String(mapa[k].nome||'').toLowerCase().trim(); })[0];
+      novo.push({ id:(ex&&ex.id)||uid(), criadoEm:(ex&&ex.criadoEm)||new Date().toISOString(),
+                  nome:mapa[k].nome, qtdTotal:Math.round(mapa[k].qtdTotal*100)/100, pedidos:mapa[k].pedidos });
+    }
+    novo.sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); });
+    listaCompras=novo;
+    try{ DB.set('lista_compras', listaCompras); }catch(e){}
+    if(typeof atualizarBadgeCompras==='function') atualizarBadgeCompras();
+  };
+  /* conciliar na tela Compras tira a marca do material nos pedidos */
+  var confirmarOrig=window.confirmarCompraItem;
+  if(typeof confirmarOrig==='function'){
+    window.confirmarCompraItem=function(id){
+      var item=(typeof listaCompras!=='undefined'?listaCompras:[]).filter(function(i){ return i && i.id===id; })[0];
+      var nome=item?String(item.nome||'').toLowerCase().trim():'';
+      var ret=confirmarOrig.apply(this, arguments);
+      if(nome){
+        var mexeu=false;
+        (pedidos||[]).forEach(function(p){
+          (p.materiais||[]).forEach(function(m){
+            if(m && m.comprar && String(m.nome||'').toLowerCase().trim()===nome){ delete m.comprar; mexeu=true; }
+          });
+        });
+        if(mexeu){ save(); if(typeof renderCompras==='function') renderCompras(); }
+      }
+      return ret;
+    };
+  }
+  var renderComprasOrig=window.renderCompras;
+  window.renderCompras=function(){
+    var sub=document.getElementById('compras-sub');
+    if(sub) sub.textContent='O que você marcou como "comprar" nos materiais dos pedidos';
+    return renderComprasOrig.apply(this, arguments);
+  };
+
+  /* menu: Estoque virou Produtos e abre o cadastro de itens e preços */
+  window._abrirProdutos=function(){ window._abrirLinhas(); aba='i'; desenhar(); };
+  function ajustarMenu(){
+    var b=document.getElementById('nav-estoque');
+    if(!b) return;
+    b.setAttribute('onclick','_abrirProdutos()');
+    var lb=b.querySelector('.nav-label'); if(lb) lb.textContent='Produtos';
+  }
 
   function botaoPrecificacao(){
     var tela=document.getElementById('screen-preco'); if(!tela || document.getElementById('le-atalho')) return;
@@ -10346,7 +10528,7 @@ else appLockInit();
 
   function iniciar(){
     try{
-      window._seedItens(); window._seedLinhas(); criarModal(); botaoPrecificacao();
+      window._seedItens(); window._seedLinhas(); criarModal(); botaoPrecificacao(); ajustarMenu();
       if(!document.getElementById('ts-cores-datalist')){
         var dl=document.createElement('datalist'); dl.id='ts-cores-datalist'; document.body.appendChild(dl);
       }
