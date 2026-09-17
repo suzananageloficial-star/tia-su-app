@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v17/09-c34';
+    var ver='v17/09-c35';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9550,8 +9550,16 @@ else appLockInit();
 .ln-cor{flex:1;border:1px solid #e7d3dd;border-radius:8px;padding:7px;font-size:12px;background:#fff}
 .ln-auto{font-size:11px;color:#7a6a70;background:#fff;border-radius:8px;padding:6px 8px;margin-top:4px;line-height:1.4}
 .ln-padrao{width:100%;margin-top:6px;border:1.5px dashed var(--pink);background:#fff;color:var(--pink);border-radius:9px;padding:7px;font-size:11px;font-weight:700;cursor:pointer}
-.material-row .mat-comprar{grid-column:1/-1;display:flex;align-items:center;gap:6px;font-size:11px;color:var(--gray-d);font-weight:700;cursor:pointer;margin-top:2px}
-.material-row .mat-comprar input{width:16px;height:16px;accent-color:#F79009}
+/* "comprar" ao lado do preço, para a linha não crescer (Suzana, 17/09) */
+.material-row{grid-template-columns:1fr 46px 96px 24px 18px 14px!important}
+.material-row .mat-comprar{display:flex;align-items:center;justify-content:center;cursor:pointer;margin:0}
+.material-row .mat-comprar span{display:none}
+.material-row .mat-comprar input{width:17px;height:17px;accent-color:#F79009;margin:0}
+/* materiais agrupados pelo item do pedido */
+.mat-grupo{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--pink);
+  background:#FDF2F7;border-radius:8px;padding:6px 8px;margin:8px 0 4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mat-grupo:first-child{margin-top:0}
 .cp-card{background:#fff;border:1px solid #eee;border-radius:12px;padding:12px;margin-bottom:10px}
 .cp-linha{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f4f4f6;font-size:13px}
 .cp-linha:last-child{border-bottom:none}
@@ -9629,7 +9637,24 @@ else appLockInit();
   function gPires(){ return gItem('Pires','pires'); }
   function gItem(nome, filtro, sempre){ var g={nome:nome, tipo:'item', filtro:filtro||'', opcoes:[]}; if(sempre) g.sempre=true; return g; }
   /* grupo de botões que ela prefere ver como lista */
-  function gLista1(nome, opcoes){ return {nome:nome, varios:false, mostrarNome:false, comoLista:true, opcoes:opcoes.map(function(n){ return {nome:n, custo:0}; })}; }
+  function gLista1(nome, opcoes, mostrarSe){
+    var g={nome:nome, varios:false, mostrarNome:true, comoLista:true, opcoes:opcoes.map(function(n){ return {nome:n, custo:0}; })};
+    if(mostrarSe) g.mostrarSe=mostrarSe;
+    return g;
+  }
+  /* campo de escrever (números do foil, medida do arco, o que vai escrito) */
+  function gTexto(nome, dica, mostrarSe){
+    var g={nome:nome, tipo:'texto', dica:dica||'', opcoes:[]};
+    if(mostrarSe) g.mostrarSe=mostrarSe;
+    return g;
+  }
+  /* campo só aparece quando a escolha de outro campo combina */
+  function visivel(l, sel, g){
+    if(!g || !g.mostrarSe) return true;
+    var marc=(sel && sel[g.mostrarSe.g]) || [];
+    var vals=marc.map(function(x){ return (typeof x==='string') ? x : x.n; });
+    return (g.mostrarSe.v||[]).some(function(v){ return vals.indexOf(v)>=0; });
+  }
   function gLista(nome, sugestoes){ return {nome:nome, tipo:'lista', filtro:'', opcoes:(sugestoes||[]).map(function(n){ return {nome:n}; })}; }
   function gCores(){ return {nome:'Cores', tipo:'cores', opcoes:[]}; }
   /* ITENS DECORATIVOS (pedido da Suzana, 17/09 à noite): eram cinco campos
@@ -9646,7 +9671,8 @@ else appLockInit();
   }
   function camposKit(peca, comPires){
     return [gItem(peca, peca.toLowerCase())].concat(comPires?[gPires()]:[]).concat([gItem('Embalagem','caixa|sacol')])
-      .concat([gDecorativos(), gLista1('Personalização',['Sem personalização','Com personalização'])]);
+      .concat([gDecorativos(), gLista1('Personalização',['Sem personalização','Com personalização']),
+               gTexto('O que vai escrito','Ex: nome e idade',{g:'Personalização', v:['Com personalização']})]);
   }
   var ITENS_CESTA=['Suco de Uva 500ml','Suco de uva caixinha','Bolinho Bauducco','Wafle','Potinho de mumu ou geleia','Torradas','Cookies','Chocolate Kit Kat','Ferrero Rocher un','Chocolate Trento','Bala Fini','Iogurte','Sucrilhos','Bombom ouro branco','Palito com frios','Nutella','Chocolate Nutella','Vasinho de flor','Batata Pringles','Ruffles','Refrigerante lata','Espumante','Ferrero Rocher c/3','Ferrero Rocher c/4','Ferrero Rocher c/8','Fotos Polaroid','Fio de Led','Cartão personalizado'];
   var MAQUINA='Desgaste de máquina';
@@ -9662,17 +9688,32 @@ else appLockInit();
       gLista1('Personalização',['Sem personalização','Com personalização'])]},
     {id:'ln_festa_caixa_completa', nome:'Festa na Caixa Completa', desc:'serve para qualquer modelo', grupos:[
       gItem('Embalagem','caixa|sacol'), gLista('Itens da cesta', ITENS_CESTA), gDecorativos(),
-      gLista1('Balão',['Sem balão','Com balão']), gCores(),
-      gLista1('Personalização',['Sem personalização','Com personalização'])]},
-    {id:'ln_baloes', nome:'Balões', desc:'arranjos, arcos e montagens', grupos:[
-      gLista1('Tipo',['Arranjo','Arco','Montagem externa','Bubble','Penca c/ 8']),
+      gLista1('Balão',['Sem balão','Bubble','Penca c/ 8']),
+      gCores(),
       gLista1('Personalização',['Sem personalização','Com personalização']),
-      gCores(), (function(){ var g=gDecorativos(); delete g.sempre; delete g.padraoItens; return g; })()]}
+      gTexto('O que vai escrito','Ex: Maria Isadora - 6 anos',{g:'Personalização', v:['Com personalização']})]},
+    /* BALÕES, como a Suzana descreveu em 17/09 à noite: arranjo tem tipo,
+       cores, base e acabamento; arco tem tamanho, formato e entrega. Cada
+       campo só aparece quando a escolha de cima pede. */
+    {id:'ln_baloes', nome:'Balões', desc:'arranjos e arcos', grupos:[
+      gLista1('Tipo',['Arranjo','Arco']),
+      gLista1('Tipo de arranjo',['Bubble 10"','Bubble 18"','Bubble 24"','Foil Número 16"','Foil Estrela 16"','Foil Coração 16"','Foil Redondo 16"'],{g:'Tipo', v:['Arranjo']}),
+      gTexto('Números','Ex: 15',{g:'Tipo de arranjo', v:['Foil Número 16"']}),
+      gLista1('Base do arranjo',['Base simples','Base orgânica'],{g:'Tipo', v:['Arranjo']}),
+      gLista1('Acabamento da base',['Com vareta','Base de argila','Sem base'],{g:'Tipo', v:['Arranjo']}),
+      gLista1('Tamanho do arco',['1 m','1,5 m','2 m','Personalizado'],{g:'Tipo', v:['Arco']}),
+      gTexto('Medida do arco','Ex: 3,5 m em L',{g:'Tamanho do arco', v:['Personalizado']}),
+      gLista1('Formato do arco',['Orgânico','Desconstruído','Tradicional'],{g:'Tipo', v:['Arco']}),
+      gLista1('Entrega',['Montagem externa','Delivery'],{g:'Tipo', v:['Arco']}),
+      gCores(),
+      gLista1('Personalização',['Sem personalização','Com personalização']),
+      gTexto('O que vai escrito','Ex: Feliz aniversário, Ana',{g:'Personalização', v:['Com personalização']}),
+      (function(){ var g=gDecorativos(); delete g.sempre; delete g.padraoItens; return g; })()]}
   ];
   var IDS_PADRAO=LINHAS_PADRAO.map(function(l){ return l.id; });
-  var ESTRUTURA=5;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
-  // campos que viraram o campo único "Itens decorativos" e saem das linhas
-  var GRUPOS_APOSENTADOS=['Palha decorativa','Papel sujinho','Fita de cetim','Fio de led','Cartão personalizado'];
+  var ESTRUTURA=6;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
+  // campos que saíram: viraram "Itens decorativos" ou mudaram de lugar
+  var GRUPOS_APOSENTADOS=['Palha decorativa','Papel sujinho','Fita de cetim','Fio de led','Cartão personalizado','Balão'];
 
   /* ── dados ─────────────────────────────────────────────────────── */
   window._seedLinhas=function(){
@@ -9693,6 +9734,12 @@ else appLockInit();
       atual.grupos=atual.grupos||[];
       // campos que viraram "Itens decorativos" saem da linha e do padrão
       atual.grupos=atual.grupos.filter(function(g){ return !(g && GRUPOS_APOSENTADOS.indexOf(g.nome)>=0); });
+      // opções que mudaram de linha (Bubble e Penca saíram dos Balões e
+      // foram para a Festa na Caixa)
+      if(atual.id==='ln_baloes'){
+        var tipo=atual.grupos.filter(function(g){ return g && g.nome==='Tipo'; })[0];
+        if(tipo) tipo.opcoes=(tipo.opcoes||[]).filter(function(o){ return ['Montagem externa','Bubble','Penca c/ 8'].indexOf(o.nome)<0; });
+      }
       if(atual.padrao) GRUPOS_APOSENTADOS.forEach(function(n){ delete atual.padrao[n]; });
       copia(d.grupos).forEach(function(novo, pos){
         var velho=atual.grupos.filter(function(g){ return g && g.nome===novo.nome; })[0];
@@ -9785,7 +9832,7 @@ else appLockInit();
   function vezesDe(l, sel){
     var vezes=1;
     (l.grupos||[]).forEach(function(g){
-      if(g.tipo) return;
+      if(g.tipo || !visivel(l, sel, g)) return;
       var marc=(sel&&sel[g.nome])||[];
       (g.opcoes||[]).forEach(function(o){ if(marc.indexOf(o.nome)>=0){ var v=parseFloat(o.vezes); if(v>1) vezes*=v; } });
     });
@@ -9796,6 +9843,7 @@ else appLockInit();
   window._insumosAutomaticos=function(l, sel){
     var nomes=[l.nome];
     (l.grupos||[]).forEach(function(g){
+      if(!visivel(l, sel, g)) return;
       if(g.tipo==='item' || g.tipo==='lista') itensSel(sel,g).forEach(function(x){ nomes.push(x.n); });
       else if(!g.tipo) ((sel&&sel[g.nome])||[]).forEach(function(n){ nomes.push(n); });
     });
@@ -9818,7 +9866,7 @@ else appLockInit();
   window._custoLinha=function(l, sel){
     var soma=parseFloat(l.custoBase)||0;
     (l.grupos||[]).forEach(function(g){
-      if(g.tipo) return;
+      if(g.tipo || !visivel(l, sel, g)) return;
       var marc=(sel&&sel[g.nome])||[];
       (g.opcoes||[]).forEach(function(o){ if(marc.indexOf(o.nome)>=0) soma+=parseFloat(o.custo)||0; });
     });
@@ -9828,6 +9876,7 @@ else appLockInit();
   window._custoCheioLinha=function(l, sel){
     var vezes=vezesDe(l, sel), soma=0;
     (l.grupos||[]).forEach(function(g){
+      if(!visivel(l, sel, g)) return;
       if(g.tipo==='item' || g.tipo==='lista') itensSel(sel,g).forEach(function(x){ soma+=custoDe(x.n)*x.q; });
     });
     (window._insumosAutomaticos(l,sel)||[]).forEach(function(x){ soma+=custoDe(x.n)*(parseFloat(x.q)||1); });
@@ -9837,11 +9886,12 @@ else appLockInit();
     var partes=[];
     (l.grupos||[]).forEach(function(g){
       if(g.tipo==='item' || g.tipo==='lista') return;        // o que vai dentro aparece em Materiais
+      if(!visivel(l, sel, g)) return;                        // campo escondido não entra no nome
       var marc=((sel&&sel[g.nome])||[]).filter(function(n){
-        return g.tipo==='cores' ? true : (g.opcoes||[]).some(function(o){ return o.nome===n; });
+        return (g.tipo==='cores' || g.tipo==='texto') ? true : (g.opcoes||[]).some(function(o){ return o.nome===n; });
       });
       if(!marc.length) return;
-      partes.push((g.mostrarNome || g.tipo==='cores') ? (g.nome+': '+marc.join(', ')) : marc.join(', '));
+      partes.push((g.mostrarNome || g.tipo==='cores' || g.tipo==='texto') ? (g.nome+': '+marc.join(', ')) : marc.join(', '));
     });
     return l.nome + (partes.length ? ' — '+partes.join(' · ') : '');
   };
@@ -9921,6 +9971,7 @@ else appLockInit();
     var lista=[];
     (l.grupos||[]).forEach(function(g){
       if(g.tipo!=='item' && g.tipo!=='lista') return;
+      if(!visivel(l, sel, g)) return;
       var escolhidos=itensSel(sel,g);
       escolhidos.forEach(function(x){ lista.push({n:x.n, q:x.q}); });
       // campo marcado como "sempre" entra na lista de materiais mesmo sem
@@ -9939,6 +9990,7 @@ else appLockInit();
       var novo=document.querySelector('#p-materiais-lista .material-row:last-child');
       if(novo) novo.dataset.deLinha=row.id;
     });
+    agruparMateriais();
   }
   function atualizaCustoPainel(row){
     var p=painelDe(row); if(!p) return;
@@ -9980,7 +10032,14 @@ else appLockInit();
     var p=painelDe(row); var l=porId(row.dataset.linhaId); if(!p || !l) return;
     var sel=selDe(row);
     var html=(l.grupos||[]).map(function(g){
+      if(!visivel(l, sel, g)) return '';          // campo que depende de outra escolha
       var titulo='<div class="lg-t">'+esc(g.nome)+(g.varios&&!g.tipo?' · pode marcar vários':'')+'</div>';
+      if(g.tipo==='texto'){
+        var v=((sel[g.nome]||[])[0])||'';
+        return '<div class="lg">'+titulo
+          +'<input type="text" class="ln-txt" data-g="'+esc(g.nome)+'" value="'+esc(v)+'" placeholder="'+esc(g.dica||'Escreva aqui')+'">'
+          +'</div>';
+      }
       if(g.tipo==='item' || g.tipo==='lista'){
         var esc_=itensSel(sel,g);
         var sug=(g.opcoes||[]).filter(function(o){ return !esc_.some(function(x){ return x.n.toLowerCase()===o.nome.toLowerCase(); }); });
@@ -10152,7 +10211,15 @@ else appLockInit();
       });
       painel.addEventListener('input', function(ev){
         var q=ev.target;
-        if(q.classList && q.classList.contains('ln-q')) qtdItem(row, q.dataset.g, parseInt(q.dataset.i,10), q.value);
+        if(q.classList && q.classList.contains('ln-q')){ qtdItem(row, q.dataset.g, parseInt(q.dataset.i,10), q.value); return; }
+        if(q.classList && q.classList.contains('ln-txt')){   // campo de escrever
+          var s=selDe(row); var v=String(q.value||'').trim();
+          if(v) s[q.dataset.g]=[v]; else delete s[q.dataset.g];
+          row.dataset.opcoes=JSON.stringify(s);
+          var l2=porId(row.dataset.linhaId);
+          var ni=row.querySelector('input[type=text]'); if(ni && l2) ni.value=window._nomeLinha(l2, s);
+          recalcularTotal();
+        }
       });
       painel.addEventListener('keydown', function(ev){
         if(ev.key!=='Enter') return;
@@ -10513,11 +10580,34 @@ else appLockInit();
     addMatOrig.apply(this, arguments);
     var row=document.querySelector('#p-materiais-lista .material-row:last-child');
     if(row && !row.querySelector('.mat-comprar')){
-      var lb=document.createElement('label'); lb.className='mat-comprar'; lb.title='Entra na lista de compras';
+      var lb=document.createElement('label'); lb.className='mat-comprar'; lb.title='Marcar para a lista de compras';
       lb.innerHTML='<input type="checkbox"><span>comprar</span>';
-      row.appendChild(lb);
+      var badge=row.querySelector('.mat-badge');
+      if(badge) row.insertBefore(lb, badge); else row.appendChild(lb);   // fica ao lado do preço
     }
   };
+  /* Materiais agrupados pelo item do pedido que os trouxe (Suzana, 17/09) */
+  function agruparMateriais(){
+    var lista=document.getElementById('p-materiais-lista'); if(!lista) return;
+    [].slice.call(lista.querySelectorAll('.mat-grupo')).forEach(function(h){ h.remove(); });
+    var grupos=[];
+    document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(ir){
+      var mats=matsDaLinha(ir.id);
+      if(mats.length) grupos.push({ titulo:((ir.querySelector('input[type=text]')||{}).value||'Item do pedido'), mats:mats });
+    });
+    if(!grupos.length) return;
+    var soltos=[].slice.call(lista.querySelectorAll('.material-row')).filter(function(m){ return !m.dataset.deLinha; });
+    grupos.forEach(function(gp){
+      var h=document.createElement('div'); h.className='mat-grupo'; h.textContent=gp.titulo;
+      lista.appendChild(h);
+      gp.mats.forEach(function(m){ lista.appendChild(m); });
+    });
+    if(soltos.length){
+      var h2=document.createElement('div'); h2.className='mat-grupo'; h2.textContent='Outros materiais';
+      lista.appendChild(h2);
+      soltos.forEach(function(m){ lista.appendChild(m); });
+    }
+  }
   var coletarMatOrig=window.coletarMateriaisPedido;
   window.coletarMateriaisPedido=function(){
     var mats=coletarMatOrig.apply(this, arguments);
@@ -10537,6 +10627,19 @@ else appLockInit();
       var r=document.querySelector('#p-materiais-lista .material-row[data-mat-id="'+m.id+'"]');
       var c=r && r.querySelector('.mat-comprar input'); if(c) c.checked=true;
     });
+    // pedido reaberto: liga cada material ao item que o trouxe, para agrupar
+    document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(ir){
+      if(!ir.dataset.matsAntigos) return;
+      var nomes=[]; try{ nomes=JSON.parse(ir.dataset.matsAntigos)||[]; }catch(e){}
+      nomes.forEach(function(n){
+        var alvo=[].slice.call(document.querySelectorAll('#p-materiais-lista .material-row')).filter(function(m){
+          return !m.dataset.deLinha && nomeDoMaterial(m).toLowerCase()===String(n).toLowerCase().trim();
+        })[0];
+        if(alvo) alvo.dataset.deLinha=ir.id;
+      });
+      ir.dataset.matsAntigos='';
+    });
+    agruparMateriais();
   };
   window.reconstruirListaCompras=function(){
     var mapa={};
