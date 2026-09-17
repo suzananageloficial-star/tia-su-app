@@ -2056,7 +2056,9 @@ function updateSyncStatus(status) {
   if (!el) return;
   const icons = { ok:'<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M7 18a4 4 0 0 1 0-8 5 5 0 0 1 9.5-1A4 4 0 0 1 17 18Z"/></svg>', syncing:'<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M20 11a8 8 0 0 0-14-4M4 5v4h4"/><path d="M4 13a8 8 0 0 0 14 4M20 19v-4h-4"/></svg>', error:'<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17.5" r="0.6" fill="currentColor" stroke="none"/></svg>', off:'—' };
   const colors = { ok:'var(--green)', syncing:'var(--cyan)', error:'var(--red)', off:'var(--gray-d)' };
-  el.textContent = icons[status] || '—';
+  // innerHTML, não textContent: os ícones viraram desenho (SVG) e, como
+  // texto, o código do desenho aparecia inteiro no topo da tela.
+  el.innerHTML = icons[status] || '—';
   el.style.color = colors[status] || 'var(--gray-d)';
   el.title = status==='ok' ? 'Sincronizado às '+lastSync : status==='syncing' ? 'Sincronizando...' : status==='error' ? 'Erro na sincronização' : 'Sem sincronização';
 }
@@ -9367,7 +9369,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v15/09-c27';
+    var ver='v17/09-c28';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
