@@ -1367,7 +1367,7 @@ html, body {
         <datalist id="produto-datalist"></datalist>
       </div>
       <div class="form-group" id="puxar-catalogo-group">
-        <label class="form-label"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M4 5h6v15H4ZM10 5h4v15h-4ZM14 6l4 .8-2.6 13L11 19"/></svg> Puxar do catálogo</label>
+        <label class="form-label"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M4 5h6v15H4ZM10 5h4v15h-4ZM14 6l4 .8-2.6 13L11 19"/></svg> 2. Não é um kit? Escolha um item avulso</label>
         <select class="form-select" id="p-catalogo-sel" onchange="puxarProdutoCatalogo(this.value)">
           <option value="">— escolher produto pronto —</option>
         </select>
@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v17/09-c32';
+    var ver='v17/09-c33';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9531,6 +9531,8 @@ else appLockInit();
 #p-linhas-botoes{margin-bottom:10px}
 .ln-botoes{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .ln-bt{border:1.5px solid var(--pink);background:#fff;color:var(--pink);border-radius:18px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.ln-dica{font-size:11px;color:var(--gray-d);line-height:1.5;margin:2px 0 6px}
+.ln-opc{width:100%;border:1px solid #e7d3dd;border-radius:8px;padding:8px;font-size:13px;background:#fff}
 .linha-painel{background:#FDF2F7;border-radius:10px;padding:8px 10px;margin:0 0 8px}
 .linha-painel .lg{margin-bottom:6px}
 .linha-painel .lg-t{font-size:10px;font-weight:800;color:var(--gray-d);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
@@ -9622,39 +9624,49 @@ else appLockInit();
      linha de Materiais do pedido, para aparecer na comanda de produção e
      ser somado uma vez só.                                             */
   function gTamanho(){ return {nome:'Tamanho', varios:false, mostrarNome:false, opcoes:[{nome:'Individual',custo:0},{nome:'Duplo',custo:0,vezes:2}]}; }
-  function gPires(){ return {nome:'Pires', varios:false, mostrarNome:true, opcoes:[{nome:'Madeira',custo:0},{nome:'Coração madeira',custo:0},{nome:'Cerâmica',custo:0}]}; }
-  function gItem(nome, filtro){ return {nome:nome, tipo:'item', filtro:filtro||'', opcoes:[]}; }
+  /* Pires virou LISTA DE ITEM (17/09, 2ª conversa): como botão ele não ia
+     para os Materiais, e ela precisa ver o pires certo lá embaixo. */
+  function gPires(){ return gItem('Pires','pires'); }
+  function gItem(nome, filtro, sempre){ var g={nome:nome, tipo:'item', filtro:filtro||'', opcoes:[]}; if(sempre) g.sempre=true; return g; }
+  /* grupo de botões que ela prefere ver como lista */
+  function gLista1(nome, opcoes){ return {nome:nome, varios:false, mostrarNome:false, comoLista:true, opcoes:opcoes.map(function(n){ return {nome:n, custo:0}; })}; }
   function gLista(nome, sugestoes){ return {nome:nome, tipo:'lista', filtro:'', opcoes:(sugestoes||[]).map(function(n){ return {nome:n}; })}; }
   function gCores(){ return {nome:'Cores', tipo:'cores', opcoes:[]}; }
-  function gAcabamento(){ return [gItem('Palha decorativa','palha'), gItem('Papel sujinho','sujinho'), gItem('Fita de cetim','fita de cetim')]; }
-  function camposKit(peca){
-    return [gItem(peca, peca.toLowerCase()), gItem('Embalagem','caixa')]
+  /* decorativos entram SEMPRE na lista de materiais, com o nome do campo:
+     lá ela escolhe a cor ou apaga a linha se não for usar */
+  function gAcabamento(){ return [gItem('Palha decorativa','palha',true), gItem('Papel sujinho','sujinho',true), gItem('Fita de cetim','fita de cetim',true)]; }
+  function camposKit(peca, comPires){
+    return [gItem(peca, peca.toLowerCase())].concat(comPires?[gPires()]:[]).concat([gItem('Embalagem','caixa|sacol')])
       .concat(gAcabamento())
-      .concat([gItem('Fio de led','fio de led'), gItem('Cartão personalizado','cart')]);
+      .concat([gItem('Fio de led','fio de led'), gItem('Cartão personalizado','cart'),
+               gLista1('Personalização',['Sem personalização','Com personalização'])]);
   }
   var ITENS_CESTA=['Suco de Uva 500ml','Suco de uva caixinha','Bolinho Bauducco','Wafle','Potinho de mumu ou geleia','Torradas','Cookies','Chocolate Kit Kat','Ferrero Rocher un','Chocolate Trento','Bala Fini','Iogurte','Sucrilhos','Bombom ouro branco','Palito com frios','Nutella','Chocolate Nutella','Vasinho de flor','Batata Pringles','Ruffles','Refrigerante lata','Espumante','Ferrero Rocher c/3','Ferrero Rocher c/4','Ferrero Rocher c/8','Fotos Polaroid','Fio de Led','Cartão personalizado'];
   var MAQUINA='Desgaste de máquina';
+  var EMBALAGENS=['Sacolinha PVC lisa','Sacolinha alça coração'];
 
   var LINHAS_PADRAO=[
-    {id:'ln_kit_xicaras_completo', nome:'Kit Xícaras Completo', desc:'com pires e colheres', grupos:[gTamanho(), gPires()].concat(camposKit('Xícara'))},
-    {id:'ln_kit_xicaras_simples',  nome:'Kit Xícaras Simples',  desc:'somente as xícaras',  grupos:[gTamanho()].concat(camposKit('Xícara'))},
-    {id:'ln_kit_canecas_completo', nome:'Kit Canecas Completo', desc:'com pires e colheres', grupos:[gTamanho(), gPires()].concat(camposKit('Caneca'))},
-    {id:'ln_kit_canecas_simples',  nome:'Kit Canecas Simples',  desc:'somente as canecas',  grupos:[gTamanho()].concat(camposKit('Caneca'))},
-    {id:'ln_festa_caixa_personalizada', nome:'Festa na Caixa Personalizada', desc:'', grupos:[gItem('Embalagem','caixa')]
+    {id:'ln_kit_xicaras_completo', nome:'Kit Xícaras Completo', desc:'com pires e colheres', grupos:[gTamanho()].concat(camposKit('Xícara', true))},
+    {id:'ln_kit_xicaras_simples',  nome:'Kit Xícaras Simples',  desc:'somente as xícaras',  grupos:[gTamanho()].concat(camposKit('Xícara', false))},
+    {id:'ln_kit_canecas_completo', nome:'Kit Canecas Completo', desc:'com pires e colheres', grupos:[gTamanho()].concat(camposKit('Caneca', true))},
+    {id:'ln_kit_canecas_simples',  nome:'Kit Canecas Simples',  desc:'somente as canecas',  grupos:[gTamanho()].concat(camposKit('Caneca', false))},
+    {id:'ln_festa_caixa_personalizada', nome:'Festa na Caixa Personalizada', desc:'', grupos:[gItem('Embalagem','caixa|sacol')]
       .concat(gAcabamento())
-      .concat([gLista('Itens da cesta', ITENS_CESTA), gItem('Cartão personalizado','cart')])},
-    {id:'ln_festa_caixa_completa', nome:'Festa na Caixa Completa', desc:'serve para qualquer modelo', grupos:[gItem('Embalagem','caixa')]
+      .concat([gLista('Itens da cesta', ITENS_CESTA), gItem('Cartão personalizado','cart'),
+        gLista1('Personalização',['Sem personalização','Com personalização'])])},
+    {id:'ln_festa_caixa_completa', nome:'Festa na Caixa Completa', desc:'serve para qualquer modelo', grupos:[gItem('Embalagem','caixa|sacol')]
       .concat(gAcabamento())
       .concat([gLista('Itens da cesta', ITENS_CESTA),
-        {nome:'Balão', varios:false, mostrarNome:false, opcoes:[{nome:'Sem balão',custo:0},{nome:'Com balão',custo:0}]},
-        gCores(), gItem('Cartão personalizado','cart')])},
+        gLista1('Balão',['Sem balão','Com balão']),
+        gCores(), gItem('Cartão personalizado','cart'),
+        gLista1('Personalização',['Sem personalização','Com personalização'])])},
     {id:'ln_baloes', nome:'Balões', desc:'arranjos, arcos e montagens', grupos:[
       {nome:'Tipo', varios:false, mostrarNome:false, opcoes:[{nome:'Arranjo',custo:0},{nome:'Arco',custo:0},{nome:'Montagem externa',custo:0},{nome:'Bubble',custo:0},{nome:'Penca c/ 8',custo:0}]},
       {nome:'Personalização', varios:false, mostrarNome:false, opcoes:[{nome:'Sem personalização',custo:0},{nome:'Com personalização',custo:0}]},
       gCores(), gItem('Fita de cetim','fita de cetim')]}
   ];
   var IDS_PADRAO=LINHAS_PADRAO.map(function(l){ return l.id; });
-  var ESTRUTURA=3;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
+  var ESTRUTURA=4;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
 
   /* ── dados ─────────────────────────────────────────────────────── */
   window._seedLinhas=function(){
@@ -9676,7 +9688,13 @@ else appLockInit();
       copia(d.grupos).forEach(function(novo, pos){
         var velho=atual.grupos.filter(function(g){ return g && g.nome===novo.nome; })[0];
         if(!velho){ atual.grupos.splice(Math.min(pos, atual.grupos.length), 0, novo); return; }
-        if(novo.tipo && !velho.tipo) velho.tipo=novo.tipo;
+        if(novo.tipo && !velho.tipo){
+          // virou campo de lista de item: os botões antigos não servem mais
+          velho.tipo=novo.tipo; velho.opcoes=[]; velho.filtro=novo.filtro||'';
+        }
+        if(novo.filtro && !velho.filtro) velho.filtro=novo.filtro;
+        if(novo.sempre) velho.sempre=true;
+        if(novo.comoLista) velho.comoLista=true;
         (novo.opcoes||[]).forEach(function(o){
           if(!(velho.opcoes||[]).some(function(x){ return x.nome===o.nome; })){ velho.opcoes=velho.opcoes||[]; velho.opcoes.push(o); }
         });
@@ -9690,11 +9708,12 @@ else appLockInit();
   window._seedItens=function(){
     if(typeof estoque==='undefined' || !Array.isArray(estoque)) return;
     var novos=0;
-    ITENS_CESTA.concat([MAQUINA]).forEach(function(nome){
+    ITENS_CESTA.concat([MAQUINA]).concat(EMBALAGENS).forEach(function(nome){
       var k=nome.toLowerCase().trim();
       if(estoque.some(function(e){ return e && (e.nome||'').toLowerCase().trim()===k; })) return;
       if(catalogo.some(function(p){ return p && p.avulso && (p.nome||'').toLowerCase().trim()===k; })) return;
-      var r={ id:'it_'+k.replace(/[^a-z0-9]+/g,'_').slice(0,44), nome:nome, cat:(nome===MAQUINA?'Insumos':'Enchimento'),
+      var cat = nome===MAQUINA ? 'Insumos' : (EMBALAGENS.indexOf(nome)>=0 ? 'Embalagem' : 'Enchimento');
+      var r={ id:'it_'+k.replace(/[^a-z0-9]+/g,'_').slice(0,44), nome:nome, cat:cat,
               un:'un', qtd:0, min:0, preco:0, forn:'', updatedAt:1 };
       estoque.push(r); novos++;
       try{ if(typeof _snapIds!=='undefined'){ _snapIds.estoque=_snapIds.estoque||{}; _snapIds.estoque[r.id]=JSON.stringify(r); } }catch(e){}
@@ -9832,6 +9851,17 @@ else appLockInit();
       calcularGastoReal();
     });
   }
+  /* Nome de uma linha de material. Fita e balão viram SELETOR DE COR, e
+     nesses a linha não tem campo de texto: o nome mora no data-balao-size
+     ou na opção escolhida. Sem isso, "Fita de cetim" duplicava ao reabrir
+     o pedido, porque a busca por nome não encontrava a linha antiga. */
+  function nomeDoMaterial(row){
+    var i=row.querySelector('.mat-nome');
+    if(i && String(i.value||'').trim()) return String(i.value).trim();
+    var s=row.querySelector('.mat-sel');
+    if(s && s.selectedIndex>0) return String(s.options[s.selectedIndex].textContent||'').split(' · ')[0].trim();
+    return String(row.dataset.balaoSize||'').trim();
+  }
   /* materiais que vieram desta linha do pedido */
   function matsDaLinha(rowId){
     return [].slice.call(document.querySelectorAll('#p-materiais-lista .material-row'))
@@ -9848,8 +9878,7 @@ else appLockInit();
       antigos.forEach(function(nome){
         var alvo=[].slice.call(document.querySelectorAll('#p-materiais-lista .material-row')).filter(function(m){
           if(m.dataset.deLinha) return false;
-          var i=m.querySelector('.mat-nome');
-          return i && String(i.value||'').toLowerCase().trim()===String(nome).toLowerCase().trim();
+          return nomeDoMaterial(m).toLowerCase()===String(nome).toLowerCase().trim();
         })[0];
         if(alvo) alvo.remove();
       });
@@ -9861,7 +9890,12 @@ else appLockInit();
     var vezes=vezesDe(l, sel);
     var lista=[];
     (l.grupos||[]).forEach(function(g){
-      if(g.tipo==='item' || g.tipo==='lista') itensSel(sel,g).forEach(function(x){ lista.push({n:x.n, q:x.q}); });
+      if(g.tipo!=='item' && g.tipo!=='lista') return;
+      var escolhidos=itensSel(sel,g);
+      escolhidos.forEach(function(x){ lista.push({n:x.n, q:x.q}); });
+      // decorativo marcado como "sempre" entra na lista de materiais mesmo
+      // sem item escolhido: ela escolhe a cor lá embaixo ou apaga a linha
+      if(!escolhidos.length && g.sempre) lista.push({n:g.nome, q:1});
     });
     (window._insumosAutomaticos(l, sel)||[]).forEach(function(x){ lista.push({n:x.n, q:(parseFloat(x.q)||1)}); });
     lista.forEach(function(x){
@@ -9885,10 +9919,12 @@ else appLockInit();
       : 'Custo em R$ 0,00. Preencha os preços em Precificação, Linhas do pedido, aba Itens e preços.';
   }
   function selectItens(gNome, filtro, valor){
-    var f=String(filtro||'').toLowerCase();
+    // o filtro aceita várias palavras separadas por | (ex.: caixa|sacol)
+    var termos=String(filtro||'').toLowerCase().split('|').map(function(s){ return s.trim(); }).filter(Boolean);
     var itens=window._registroItens().filter(function(x){
-      if(!f) return true;
-      return x.nome.toLowerCase().indexOf(f)>=0 || String(x.cat||'').toLowerCase().indexOf(f)>=0;
+      if(!termos.length) return true;
+      var alvo=(x.nome+' '+(x.cat||'')).toLowerCase();
+      return termos.some(function(t){ return alvo.indexOf(t)>=0; });
     });
     if(!itens.length) itens=window._registroItens();
     return '<select class="ln-sel" data-g="'+esc(gNome)+'">'
@@ -9934,6 +9970,14 @@ else appLockInit();
       }
       if(!(g.opcoes||[]).length) return '';
       var marc=sel[g.nome]||[];
+      if(g.comoLista){                       // ela prefere lista a botão redondo
+        return '<div class="lg">'+titulo
+          +'<select class="ln-opc" data-g="'+esc(g.nome)+'"><option value="">— escolher —</option>'
+          + g.opcoes.map(function(o){
+              return '<option value="'+esc(o.nome)+'"'+(marc.indexOf(o.nome)>=0?' selected':'')+'>'+esc(o.nome)+(parseFloat(o.custo)>0?(' · '+fmt(o.custo)):'')+'</option>';
+            }).join('')
+          +'</select></div>';
+      }
       return '<div class="lg">'+titulo+'<div class="chips">'
         + g.opcoes.map(function(o){
             return '<button type="button" class="ln-chip'+(marc.indexOf(o.nome)>=0?' on':'')+'" data-g="'+esc(g.nome)+'" data-o="'+esc(o.nome)+'">'+esc(o.nome)+'</button>';
@@ -10067,7 +10111,12 @@ else appLockInit();
       });
       painel.addEventListener('change', function(ev){
         var s=ev.target;
-        if(s.classList && s.classList.contains('ln-sel')){ addItem(row, s.dataset.g, s.value, 1); }
+        if(s.classList && s.classList.contains('ln-sel')){ addItem(row, s.dataset.g, s.value, 1); return; }
+        if(s.classList && s.classList.contains('ln-opc')){      // grupo de botões mostrado como lista
+          var sel2=selDe(row);
+          if(s.value) sel2[s.dataset.g]=[s.value]; else delete sel2[s.dataset.g];
+          mudou(row, sel2);
+        }
       });
       painel.addEventListener('input', function(ev){
         var q=ev.target;
@@ -10109,7 +10158,7 @@ else appLockInit();
         it.linhaId=row.dataset.linhaId; it.opcoes=selDe(row);
         // guarda o que esta linha mandou para Materiais, para na próxima
         // abertura o app saber quais linhas refazer em vez de duplicar
-        it.mats=matsDaLinha(row.id).map(function(m){ var i=m.querySelector('.mat-nome'); return i?String(i.value||''):''; }).filter(Boolean);
+        it.mats=matsDaLinha(row.id).map(nomeDoMaterial).filter(Boolean);
         if(!it.mats.length && row.dataset.matsAntigos){ try{ it.mats=JSON.parse(row.dataset.matsAntigos)||[]; }catch(e){} }
       }
       if(row.dataset.avulsoId) it.avulsoId=row.dataset.avulsoId;
@@ -10175,20 +10224,19 @@ else appLockInit();
     if(!box){ box=document.createElement('div'); box.id='p-linhas-botoes'; grp.insertBefore(box, grp.firstChild); }
     var ativas=linhas().filter(function(l){ return l.ativo!==false; });
     box.innerHTML = ativas.length
-      ? '<label class="form-label">Adicionar linha</label><div class="ln-botoes">'
+      ? '<label class="form-label">1. O que vai no pedido</label><div class="ln-dica">Toque no kit. Depois escolha, um a um, o que vai dentro: a peça, o pires, a embalagem e os decorativos. Tudo o que você escolher aparece em <b>Materiais usados</b>, lá embaixo.</div><div class="ln-botoes">'
         + ativas.map(function(l){ return '<button type="button" class="ln-bt" onclick="_addLinhaPedido(\''+l.id+'\')">'+esc(l.nome)+'</button>'; }).join('')
         + '</div>'
       : '';
   }
   window.popularCatalogoSelect=function(){
     var sel=document.getElementById('p-catalogo-sel'); if(!sel) return;
+    /* Só itens avulsos (decisão da Suzana, 17/09): os kits antigos do
+       catálogo saíram daqui, porque kit agora é linha. O catálogo de
+       produtos continua inteiro na Precificação e no catálogo de fotos. */
     var op=function(p){ return '<option value="'+esc(p.id)+'">'+esc(p.nome)+(parseFloat(p.preco)>0?(' · '+fmt(p.preco)):'')+'</option>'; };
     var av=avulsos();
-    var prods=catalogo.filter(function(p){ return p && !p.linha && !p.avulso; }).sort(porNome);
-    var h='<option value="">— item avulso ou produto pronto —</option>';
-    if(av.length) h+='<optgroup label="Itens avulsos">'+av.map(op).join('')+'</optgroup>';
-    if(prods.length) h+='<optgroup label="Produtos do catálogo">'+prods.map(op).join('')+'</optgroup>';
-    sel.innerHTML=h;
+    sel.innerHTML='<option value="">— item avulso (fora dos kits acima) —</option>'+av.map(op).join('');
     renderBotoesLinhas();
   };
   var puxarOrig=window.puxarProdutoCatalogo;
