@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v17/09-c33';
+    var ver='v17/09-c34';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9632,14 +9632,21 @@ else appLockInit();
   function gLista1(nome, opcoes){ return {nome:nome, varios:false, mostrarNome:false, comoLista:true, opcoes:opcoes.map(function(n){ return {nome:n, custo:0}; })}; }
   function gLista(nome, sugestoes){ return {nome:nome, tipo:'lista', filtro:'', opcoes:(sugestoes||[]).map(function(n){ return {nome:n}; })}; }
   function gCores(){ return {nome:'Cores', tipo:'cores', opcoes:[]}; }
-  /* decorativos entram SEMPRE na lista de materiais, com o nome do campo:
-     lá ela escolhe a cor ou apaga a linha se não for usar */
-  function gAcabamento(){ return [gItem('Palha decorativa','palha',true), gItem('Papel sujinho','sujinho',true), gItem('Fita de cetim','fita de cetim',true)]; }
+  /* ITENS DECORATIVOS (pedido da Suzana, 17/09 à noite): eram cinco campos
+     separados e viraram UM campo só, com a categoria inteira. Palha, papel
+     sujinho e fita já entram marcados em todo kit — é só apagar a linha em
+     Materiais quando não for usar. */
+  var ITENS_DECORATIVOS=['Palha decorativa','Papel poli sujinho','Fotos Polaroid','Fio de LED','Fita de cetim','Cartão personalizado','Adesivo personalizado','Etiqueta'];
+  var DECOR_PADRAO=['Palha decorativa','Papel poli sujinho','Fita de cetim'];
+  function gDecorativos(){
+    var g=gLista('Itens decorativos', ITENS_DECORATIVOS);
+    g.filtro='palha|sujinho|polaroid|led|fita de cetim|cart|adesiv|etiqueta|decorativ';
+    g.sempre=true; g.padraoItens=DECOR_PADRAO.slice();
+    return g;
+  }
   function camposKit(peca, comPires){
     return [gItem(peca, peca.toLowerCase())].concat(comPires?[gPires()]:[]).concat([gItem('Embalagem','caixa|sacol')])
-      .concat(gAcabamento())
-      .concat([gItem('Fio de led','fio de led'), gItem('Cartão personalizado','cart'),
-               gLista1('Personalização',['Sem personalização','Com personalização'])]);
+      .concat([gDecorativos(), gLista1('Personalização',['Sem personalização','Com personalização'])]);
   }
   var ITENS_CESTA=['Suco de Uva 500ml','Suco de uva caixinha','Bolinho Bauducco','Wafle','Potinho de mumu ou geleia','Torradas','Cookies','Chocolate Kit Kat','Ferrero Rocher un','Chocolate Trento','Bala Fini','Iogurte','Sucrilhos','Bombom ouro branco','Palito com frios','Nutella','Chocolate Nutella','Vasinho de flor','Batata Pringles','Ruffles','Refrigerante lata','Espumante','Ferrero Rocher c/3','Ferrero Rocher c/4','Ferrero Rocher c/8','Fotos Polaroid','Fio de Led','Cartão personalizado'];
   var MAQUINA='Desgaste de máquina';
@@ -9650,23 +9657,22 @@ else appLockInit();
     {id:'ln_kit_xicaras_simples',  nome:'Kit Xícaras Simples',  desc:'somente as xícaras',  grupos:[gTamanho()].concat(camposKit('Xícara', false))},
     {id:'ln_kit_canecas_completo', nome:'Kit Canecas Completo', desc:'com pires e colheres', grupos:[gTamanho()].concat(camposKit('Caneca', true))},
     {id:'ln_kit_canecas_simples',  nome:'Kit Canecas Simples',  desc:'somente as canecas',  grupos:[gTamanho()].concat(camposKit('Caneca', false))},
-    {id:'ln_festa_caixa_personalizada', nome:'Festa na Caixa Personalizada', desc:'', grupos:[gItem('Embalagem','caixa|sacol')]
-      .concat(gAcabamento())
-      .concat([gLista('Itens da cesta', ITENS_CESTA), gItem('Cartão personalizado','cart'),
-        gLista1('Personalização',['Sem personalização','Com personalização'])])},
-    {id:'ln_festa_caixa_completa', nome:'Festa na Caixa Completa', desc:'serve para qualquer modelo', grupos:[gItem('Embalagem','caixa|sacol')]
-      .concat(gAcabamento())
-      .concat([gLista('Itens da cesta', ITENS_CESTA),
-        gLista1('Balão',['Sem balão','Com balão']),
-        gCores(), gItem('Cartão personalizado','cart'),
-        gLista1('Personalização',['Sem personalização','Com personalização'])])},
+    {id:'ln_festa_caixa_personalizada', nome:'Festa na Caixa Personalizada', desc:'', grupos:[
+      gItem('Embalagem','caixa|sacol'), gLista('Itens da cesta', ITENS_CESTA), gDecorativos(),
+      gLista1('Personalização',['Sem personalização','Com personalização'])]},
+    {id:'ln_festa_caixa_completa', nome:'Festa na Caixa Completa', desc:'serve para qualquer modelo', grupos:[
+      gItem('Embalagem','caixa|sacol'), gLista('Itens da cesta', ITENS_CESTA), gDecorativos(),
+      gLista1('Balão',['Sem balão','Com balão']), gCores(),
+      gLista1('Personalização',['Sem personalização','Com personalização'])]},
     {id:'ln_baloes', nome:'Balões', desc:'arranjos, arcos e montagens', grupos:[
-      {nome:'Tipo', varios:false, mostrarNome:false, opcoes:[{nome:'Arranjo',custo:0},{nome:'Arco',custo:0},{nome:'Montagem externa',custo:0},{nome:'Bubble',custo:0},{nome:'Penca c/ 8',custo:0}]},
-      {nome:'Personalização', varios:false, mostrarNome:false, opcoes:[{nome:'Sem personalização',custo:0},{nome:'Com personalização',custo:0}]},
-      gCores(), gItem('Fita de cetim','fita de cetim')]}
+      gLista1('Tipo',['Arranjo','Arco','Montagem externa','Bubble','Penca c/ 8']),
+      gLista1('Personalização',['Sem personalização','Com personalização']),
+      gCores(), (function(){ var g=gDecorativos(); delete g.sempre; delete g.padraoItens; return g; })()]}
   ];
   var IDS_PADRAO=LINHAS_PADRAO.map(function(l){ return l.id; });
-  var ESTRUTURA=4;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
+  var ESTRUTURA=5;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
+  // campos que viraram o campo único "Itens decorativos" e saem das linhas
+  var GRUPOS_APOSENTADOS=['Palha decorativa','Papel sujinho','Fita de cetim','Fio de led','Cartão personalizado'];
 
   /* ── dados ─────────────────────────────────────────────────────── */
   window._seedLinhas=function(){
@@ -9685,6 +9691,9 @@ else appLockInit();
          que já existe mantém nome, filtro e custos, e só recebe as opções
          que faltavam. Grupo que ela criou continua onde está. */
       atual.grupos=atual.grupos||[];
+      // campos que viraram "Itens decorativos" saem da linha e do padrão
+      atual.grupos=atual.grupos.filter(function(g){ return !(g && GRUPOS_APOSENTADOS.indexOf(g.nome)>=0); });
+      if(atual.padrao) GRUPOS_APOSENTADOS.forEach(function(n){ delete atual.padrao[n]; });
       copia(d.grupos).forEach(function(novo, pos){
         var velho=atual.grupos.filter(function(g){ return g && g.nome===novo.nome; })[0];
         if(!velho){ atual.grupos.splice(Math.min(pos, atual.grupos.length), 0, novo); return; }
@@ -9708,17 +9717,33 @@ else appLockInit();
   window._seedItens=function(){
     if(typeof estoque==='undefined' || !Array.isArray(estoque)) return;
     var novos=0;
-    ITENS_CESTA.concat([MAQUINA]).concat(EMBALAGENS).forEach(function(nome){
+    ITENS_CESTA.concat([MAQUINA]).concat(EMBALAGENS).concat(ITENS_DECORATIVOS).forEach(function(nome){
       var k=nome.toLowerCase().trim();
       if(estoque.some(function(e){ return e && (e.nome||'').toLowerCase().trim()===k; })) return;
       if(catalogo.some(function(p){ return p && p.avulso && (p.nome||'').toLowerCase().trim()===k; })) return;
-      var cat = nome===MAQUINA ? 'Insumos' : (EMBALAGENS.indexOf(nome)>=0 ? 'Embalagem' : 'Enchimento');
+      var cat = nome===MAQUINA ? 'Insumos'
+              : (EMBALAGENS.indexOf(nome)>=0 ? 'Embalagem'
+              : (ITENS_DECORATIVOS.indexOf(nome)>=0 ? 'Itens decorativos' : 'Enchimento'));
       var r={ id:'it_'+k.replace(/[^a-z0-9]+/g,'_').slice(0,44), nome:nome, cat:cat,
               un:'un', qtd:0, min:0, preco:0, forn:'', updatedAt:1 };
       estoque.push(r); novos++;
       try{ if(typeof _snapIds!=='undefined'){ _snapIds.estoque=_snapIds.estoque||{}; _snapIds.estoque[r.id]=JSON.stringify(r); } }catch(e){}
     });
+    /* Fotos Polaroid e Fio de LED também se vendem soltos: entram como
+       item avulso, para aparecerem no seletor do pedido (Suzana, 17/09). */
+    var avNovos=0;
+    ['Fotos Polaroid','Fio de LED'].forEach(function(nome){
+      var k=nome.toLowerCase().trim();
+      if(catalogo.some(function(p){ return p && p.avulso && (p.nome||'').toLowerCase().trim()===k; })) return;
+      var noEst=estoque.filter(function(e){ return e && (e.nome||'').toLowerCase().trim()===k; })[0];
+      var r={ id:'av_'+k.replace(/[^a-z0-9]+/g,'_').slice(0,44), avulso:true, nome:nome, cat:'Avulso',
+              un:'un', custo:noEst?(parseFloat(noEst.preco)||0):0, matCusto:noEst?(parseFloat(noEst.preco)||0):0,
+              preco:0, mg:0, updatedAt:1 };
+      catalogo.push(r); avNovos++;
+      try{ if(typeof _snapIds!=='undefined'){ _snapIds.catalogo=_snapIds.catalogo||{}; _snapIds.catalogo[r.id]=JSON.stringify(r); } }catch(e){}
+    });
     if(novos){ try{ DB.set('est', estoque); }catch(e){} }
+    if(avNovos){ try{ DB.set('cat', catalogo); }catch(e){} }
   };
 
   function linhas(){ window._seedLinhas(); return catalogo.filter(function(p){ return p && p.linha; }).sort(function(a,b){ return (a.ordem||0)-(b.ordem||0); }); }
@@ -9734,7 +9759,12 @@ else appLockInit();
     });
     catalogo.filter(function(p){ return p && p.avulso; }).forEach(function(a){
       if(!a.nome) return;
-      m[String(a.nome).toLowerCase().trim()]={ id:a.id, nome:a.nome, custo:parseFloat(a.custo)||0, cat:'Avulso', un:a.un||'un' };
+      var k=String(a.nome).toLowerCase().trim();
+      var custo=parseFloat(a.custo)||0;
+      // o mesmo nome pode estar nos dois lugares (produto e avulso):
+      // vale o que TEM preço, para não zerar o custo do kit
+      if(m[k] && !(custo>0) && m[k].custo>0) return;
+      m[k]={ id:a.id, nome:a.nome, custo:custo, cat:'Avulso', un:a.un||'un' };
     });
     for(var k in m) out.push(m[k]);
     return out.sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); });
@@ -9771,7 +9801,7 @@ else appLockInit();
     });
     var txt=nomes.join(' ').toLowerCase();
     var out=[{n:MAQUINA, q:1}];                                   // desgaste de máquina entra em tudo
-    if(/cart[ãa]o/.test(txt)){
+    if(/cart[ãa]o|adesivo personalizado|etiqueta/.test(txt)){
       out.push({n:(sel && sel['__papel']) || 'PAPEL GLOSSY 180G', q:1});
       out.push({n:'IMPRESSÃO COMUM', q:1});
     }
@@ -9893,9 +9923,11 @@ else appLockInit();
       if(g.tipo!=='item' && g.tipo!=='lista') return;
       var escolhidos=itensSel(sel,g);
       escolhidos.forEach(function(x){ lista.push({n:x.n, q:x.q}); });
-      // decorativo marcado como "sempre" entra na lista de materiais mesmo
-      // sem item escolhido: ela escolhe a cor lá embaixo ou apaga a linha
-      if(!escolhidos.length && g.sempre) lista.push({n:g.nome, q:1});
+      // campo marcado como "sempre" entra na lista de materiais mesmo sem
+      // escolha: ela escolhe a cor lá embaixo ou apaga a linha
+      if(!escolhidos.length && g.sempre){
+        ((g.padraoItens && g.padraoItens.length) ? g.padraoItens : [g.nome]).forEach(function(n){ lista.push({n:n, q:1}); });
+      }
     });
     (window._insumosAutomaticos(l, sel)||[]).forEach(function(x){ lista.push({n:x.n, q:(parseFloat(x.q)||1)}); });
     lista.forEach(function(x){
