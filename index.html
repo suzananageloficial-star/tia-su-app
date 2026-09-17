@@ -4065,8 +4065,10 @@ function excluirPedido() {
   // Confirma com o usuário
   const opcoes = ['Cancelar pedido (mantém o registro)', 'Excluir permanentemente'];
   // Usa confirm simples para mobile
+  // Texto puro: a caixa de aviso do navegador não desenha ícone. Com o
+  // código do desenho aqui dentro, a pergunta aparecia ilegível na tela.
   const confirma = confirm(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17.5" r="0.6" fill="currentColor" stroke="none"/></svg> O que deseja fazer com o pedido de "${p.cliente}"?
+    `O que deseja fazer com o pedido de "${p.cliente}"?
 
 ` +
     `OK = Marcar como Cancelado (recomendado)
@@ -4074,7 +4076,7 @@ function excluirPedido() {
     `Cancelar = Voltar sem fazer nada
 
 ` +
-    `(Para excluir permanentemente, mude o status para Cancelado e salve, depois use o botão <svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg> vermelho que aparecerá)`
+    `(Para excluir de vez, mude o status para Cancelado e salve. Depois aparece um botão vermelho de excluir.)`
   );
 
   if (confirma) {
@@ -9375,7 +9377,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v17/09-c29';
+    var ver='v17/09-c30';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9984,7 +9986,10 @@ else appLockInit();
     return { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo,
       clientes:clientes, fornecedores:(typeof fornecedores!=='undefined'?fornecedores:[]),
       ativos:(typeof ativos!=='undefined'?ativos:[]), listaCompras:(typeof listaCompras!=='undefined'?listaCompras:[]),
-      recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[]) };
+      recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[]),
+      // as lápides viajam junto: sem elas, o que foi excluído num aparelho
+      // voltava do outro na mesclagem
+      _tumbas:(typeof tumbas!=='undefined'?tumbas:[]) };
   }
   window._fbPush=function(){
     try{
@@ -9998,11 +10003,39 @@ else appLockInit();
   };
   window._fbPushDebounced=function(){ clearTimeout(_pushTimer); _pushTimer=setTimeout(window._fbPush,1200); };
 
+  /* ── MESCLAGEM, EM VEZ DE TROCA (17/09/2026) ────────────────────────
+     Motivo: um pedido lançado no celular sumiu. Até aqui esta sincronização
+     era "quem salvou por último manda": o aparelho que tivesse o carimbo
+     mais novo mandava a SUA lista inteira por cima da outra. Bastava o
+     computador salvar qualquer coisa depois — e o app salva sozinho ao
+     abrir, quando reconfere os materiais — para a lista dele, sem o pedido
+     novo, virar a verdade e apagar o pedido nos dois lados.
+     Agora junta registro a registro, igual ao backup da planilha: vale o
+     carimbo mais novo de cada registro, e só some de verdade o que tem
+     lápide de exclusão. Se sobrou algo que só existe aqui, este aparelho
+     envia a união logo em seguida.                                        */
+  function _juntar(localArr, nuvemArr, todasTumbas){
+    var map={}, extras=[], jaVi={}, soNoLocal=false;
+    function guardaExtra(r){ var k=JSON.stringify(r); if(jaVi[k]) return; jaVi[k]=1; extras.push(r); }
+    (nuvemArr||[]).forEach(function(r){ if(r&&r.id) map[r.id]=r; else if(r!=null) guardaExtra(r); });
+    (localArr||[]).forEach(function(r){
+      if(r==null) return;
+      if(!r.id){ var antes=extras.length; guardaExtra(r); if(extras.length>antes) soNoLocal=true; return; }
+      var c=map[r.id];
+      if(!c){ map[r.id]=r; soNoLocal=true; return; }
+      if((r.updatedAt||0) > (c.updatedAt||0)){ map[r.id]=r; soNoLocal=true; }
+    });
+    (todasTumbas||[]).forEach(function(t){
+      var r=t&&map[t.id];
+      if(r && (r.updatedAt||0) <= t.ts) delete map[t.id];   // excluído em algum aparelho
+    });
+    var lista=[]; for(var k in map) lista.push(map[k]);
+    return { lista:lista.concat(extras), soNoLocal:soNoLocal };
+  }
+
   function _aplicarRemoto(d){
     if(!d || !d.payload) return;
     var rup=parseFloat(d.updatedAt||0);
-    var localTs=parseFloat(localStorage.getItem('ts_ultimaSync')||'0')||0;
-    if(!(rup>localTs)) return;                    // remoto não é mais novo que o local → NÃO aplica (protege o local)
     var data; try{ data=JSON.parse(d.payload); }catch(e){ return; }
     var temDados=(data.pedidos&&data.pedidos.length)||(data.financeiro&&data.financeiro.length)||(data.estoque&&data.estoque.length);
     if(!temDados) return;                         // segurança: nunca aplica vazio
@@ -10012,25 +10045,42 @@ else appLockInit();
        que o outro aparelho salva — bem no meio de um cadastro aqui.
        Ver o bloco TELA OCUPADA, no começo do arquivo. */
     window._aplicarQuandoLivre(function(){
-      pedidos=data.pedidos||[]; financeiro=data.financeiro||[]; estoque=data.estoque||[];
-      catalogo=data.catalogo||[]; clientes=data.clientes||[];
-      if(typeof fornecedores!=='undefined') fornecedores=data.fornecedores||[];
-      if(typeof ativos!=='undefined') ativos=data.ativos||[];
-      if(typeof listaCompras!=='undefined') listaCompras=data.listaCompras||[];
-      if(typeof recorrentes!=='undefined') recorrentes=data.recorrentes||[];
+      // lápides: junta as daqui com as que vieram da nuvem
+      var vistas={}; tumbas.forEach(function(t){ vistas[t.id+'|'+t.ts]=1; });
+      (data._tumbas||[]).forEach(function(t){ if(t&&t.id&&!vistas[t.id+'|'+t.ts]) tumbas.push(t); });
+      try{ localStorage.setItem('ts_tumbas', JSON.stringify(tumbas)); }catch(e){}
+
+      var faltaNaNuvem=false;
+      function junta(local, nuvem){ var r=_juntar(local, nuvem, tumbas); if(r.soNoLocal) faltaNaNuvem=true; return r.lista; }
+
+      pedidos   = junta(pedidos,   data.pedidos);
+      financeiro= junta(financeiro,data.financeiro);
+      estoque   = junta(estoque,   data.estoque);
+      catalogo  = junta(catalogo,  data.catalogo);
+      clientes  = junta(clientes,  data.clientes);
+      if(typeof fornecedores!=='undefined') fornecedores=junta(fornecedores, data.fornecedores);
+      if(typeof ativos!=='undefined')       ativos      =junta(ativos,       data.ativos);
+      if(typeof recorrentes!=='undefined')  recorrentes =junta(recorrentes,  data.recorrentes);
+      if(typeof listaCompras!=='undefined' && data.listaCompras) listaCompras=data.listaCompras;
       try{
         DB.set('pedidos',pedidos); DB.set('fin',financeiro); DB.set('est',estoque);
         DB.set('cat',catalogo); DB.set('clientes',clientes);
         if(typeof fornecedores!=='undefined') DB.set('fornecedores',fornecedores);
         if(typeof ativos!=='undefined') DB.set('ativos',ativos);
+        if(typeof recorrentes!=='undefined') DB.set('recorrentes',recorrentes);
         DB.set('lista_compras',(typeof listaCompras!=='undefined'?listaCompras:[]));
       }catch(e){}
+      // o que veio da mesclagem não é alteração local: não pode virar lápide
+      if(typeof _snapshot==='function'){ try{ _snapshot(); }catch(e){} }
       localStorage.setItem('ts_ultimaSync', String(rup));
       if(typeof renderScreen==='function' && typeof currentScreen!=='undefined'){ try{ renderScreen(currentScreen); }catch(e){} }
       if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
       if(typeof toast==='function') toast('🔄 Atualizado da nuvem');
+      if(faltaNaNuvem) window._fbPush();          // a nuvem não tinha tudo daqui: envia a união
     });
   }
+  window._aplicarRemoto=_aplicarRemoto;   // usados pelos testes
+  window._dadosLocais=_dadosLocais;
 
   try{
     firebase.auth().onAuthStateChanged(function(user){
@@ -10040,10 +10090,9 @@ else appLockInit();
           fdoc.onSnapshot(function(snap){
             try{
               if(!snap.exists){ window._fbPush(); return; }            // nuvem vazia → sobe o local
-              var d=snap.data(); var rup=parseFloat(d.updatedAt||0);
-              var localTs=parseFloat(localStorage.getItem('ts_ultimaSync')||'0')||0;
-              if(rup>localTs){ _aplicarRemoto(d); }                    // nuvem mais nova → aplica neste aparelho
-              else if(localTs>rup){ window._fbPush(); }                 // local mais novo → sobe pra nuvem
+              // Junta sempre os dois lados. Se sobrar coisa que só existe
+              // aqui, o próprio _aplicarRemoto envia a união em seguida.
+              _aplicarRemoto(snap.data());
             }catch(e){ console.warn('[FB] snapshot', e); }
           }, function(err){ console.warn('[FB] snapshot', err); });
         }
