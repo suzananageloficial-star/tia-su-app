@@ -1536,11 +1536,11 @@ html, body {
       </div>
       <div class="form-group" id="f-estoque-block" style="display:none;background:var(--cyan-l);border-radius:12px;padding:10px 12px">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--cyan-d);cursor:pointer;margin-bottom:8px">
-          <input type="checkbox" id="f-add-estoque" checked onchange="_toggleEstoqueFin()" style="width:18px;height:18px;accent-color:#0097A7">
-          <svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg> Dar entrada no estoque
+          <input type="checkbox" id="f-add-estoque" onchange="_toggleEstoqueFin()" style="width:18px;height:18px;accent-color:#0097A7">
+          <svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg> Cadastrar como itens avulsos para vender
         </label>
         <div id="f-estoque-campos">
-          <div style="font-size:11px;color:var(--cyan-d);margin-bottom:6px">Um item por material. Dá pra adicionar, editar ou remover antes de Registrar.</div>
+          <div style="font-size:11px;color:var(--cyan-d);margin-bottom:6px">Um item por linha. Cada um vira item avulso no pedido, com o custo por unidade. Nome igual a um avulso que já existe atualiza o custo dele.</div>
           <div id="f-est-linhas"></div>
           <datalist id="f-est-datalist"></datalist>
           <button type="button" onclick="_addEstLinhaFin()" class="btn btn-ghost btn-sm" style="width:100%;margin-top:2px;border:1.5px dashed var(--cyan);color:var(--cyan-d);font-size:12px;font-weight:700">+ adicionar item</button>
@@ -2936,22 +2936,24 @@ function salvarFin() {
       const un  = l.un || 'un';
       const vItem = parseFloat(l.valor) || 0;
       if (qtd > 0 && nomeItem) {
-        const unit = vItem / qtd;
-        const ix = estoque.findIndex(e => (e.nome||'').toLowerCase().trim() === nomeItem.toLowerCase());
+        const unit = Math.round((vItem / qtd) * 100) / 100;
+        // Sem controle de estoque desde 17/09/2026: a compra marcada vira ITEM
+        // AVULSO para vender, com o custo por unidade. Nome igual atualiza o custo.
+        const nmAv = nomeItem.toLowerCase();
+        const ix = catalogo.findIndex(p => p && p.avulso && (p.nome||'').toLowerCase().trim() === nmAv);
         let itemId;
         if (ix >= 0) {
-          estoque[ix].qtd = (parseFloat(estoque[ix].qtd)||0) + qtd;
-          if (unit > 0) estoque[ix].preco = unit;
-          itemId = estoque[ix].id;
+          if (unit > 0) { catalogo[ix].custo = unit; catalogo[ix].matCusto = unit; }
+          itemId = catalogo[ix].id;
         } else {
           itemId = uid();
-          estoque.push({ id: itemId, nome: nomeItem, cat: cat, un: un, qtd: qtd, min: 0, preco: unit, forn: '' });
+          catalogo.push({ id: itemId, avulso: true, nome: nomeItem, cat: 'Avulso', un: un, custo: unit, matCusto: unit, preco: 0, mg: 0 });
         }
         entradas.push({ itemId: itemId, nome: nomeItem, qtd: qtd });
         nAdd++;
       }
     });
-    if (nAdd) { obj.estoqueEntradas = entradas; msgEstoque = ' <svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg> ' + nAdd + ' item(ns) no estoque'; }
+    if (nAdd) { obj.avulsosCadastrados = entradas; msgEstoque = ' · ' + nAdd + ' item(ns) avulso(s) cadastrado(s)'; }
   }
 
   save();
@@ -6665,7 +6667,7 @@ function exportarExcel() {
     // ── Catálogo ──
     if (catalogo && catalogo.length > 0) {
       const catRows = [['ID','Nome','Categoria','Preço','Custo','Notas']];
-      catalogo.forEach(p => catRows.push([
+      catalogo.filter(p => p && !p.linha).forEach(p => catRows.push([
         p.id, p.nome||'', p.cat||'', p.preco||0, p.custo||0, p.obs||''
       ]));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catRows), '<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M12 12 4 7v10ZM12 12l8-5v10Z"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg> Catálogo');
@@ -8096,11 +8098,13 @@ function _escHtml(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(
 function _popularFiltroCat(){
   var sel=document.getElementById('cat-filtro'); if(!sel) return;
   var atual=sel.value||'__todas__';
-  var cats=[]; catalogo.forEach(function(p){ var c=(p.cat||'Sem categoria'); if(cats.indexOf(c)<0) cats.push(c); });
+  // As linhas do pedido moram no catálogo, mas não são produto: ficam fora da Precificação.
+  var base=catalogo.filter(function(p){ return p && !p.linha; });
+  var cats=[]; base.forEach(function(p){ var c=(p.cat||'Sem categoria'); if(cats.indexOf(c)<0) cats.push(c); });
   cats.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
-  var opts='<option value="__todas__">Todas as categorias ('+catalogo.length+')</option>';
+  var opts='<option value="__todas__">Todas as categorias ('+base.length+')</option>';
   cats.forEach(function(c){
-    var n=catalogo.filter(function(p){ return (p.cat||'Sem categoria')===c; }).length;
+    var n=base.filter(function(p){ return (p.cat||'Sem categoria')===c; }).length;
     opts+='<option value="'+_escHtml(c)+'">'+_escHtml(c)+' ('+n+')</option>';
   });
   sel.innerHTML=opts;
@@ -8110,7 +8114,8 @@ function _popularFiltroCat(){
 function _catVisiveis(){
   var sel=document.getElementById('cat-filtro');
   var f=sel?sel.value:'__todas__';
-  return (!f||f==='__todas__') ? catalogo.slice() : catalogo.filter(function(p){ return (p.cat||'Sem categoria')===f; });
+  var base=catalogo.filter(function(p){ return p && !p.linha; });
+  return (!f||f==='__todas__') ? base : base.filter(function(p){ return (p.cat||'Sem categoria')===f; });
 }
 function _marcarTodosCat(){
   var boxes=document.querySelectorAll('#catalogo-list .cat-sel');
@@ -8344,7 +8349,8 @@ function salvarProduto(){
   };
   if(_editandoProdutoId){
     var idx=catalogo.findIndex(function(x){return x.id===_editandoProdutoId;});
-    if(idx>=0) catalogo[idx]=prod; else catalogo.push(prod);
+    // editar um item avulso pela Precificação não pode tirar a marca de avulso
+    if(idx>=0){ if(catalogo[idx].avulso) prod.avulso=true; catalogo[idx]=prod; } else catalogo.push(prod);
     toast('✅ "'+nome+'" atualizado · '+fmt(preco)+'!');
   } else {
     catalogo.push(prod);
@@ -9369,7 +9375,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v17/09-c28';
+    var ver='v17/09-c29';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9479,6 +9485,466 @@ async function removerSenhaApp(){
 }
 if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', appLockInit);
 else appLockInit();
+</script>
+
+<!-- ════════ APP ENXUTO: LINHAS DO PEDIDO + ITENS AVULSOS (Claude 17/09/2026) ════════ -->
+<style>
+#nav-estoque,#nav-compras{display:none!important}
+#p-linhas-botoes{margin-bottom:10px}
+.ln-botoes{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.ln-bt{border:1.5px solid var(--pink);background:#fff;color:var(--pink);border-radius:18px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.linha-painel{background:#FDF2F7;border-radius:10px;padding:8px 10px;margin:0 0 8px}
+.linha-painel .lg{margin-bottom:6px}
+.linha-painel .lg-t{font-size:10px;font-weight:800;color:var(--gray-d);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.linha-painel .chips{display:flex;flex-wrap:wrap;gap:5px}
+.ln-chip{border:1.5px solid #E9C6D6;background:#fff;color:#555;border-radius:14px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer}
+.ln-chip.on{background:var(--pink);border-color:var(--pink);color:#fff}
+.linha-painel .ln-custo{font-size:11px;color:var(--gray-d);text-align:right;font-weight:700;margin-top:2px}
+.le-ajuda{font-size:11px;color:var(--gray-d);line-height:1.5;margin-bottom:10px}
+.le-card{border:1px solid #eee;border-radius:12px;padding:10px;margin-bottom:10px;background:#fff}
+.le-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.le-row input[type=text],.le-row input[type=number],.le-row select{border:1px solid #e5e5e5;border-radius:8px;padding:7px 8px;font-size:13px;min-width:0;background:#fff}
+.le-grupo{background:#F6F6F8;border-radius:10px;padding:8px;margin:6px 0}
+.le-mini{font-size:11px;color:var(--gray-d);display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.le-x{background:none;border:none;color:#E53935;font-size:20px;line-height:1;cursor:pointer;padding:0 4px}
+.le-add{width:100%;border:1.5px dashed #00BCD4;background:none;color:#00838F;border-radius:9px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;margin-top:4px}
+.le-tabs{display:flex;gap:6px;background:#F2F2F4;padding:4px;border-radius:12px;margin-bottom:10px}
+.le-tabs button{flex:1;border:none;border-radius:9px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;background:none;color:var(--gray-d)}
+.le-tabs button.on{background:#fff;color:var(--pink)}
+</style>
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+   APP ENXUTO (decidido com a Suzana em 17/09/2026)
+
+   • Estoque e Compras saem do menu. Só ficam escondidos: os dados antigos
+     continuam guardados e sincronizando.
+   • O pedido é lançado por LINHA genérica (kits, festa na caixa, balões),
+     como no app da Laura: escolhe a linha, marca as opções, o nome do item
+     se monta sozinho e o custo entra no gasto do pedido.
+   • Itens avulsos (canecas, camisetas, necessaires...) nascem da compra
+     lançada no Financeiro. Não se conta estoque.
+
+   ONDE MORA: dentro do catálogo, que já sincroniza e mescla por id.
+     linha:  {id:'ln_...', linha:true, nome, desc, custoBase, ativo, ordem,
+              grupos:[{nome, varios, mostrarNome, opcoes:[{nome, custo, vezes}]}]}
+     avulso: {id, avulso:true, nome, custo, preco}
+   No pedido, cada item guarda linhaId/avulsoId, opcoes {grupo:[opções]} e
+   custoUn. O custo gravado no pedido NÃO muda se o custo da linha mudar
+   depois: pedido antigo guarda o que valia no dia.
+
+   CUIDADO COM A SINCRONIZAÇÃO: as linhas-padrão nascem com id FIXO e carimbo
+   1 (bem antigo), e entram no "retrato" do _snapshot para o save() não
+   carimbá-las com a hora de agora. Assim, se o outro aparelho já editou os
+   custos, a versão dele vence a mesclagem em vez de ser atropelada pela
+   linha em branco deste aparelho. Linha-padrão não se exclui (voltaria na
+   próxima abertura): desliga em "aparece no pedido".
+   ═══════════════════════════════════════════════════════════════════ */
+(function(){
+  function R2(v){ return Math.round((parseFloat(v)||0)*100)/100; }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function porNome(a,b){ return (a.nome||'').localeCompare(b.nome||'','pt-BR'); }
+  function copia(o){ return JSON.parse(JSON.stringify(o)); }
+
+  function gTamanho(){ return {nome:'Tamanho', varios:false, mostrarNome:false, opcoes:[{nome:'Individual',custo:0},{nome:'Duplo',custo:0,vezes:2}]}; }
+  function gPires(){ return {nome:'Pires', varios:false, mostrarNome:true, opcoes:[{nome:'Madeira',custo:0},{nome:'Cerâmica',custo:0}]}; }
+  var LINHAS_PADRAO=[
+    {id:'ln_kit_xicaras_completo', nome:'Kit Xícaras Completo', desc:'com pires e colheres', grupos:[gTamanho(), gPires()]},
+    {id:'ln_kit_xicaras_simples',  nome:'Kit Xícaras Simples',  desc:'somente as xícaras',  grupos:[gTamanho()]},
+    {id:'ln_kit_canecas_completo', nome:'Kit Canecas Completo', desc:'com pires e colheres', grupos:[gTamanho(), gPires()]},
+    {id:'ln_kit_canecas_simples',  nome:'Kit Canecas Simples',  desc:'somente as canecas',  grupos:[gTamanho()]},
+    {id:'ln_festa_caixa_personalizada', nome:'Festa na Caixa Personalizada', desc:'', grupos:[
+      {nome:'Tipo de caixa', varios:false, mostrarNome:true, opcoes:[]},
+      {nome:'Personalização', varios:true, mostrarNome:true, opcoes:[]}]},
+    {id:'ln_festa_caixa_completa', nome:'Festa na Caixa Completa', desc:'serve para qualquer modelo', grupos:[
+      {nome:'Tipo de caixa', varios:false, mostrarNome:true, opcoes:[]},
+      {nome:'Balão', varios:false, mostrarNome:false, opcoes:[{nome:'Sem balão',custo:0},{nome:'Com balão',custo:0}]},
+      {nome:'Personalização', varios:false, mostrarNome:false, opcoes:[{nome:'Sem personalização',custo:0},{nome:'Com personalização',custo:0}]},
+      {nome:'Itens da cesta', varios:true, mostrarNome:true, opcoes:[{nome:'Suco',custo:0},{nome:'Bolo',custo:0},{nome:'Pão de queijo',custo:0}]}]},
+    {id:'ln_baloes', nome:'Balões', desc:'arranjos, arcos e montagens', grupos:[
+      {nome:'Tipo', varios:false, mostrarNome:false, opcoes:[{nome:'Arranjo',custo:0},{nome:'Arco',custo:0},{nome:'Montagem externa',custo:0}]}]}
+  ];
+  var IDS_PADRAO=LINHAS_PADRAO.map(function(l){ return l.id; });
+
+  /* ── dados ─────────────────────────────────────────────────────── */
+  window._seedLinhas=function(){
+    if(typeof catalogo==='undefined' || !Array.isArray(catalogo)) return;
+    var novos=0;
+    LINHAS_PADRAO.forEach(function(d,i){
+      if(catalogo.some(function(p){ return p && p.id===d.id; })) return;
+      var r=copia(d); r.linha=true; r.ativo=true; r.custoBase=0; r.ordem=i; r.cat='Linha do pedido'; r.updatedAt=1;
+      catalogo.push(r); novos++;
+      try{ if(typeof _snapIds!=='undefined'){ _snapIds.catalogo=_snapIds.catalogo||{}; _snapIds.catalogo[r.id]=JSON.stringify(r); } }catch(e){}
+    });
+    if(novos){ try{ DB.set('cat', catalogo); }catch(e){} }
+  };
+  function linhas(){ window._seedLinhas(); return catalogo.filter(function(p){ return p && p.linha; }).sort(function(a,b){ return (a.ordem||0)-(b.ordem||0); }); }
+  function avulsos(){ return catalogo.filter(function(p){ return p && p.avulso; }).sort(porNome); }
+  function porId(id){ return catalogo.find(function(p){ return p && p.id===id; }); }
+
+  window._custoLinha=function(l, sel){
+    var soma=parseFloat(l.custoBase)||0, vezes=1;
+    (l.grupos||[]).forEach(function(g){
+      var marc=(sel&&sel[g.nome])||[];
+      (g.opcoes||[]).forEach(function(o){
+        if(marc.indexOf(o.nome)<0) return;
+        soma+=parseFloat(o.custo)||0;
+        var v=parseFloat(o.vezes); if(v>1) vezes*=v;
+      });
+    });
+    return R2(soma*vezes);
+  };
+  window._nomeLinha=function(l, sel){
+    var partes=[];
+    (l.grupos||[]).forEach(function(g){
+      var marc=((sel&&sel[g.nome])||[]).filter(function(n){ return (g.opcoes||[]).some(function(o){ return o.nome===n; }); });
+      if(!marc.length) return;
+      partes.push(g.mostrarNome ? (g.nome+': '+marc.join(', ')) : marc.join(', '));
+    });
+    return l.nome + (partes.length ? ' — '+partes.join(' · ') : '');
+  };
+
+  /* ── itens do pedido ───────────────────────────────────────────── */
+  function lista(){ return document.getElementById('p-itens-lista'); }
+  function painelDe(row){ var l=lista(); return l ? l.querySelector('.linha-painel[data-for="'+row.id+'"]') : null; }
+  function selDe(row){ try{ return JSON.parse(row.dataset.opcoes||'{}')||{}; }catch(e){ return {}; } }
+  function custoItensTela(){
+    var s=0;
+    document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(r){
+      var u=parseFloat(r.dataset.custoUn);
+      if(u>0) s+=u*(parseFloat((r.querySelector('.pi-qtd')||{}).value)||0);
+    });
+    return R2(s);
+  }
+  function ligarRow(row){
+    var q=row.querySelector('.pi-qtd');
+    if(q) q.addEventListener('input', function(){ atualizaCustoPainel(row); calcularGastoReal(); });
+    var d=row.querySelector('.material-del');
+    if(d) d.addEventListener('click', function(){ var p=painelDe(row); if(p) p.remove(); calcularGastoReal(); });
+  }
+  function atualizaCustoPainel(row){
+    var p=painelDe(row); if(!p) return;
+    var el=p.querySelector('.ln-custo'); if(!el) return;
+    var u=parseFloat(row.dataset.custoUn)||0;
+    var q=parseFloat((row.querySelector('.pi-qtd')||{}).value)||0;
+    el.textContent = u>0
+      ? ('Custo: '+fmt(u)+' por unidade'+(q>1?(' · '+fmt(R2(u*q))+' no total'):''))
+      : 'Custo ainda em R$ 0,00. Preencha em Precificação, Linhas do pedido.';
+  }
+  function renderPainel(row){
+    var p=painelDe(row); var l=porId(row.dataset.linhaId); if(!p || !l) return;
+    var sel=selDe(row);
+    var html=(l.grupos||[]).filter(function(g){ return (g.opcoes||[]).length; }).map(function(g){
+      var marc=sel[g.nome]||[];
+      return '<div class="lg"><div class="lg-t">'+esc(g.nome)+(g.varios?' · pode marcar vários':'')+'</div><div class="chips">'
+        + g.opcoes.map(function(o){
+            return '<button type="button" class="ln-chip'+(marc.indexOf(o.nome)>=0?' on':'')+'" data-g="'+esc(g.nome)+'" data-o="'+esc(o.nome)+'">'+esc(o.nome)+'</button>';
+          }).join('')
+        + '</div></div>';
+    }).join('');
+    if(!html) html='<div class="le-ajuda" style="margin:0">Esta linha ainda não tem opções. Cadastre em Precificação, Linhas do pedido.</div>';
+    p.innerHTML=html+'<div class="ln-custo"></div>';
+    atualizaCustoPainel(row);
+  }
+  function alternarOpcao(row, gNome, oNome){
+    var l=porId(row.dataset.linhaId); if(!l) return;
+    var g=(l.grupos||[]).find(function(x){ return x.nome===gNome; }); if(!g) return;
+    var sel=selDe(row); var marc=(sel[gNome]||[]).slice();
+    var i=marc.indexOf(oNome);
+    if(i>=0) marc.splice(i,1); else if(g.varios) marc.push(oNome); else marc=[oNome];
+    if(marc.length) sel[gNome]=marc; else delete sel[gNome];
+    row.dataset.opcoes=JSON.stringify(sel);
+    row.dataset.custoUn=String(window._custoLinha(l, sel));
+    var ni=row.querySelector('input[type=text]'); if(ni) ni.value=window._nomeLinha(l, sel);
+    renderPainel(row); recalcularTotal(); calcularGastoReal();
+  }
+  function preencherProduto(nome){ var el=document.getElementById('p-produto'); if(el && !el.value.trim()) el.value=nome; }
+
+  window._addLinhaPedido=function(linhaId, salvo){
+    var li=lista(); if(!li) return;
+    var l=porId(linhaId);
+    var sel=(salvo && salvo.opcoes) || {};
+    adicionarItemPedido(salvo ? salvo.nome : (l ? l.nome : ''), salvo ? salvo.qtd : 1, salvo ? salvo.preco : '', salvo ? salvo.un : 'un');
+    var row=li.lastElementChild; if(!row) return;
+    row.dataset.linhaId=linhaId;
+    row.dataset.opcoes=JSON.stringify(sel);
+    row.dataset.custoUn=String((salvo && salvo.custoUn!=null) ? R2(salvo.custoUn) : (l ? window._custoLinha(l, sel) : 0));
+    ligarRow(row);
+    if(l){
+      var painel=document.createElement('div'); painel.className='linha-painel'; painel.dataset.for=row.id;
+      painel.addEventListener('click', function(ev){
+        var b=ev.target.closest('.ln-chip'); if(!b) return;
+        ev.preventDefault(); alternarOpcao(row, b.dataset.g, b.dataset.o);
+      });
+      row.after(painel); renderPainel(row);
+      if(!salvo) preencherProduto(l.nome);
+    }
+    calcularGastoReal();
+  };
+  window._addAvulsoPedido=function(av, salvo){
+    var li=lista(); if(!li) return;
+    adicionarItemPedido(salvo ? salvo.nome : av.nome, salvo ? salvo.qtd : 1, salvo ? salvo.preco : (parseFloat(av.preco)>0 ? av.preco : ''), salvo ? salvo.un : (av.un||'un'));
+    var row=li.lastElementChild; if(!row) return;
+    row.dataset.avulsoId=av.id||'';
+    row.dataset.custoUn=String((salvo && salvo.custoUn!=null) ? R2(salvo.custoUn) : R2(av.custo));
+    ligarRow(row);
+    if(!salvo) preencherProduto(av.nome);
+    calcularGastoReal();
+  };
+
+  window.coletarItensPedido=function(){
+    var itens=[];
+    document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(row){
+      var nome=((row.querySelector('input[type=text]')||{}).value||'').trim();
+      var qtd=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
+      var un=((row.querySelector('.pi-un')||{}).value||'').trim()||'un';
+      var preco=parseFloat((row.querySelector('.pi-preco')||{}).value)||0;
+      if(!(nome || preco)) return;
+      var it={nome:nome, qtd:qtd, un:un, preco:preco};
+      if(row.dataset.linhaId){ it.linhaId=row.dataset.linhaId; it.opcoes=selDe(row); }
+      if(row.dataset.avulsoId) it.avulsoId=row.dataset.avulsoId;
+      if(row.dataset.custoUn!=null && row.dataset.custoUn!=='') it.custoUn=R2(row.dataset.custoUn);
+      itens.push(it);
+    });
+    return itens;
+  };
+  window.popularItensPedido=function(itens){
+    var li=lista(); if(!li) return;
+    li.innerHTML='';
+    (itens||[]).forEach(function(it){
+      if(it.linhaId && porId(it.linhaId)){ window._addLinhaPedido(it.linhaId, it); return; }
+      if(it.avulsoId){ window._addAvulsoPedido(porId(it.avulsoId)||{id:it.avulsoId, nome:it.nome, custo:it.custoUn}, it); return; }
+      adicionarItemPedido(it.nome, it.qtd, it.preco, it.un);
+      if(it.custoUn!=null){
+        var row=li.lastElementChild;
+        row.dataset.custoUn=String(R2(it.custoUn));
+        if(it.linhaId){ row.dataset.linhaId=it.linhaId; row.dataset.opcoes=JSON.stringify(it.opcoes||{}); }
+        ligarRow(row);
+      }
+    });
+    recalcularTotal();
+  };
+
+  /* gasto do pedido = materiais (como antes) + custo das linhas e avulsos */
+  window.calcularGastoReal=function(){
+    var mat=0;
+    document.querySelectorAll('#p-materiais-lista .material-row').forEach(function(row){
+      mat+=window._parseMoeda((row.querySelector('.mat-valor')||{}).value);
+    });
+    var total=R2(mat+custoItensTela());
+    var disp=document.getElementById('p-gasto-real'); if(disp) disp.textContent='R$ '+total.toFixed(2).replace('.',',');
+    var c=document.getElementById('p-custo'); if(c && total>0) c.value=total.toFixed(2);
+    calcularLucro();
+  };
+
+  /* o salvarPedido original só soma materiais no custoReal, que é o custo
+     que Relatórios e Tráfego usam. Completa com o custo das linhas. */
+  var salvarPedidoOrig=window.salvarPedido;
+  window.salvarPedido=function(){
+    var idAntes=(document.getElementById('p-id')||{}).value||'';
+    var antes={}; pedidos.forEach(function(p){ antes[p.id]=1; });
+    var ret=salvarPedidoOrig.apply(this, arguments);
+    try{
+      var p=idAntes ? pedidos.find(function(x){ return x.id===idAntes; }) : pedidos.find(function(x){ return !antes[x.id]; });
+      if(p && Array.isArray(p.itens)){
+        var lin=R2(p.itens.reduce(function(s,it){ return s+(parseFloat(it.custoUn)||0)*(parseFloat(it.qtd)||0); },0));
+        if(lin>0){
+          var mat=R2((p.materiais||[]).reduce(function(s,m){ return s+(m.qtd||0)*(m.valor||0); },0));
+          var cr=R2(mat+lin);
+          if(p.custoReal!==cr){ p.custoReal=cr; if(!(parseFloat(p.custo)>0)) p.custo=cr; save(); }
+        }
+      }
+    }catch(e){ console.warn('[enxuto] custo do pedido', e); }
+    return ret;
+  };
+
+  /* seletor do pedido: botões das linhas + avulsos e produtos antigos */
+  function renderBotoesLinhas(){
+    var grp=document.getElementById('puxar-catalogo-group'); if(!grp) return;
+    var box=document.getElementById('p-linhas-botoes');
+    if(!box){ box=document.createElement('div'); box.id='p-linhas-botoes'; grp.insertBefore(box, grp.firstChild); }
+    var ativas=linhas().filter(function(l){ return l.ativo!==false; });
+    box.innerHTML = ativas.length
+      ? '<label class="form-label">Adicionar linha</label><div class="ln-botoes">'
+        + ativas.map(function(l){ return '<button type="button" class="ln-bt" onclick="_addLinhaPedido(\''+l.id+'\')">'+esc(l.nome)+'</button>'; }).join('')
+        + '</div>'
+      : '';
+  }
+  window.popularCatalogoSelect=function(){
+    var sel=document.getElementById('p-catalogo-sel'); if(!sel) return;
+    var op=function(p){ return '<option value="'+esc(p.id)+'">'+esc(p.nome)+(parseFloat(p.preco)>0?(' · '+fmt(p.preco)):'')+'</option>'; };
+    var av=avulsos();
+    var prods=catalogo.filter(function(p){ return p && !p.linha && !p.avulso; }).sort(porNome);
+    var h='<option value="">— item avulso ou produto pronto —</option>';
+    if(av.length) h+='<optgroup label="Itens avulsos">'+av.map(op).join('')+'</optgroup>';
+    if(prods.length) h+='<optgroup label="Produtos do catálogo">'+prods.map(op).join('')+'</optgroup>';
+    sel.innerHTML=h;
+    renderBotoesLinhas();
+  };
+  var puxarOrig=window.puxarProdutoCatalogo;
+  window.puxarProdutoCatalogo=function(id){
+    var p=id && porId(id);
+    var s=document.getElementById('p-catalogo-sel');
+    if(p && p.avulso){ window._addAvulsoPedido(p); if(s) s.value=''; return; }
+    if(p && p.linha){ window._addLinhaPedido(p.id); if(s) s.value=''; return; }
+    return puxarOrig.apply(this, arguments);
+  };
+
+  /* Financeiro: a lista da compra sugere os avulsos, não mais o estoque */
+  window._popularDatalistEstoqueFin=function(){
+    var dl=document.getElementById('f-est-datalist'); if(!dl) return;
+    dl.innerHTML=avulsos().map(function(a){ return '<option value="'+esc(a.nome)+'">'; }).join('');
+  };
+  var openOrig=window.openModal;
+  window.openModal=function(id, isNew){
+    if(id==='modal-pedido') window._seedLinhas();
+    var ret=openOrig.apply(this, arguments);
+    if(id==='modal-fin' && isNew){ var c=document.getElementById('f-add-estoque'); if(c) c.checked=false; }
+    return ret;
+  };
+
+  /* ── editor: Precificação › Linhas do pedido e avulsos ─────────── */
+  var rasc=null, aba='l';
+  function criarModal(){
+    if(document.getElementById('modal-linhas')) return;
+    var m=document.createElement('div'); m.className='modal-overlay'; m.id='modal-linhas';
+    m.innerHTML='<div class="modal"><div class="modal-handle"></div>'
+      +'<div class="modal-title">Linhas do pedido e itens avulsos</div>'
+      +'<div class="modal-body"><div class="le-tabs"><button type="button" data-aba="l">Linhas do pedido</button><button type="button" data-aba="a">Itens avulsos</button></div><div id="le-conteudo"></div></div>'
+      +'<div class="form-actions"><button class="btn btn-outline" onclick="closeModal(\'modal-linhas\')">Cancelar</button><button class="btn btn-pink" style="flex:1" onclick="_leSalvar()">Salvar</button></div></div>';
+    document.body.appendChild(m);
+    m.addEventListener('input', aoDigitar);
+    m.addEventListener('change', aoDigitar);
+    m.addEventListener('click', aoClicar);
+  }
+  function num(v){ return (parseFloat(v)||0)>0 ? v : ''; }
+  function desenhar(){
+    var box=document.getElementById('le-conteudo'); if(!box || !rasc) return;
+    document.querySelectorAll('#modal-linhas .le-tabs button').forEach(function(b){ b.className=(b.dataset.aba===aba)?'on':''; });
+    if(aba==='a'){
+      box.innerHTML='<div class="le-ajuda">Os avulsos também nascem sozinhos quando você lança uma compra no Financeiro e marca <b>Cadastrar como itens avulsos</b>. Aqui você corrige nome, custo e preço de venda.</div>'
+        + rasc.avulsos.map(function(a,ai){
+            return '<div class="le-card"><div class="le-row"><input type="text" data-k="a.nome" data-ai="'+ai+'" value="'+esc(a.nome)+'" placeholder="Nome do item" style="flex:1;font-weight:700"><button type="button" class="le-x" data-act="dela" data-ai="'+ai+'" title="Excluir">×</button></div>'
+              +'<div class="le-row"><span class="le-mini">Custo R$</span><input type="number" step="0.01" min="0" data-k="a.custo" data-ai="'+ai+'" value="'+num(a.custo)+'" placeholder="0,00" style="width:90px"><span class="le-mini">Venda R$</span><input type="number" step="0.01" min="0" data-k="a.preco" data-ai="'+ai+'" value="'+num(a.preco)+'" placeholder="0,00" style="width:90px"></div></div>';
+          }).join('')
+        + '<button type="button" class="le-add" data-act="adda">+ item avulso</button>';
+      return;
+    }
+    box.innerHTML='<div class="le-ajuda"><b>Como o custo é calculado:</b> custo base + custo de cada opção marcada no pedido. Opção com <b>×2</b> multiplica o kit inteiro (use no Duplo). Mudar um custo aqui não altera pedido já salvo.</div>'
+      + rasc.linhas.map(function(l,li){
+          var padrao=IDS_PADRAO.indexOf(l.id)>=0;
+          return '<div class="le-card">'
+            +'<div class="le-row"><input type="text" data-k="l.nome" data-li="'+li+'" value="'+esc(l.nome)+'" style="flex:1;font-weight:700">'
+            +'<label class="le-mini"><input type="checkbox" data-k="l.ativo" data-li="'+li+'"'+(l.ativo!==false?' checked':'')+'> aparece no pedido</label>'
+            +(padrao?'':'<button type="button" class="le-x" data-act="dell" data-li="'+li+'" title="Excluir linha">×</button>')+'</div>'
+            +'<div class="le-row"><span class="le-mini" style="flex:1;white-space:normal">Custo base por unidade</span><span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-k="l.custoBase" data-li="'+li+'" value="'+num(l.custoBase)+'" placeholder="0,00" style="width:90px"></div>'
+            + (l.grupos||[]).map(function(g,gi){
+                return '<div class="le-grupo">'
+                  +'<div class="le-row"><input type="text" data-k="g.nome" data-li="'+li+'" data-gi="'+gi+'" value="'+esc(g.nome)+'" placeholder="Nome do grupo" style="flex:1;font-weight:700">'
+                  +'<label class="le-mini"><input type="checkbox" data-k="g.varios" data-li="'+li+'" data-gi="'+gi+'"'+(g.varios?' checked':'')+'> vários</label>'
+                  +'<button type="button" class="le-x" data-act="delg" data-li="'+li+'" data-gi="'+gi+'" title="Excluir grupo">×</button></div>'
+                  + (g.opcoes||[]).map(function(o,oi){
+                      var v=parseFloat(o.vezes)||1;
+                      return '<div class="le-row"><input type="text" data-k="o.nome" data-li="'+li+'" data-gi="'+gi+'" data-oi="'+oi+'" value="'+esc(o.nome)+'" placeholder="Opção" style="flex:1">'
+                        +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-k="o.custo" data-li="'+li+'" data-gi="'+gi+'" data-oi="'+oi+'" value="'+num(o.custo)+'" placeholder="0,00" style="width:74px">'
+                        +'<select data-k="o.vezes" data-li="'+li+'" data-gi="'+gi+'" data-oi="'+oi+'" title="Multiplica o custo do kit inteiro"><option value="1"'+(v===1?' selected':'')+'>×1</option><option value="2"'+(v===2?' selected':'')+'>×2</option><option value="3"'+(v===3?' selected':'')+'>×3</option></select>'
+                        +'<button type="button" class="le-x" data-act="delo" data-li="'+li+'" data-gi="'+gi+'" data-oi="'+oi+'" title="Excluir opção">×</button></div>';
+                    }).join('')
+                  +'<button type="button" class="le-add" data-act="addo" data-li="'+li+'" data-gi="'+gi+'">+ opção</button></div>';
+              }).join('')
+            +'<button type="button" class="le-add" data-act="addg" data-li="'+li+'">+ grupo de opções</button></div>';
+        }).join('')
+      + '<button type="button" class="le-add" data-act="addl">+ nova linha</button>';
+  }
+  function idx(el, k){ var v=el.dataset[k]; return v==null ? -1 : parseInt(v,10); }
+  function aoDigitar(ev){
+    var t=ev.target; var k=t.dataset && t.dataset.k; if(!k || !rasc) return;
+    var val=(t.type==='checkbox') ? t.checked : t.value;
+    var li=idx(t,'li'), gi=idx(t,'gi'), oi=idx(t,'oi'), ai=idx(t,'ai');
+    var L=rasc.linhas[li], G=L&&L.grupos?L.grupos[gi]:null, O=G&&G.opcoes?G.opcoes[oi]:null, A=rasc.avulsos[ai];
+    switch(k){
+      case 'l.nome': if(L) L.nome=val; break;
+      case 'l.ativo': if(L) L.ativo=val; break;
+      case 'l.custoBase': if(L) L.custoBase=R2(val); break;
+      case 'g.nome': if(G) G.nome=val; break;
+      case 'g.varios': if(G) G.varios=val; break;
+      case 'o.nome': if(O) O.nome=val; break;
+      case 'o.custo': if(O) O.custo=R2(val); break;
+      case 'o.vezes': if(O){ var v=parseFloat(val)||1; if(v>1) O.vezes=v; else delete O.vezes; } break;
+      case 'a.nome': if(A) A.nome=val; break;
+      case 'a.custo': if(A){ A.custo=R2(val); A.matCusto=A.custo; } break;
+      case 'a.preco': if(A) A.preco=R2(val); break;
+    }
+  }
+  function aoClicar(ev){
+    var tab=ev.target.closest('[data-aba]');
+    if(tab){ aba=tab.dataset.aba; desenhar(); return; }
+    var b=ev.target.closest('[data-act]'); if(!b || !rasc) return;
+    var li=idx(b,'li'), gi=idx(b,'gi'), oi=idx(b,'oi'), ai=idx(b,'ai');
+    var L=rasc.linhas[li];
+    switch(b.dataset.act){
+      case 'addl':
+        rasc.linhas.push({id:'ln_'+uid(), linha:true, nome:'Nova linha', desc:'', custoBase:0, ativo:true, cat:'Linha do pedido',
+          ordem:rasc.linhas.reduce(function(m,x){ return Math.max(m, x.ordem||0); },0)+1, grupos:[]});
+        break;
+      case 'dell': if(L && confirm('Excluir a linha "'+L.nome+'"? Pedidos já salvos não mudam.')){ rasc.removidosL.push(L.id); rasc.linhas.splice(li,1); } break;
+      case 'addg': if(L){ L.grupos=L.grupos||[]; L.grupos.push({nome:'', varios:false, mostrarNome:true, opcoes:[]}); } break;
+      case 'delg': if(L && confirm('Excluir este grupo de opções?')) L.grupos.splice(gi,1); break;
+      case 'addo': if(L && L.grupos[gi]){ L.grupos[gi].opcoes=L.grupos[gi].opcoes||[]; L.grupos[gi].opcoes.push({nome:'', custo:0}); } break;
+      case 'delo': if(L && L.grupos[gi]) L.grupos[gi].opcoes.splice(oi,1); break;
+      case 'adda': rasc.avulsos.push({id:uid(), avulso:true, nome:'', cat:'Avulso', un:'un', custo:0, matCusto:0, preco:0, mg:0}); break;
+      case 'dela': if(rasc.avulsos[ai] && confirm('Excluir o avulso "'+(rasc.avulsos[ai].nome||'sem nome')+'"? Pedidos já salvos não mudam.')){ rasc.removidosA.push(rasc.avulsos[ai].id); rasc.avulsos.splice(ai,1); } break;
+      default: return;
+    }
+    desenhar();
+  }
+  window._abrirLinhas=function(){
+    window._seedLinhas(); criarModal();
+    rasc={linhas:copia(linhas()), avulsos:copia(avulsos()), removidosL:[], removidosA:[]};
+    aba='l'; desenhar();
+    openModal('modal-linhas');
+  };
+  window._leSalvar=function(){
+    if(!rasc) return;
+    rasc.linhas.forEach(function(L){
+      L.nome=(L.nome||'').trim()||'Linha sem nome';
+      L.grupos=(L.grupos||[]).map(function(g){
+        g.nome=(g.nome||'').trim();
+        g.opcoes=(g.opcoes||[]).filter(function(o){ o.nome=(o.nome||'').trim(); return !!o.nome; });
+        return g;
+      }).filter(function(g){ return g.nome || g.opcoes.length; });
+      var i=catalogo.findIndex(function(p){ return p && p.id===L.id; });
+      if(i>=0) catalogo[i]=L; else catalogo.push(L);
+    });
+    rasc.avulsos.forEach(function(A){
+      A.nome=(A.nome||'').trim();
+      var i=catalogo.findIndex(function(p){ return p && p.id===A.id; });
+      if(!A.nome){ if(i>=0) rasc.removidosA.push(A.id); return; }
+      if(i>=0) catalogo[i]=Object.assign({}, catalogo[i], A); else catalogo.push(A);
+    });
+    var fora=rasc.removidosL.concat(rasc.removidosA);
+    if(fora.length) catalogo=catalogo.filter(function(p){ return !(p && fora.indexOf(p.id)>=0); });
+    save();
+    closeModal('modal-linhas');
+    if(typeof renderCatalogo==='function') try{ renderCatalogo(); }catch(e){}
+    toast('Linhas e avulsos salvos');
+  };
+
+  function botaoPrecificacao(){
+    var tela=document.getElementById('screen-preco'); if(!tela || document.getElementById('le-atalho')) return;
+    var cab=tela.querySelector('.page-header');
+    var d=document.createElement('div'); d.id='le-atalho';
+    d.style.cssText='background:#FDF2F7;border:1.5px solid #F4C6D9;border-radius:14px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px';
+    d.innerHTML='<div style="flex:1"><div style="font-weight:800;font-size:14px;color:var(--pink)">Linhas do pedido e itens avulsos</div>'
+      +'<div style="font-size:11px;color:var(--gray-d);margin-top:2px">Kits, festa na caixa e balões: opções e custos de cada um.</div></div>'
+      +'<button type="button" class="btn btn-pink btn-sm" onclick="_abrirLinhas()">Abrir</button>';
+    if(cab && cab.nextSibling) tela.insertBefore(d, cab.nextSibling); else tela.insertBefore(d, tela.firstChild);
+  }
+
+  function iniciar(){
+    try{ window._seedLinhas(); criarModal(); botaoPrecificacao(); }catch(e){ console.warn('[enxuto]', e); }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
+})();
 </script>
 
 <!-- ════════ SYNC EM TEMPO REAL SEGURO — Firebase + LOGIN (Claude ago/2026) ════════
