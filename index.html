@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v18/09-c37';
+    var ver='v18/09-c38';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9532,6 +9532,18 @@ else appLockInit();
 .ln-botoes{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .ln-bt{border:1.5px solid var(--pink);background:#fff;color:var(--pink);border-radius:18px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer}
 .ln-dica{font-size:11px;color:var(--gray-d);line-height:1.5;margin:2px 0 6px}
+/* recolher cada item do pedido */
+.linha-painel .ln-resumo{display:none}
+.linha-painel.recolhido > *:not(.ln-resumo){display:none!important}
+.linha-painel.recolhido{padding:8px 10px}
+.linha-painel.recolhido .ln-resumo{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;
+  font-size:12px;font-weight:700;color:#7a6a70}
+.linha-painel .ln-resumo b{color:var(--pink);white-space:nowrap}
+.ln-recolher{width:100%;margin-top:8px;background:#fff;border:1.5px solid #E9C6D6;color:var(--pink);border-radius:9px;
+  padding:7px;font-size:12px;font-weight:700;cursor:pointer}
+.material-row.oculto{display:none!important}
+.mat-grupo[data-for]{cursor:pointer}
+.mat-grupo[data-for]::before{content:attr(data-seta) ' '}
 #aviso-versao{position:fixed;left:10px;right:10px;z-index:9999;display:flex;align-items:center;gap:10px;
   background:var(--pink,#EC2A7F);color:#fff;border-radius:14px;padding:10px 12px 10px 16px;
   box-shadow:0 6px 18px rgba(236,42,127,.35);font-size:13px;font-weight:700;max-width:560px;margin:0 auto}
@@ -10119,7 +10131,15 @@ else appLockInit();
     // guardar esta montagem como a que já vem marcada da próxima vez
     html+='<button type="button" class="ln-padrao" data-padrao="1">Salvar esta montagem como padrão do '+esc(l.nome)+'</button>';
     if(!html) html='<div class="le-ajuda" style="margin:0">Esta linha ainda não tem campos. Configure em Precificação, Linhas do pedido.</div>';
-    p.innerHTML=html+'<div class="ln-custo"></div>';
+    /* RECOLHER (Suzana, 18/09): com vários itens o pedido ficava gigante.
+       Recolhido, o bloco mostra só o resumo; os materiais dele recolhem
+       junto na lista. Nada é apagado: só deixa de aparecer. */
+    var nMats=matsDaLinha(row.id).length;
+    var resumo='<div class="ln-resumo" data-abrir="1"><span>▸ '+(nMats ? (nMats+' materiais dentro') : 'nada escolhido ainda')
+      +' · custo '+fmt(custoTotalDaLinha(row))+'</span><b>Abrir</b></div>';
+    p.innerHTML=resumo+html+'<div class="ln-custo"></div>'
+      +'<button type="button" class="ln-recolher" data-recolher="1">Recolher este item</button>';
+    p.classList.toggle('recolhido', row.dataset.recolhido==='1');
     var dl=document.getElementById('ts-cores-datalist');
     if(dl) dl.innerHTML=coresSalvas().map(function(c){ return '<option value="'+esc(c)+'">'; }).join('');
     atualizaCustoPainel(row);
@@ -10180,6 +10200,35 @@ else appLockInit();
   }
   function preencherProduto(nome){ var el=document.getElementById('p-produto'); if(el && !el.value.trim()) el.value=nome; }
 
+  /* custo desta linha: materiais dela (já multiplicados) + base × qtd */
+  function custoTotalDaLinha(row){
+    var s=0;
+    matsDaLinha(row.id).forEach(function(m){ s+=window._parseMoeda((m.querySelector('.mat-valor')||{}).value); });
+    var q=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
+    s+=(parseFloat(row.dataset.custoUn)||0)*q;
+    return R2(s);
+  }
+  function recolher(row, sim){
+    row.dataset.recolhido = sim ? '1' : '';
+    renderPainel(row);
+    aplicarRecolhidoMateriais();
+  }
+  /* o que está recolhido some também da lista de materiais (só visual) */
+  function aplicarRecolhidoMateriais(){
+    var lista=document.getElementById('p-materiais-lista'); if(!lista) return;
+    [].slice.call(lista.querySelectorAll('.material-row')).forEach(function(m){
+      var dono=m.dataset.deLinha && document.getElementById(m.dataset.deLinha);
+      m.classList.toggle('oculto', !!(dono && dono.dataset.recolhido==='1'));
+    });
+    [].slice.call(lista.querySelectorAll('.mat-grupo[data-for]')).forEach(function(h){
+      var dono=document.getElementById(h.dataset.for);
+      var fechado=!!(dono && dono.dataset.recolhido==='1');
+      h.classList.toggle('fechado', fechado);
+      h.dataset.seta=fechado ? '▸' : '▾';
+    });
+  }
+  window._recolherLinha=function(rowId, sim){ var r=document.getElementById(rowId); if(r) recolher(r, sim!==false); };
+
   /* PADRÃO DO KIT (pedido da Suzana em 17/09): guarda a montagem atual na
      linha, e todo kit novo já nasce com ela marcada. Não mexe em pedido
      salvo, e a cor do balão fica de fora: cor é de cada pedido.        */
@@ -10203,6 +10252,12 @@ else appLockInit();
   window._addLinhaPedido=function(linhaId, salvo){
     var li=lista(); if(!li) return;
     var l=porId(linhaId);
+    // item novo entrando: os que já estavam preenchidos recolhem
+    if(!salvo){
+      [].slice.call(li.querySelectorAll('.item-pedido-row')).forEach(function(r){
+        if(r.dataset.linhaId && r.dataset.recolhido!=='1'){ r.dataset.recolhido='1'; renderPainel(r); }
+      });
+    }
     // kit novo já nasce com a montagem padrão que ela salvou
     var sel=(salvo && salvo.opcoes) || window._padraoDaLinha(l);
     var nomeIni = salvo ? salvo.nome : (l ? window._nomeLinha(l, sel) : '');
@@ -10215,8 +10270,10 @@ else appLockInit();
     if(l){
       var painel=document.createElement('div'); painel.className='linha-painel'; painel.dataset.for=row.id;
       painel.addEventListener('click', function(ev){
-        var b=ev.target.closest('.ln-chip, .ln-x, .ln-padrao'); if(!b) return;
+        var b=ev.target.closest('.ln-chip, .ln-x, .ln-padrao, .ln-resumo, .ln-recolher'); if(!b) return;
         ev.preventDefault();
+        if(b.dataset.recolher!=null){ recolher(row, true); return; }
+        if(b.dataset.abrir!=null){ recolher(row, false); return; }
         if(b.dataset.padrao!=null){ salvarPadrao(row); return; }
         if(b.dataset.papel!=null){ var s=selDe(row); s['__papel']=b.dataset.papel; mudou(row, s); return; }
         if(b.dataset.add!=null){ addItem(row, b.dataset.g, b.dataset.add, 1); return; }
@@ -10261,6 +10318,7 @@ else appLockInit();
         if(c.classList && c.classList.contains('ln-cor')){ ev.preventDefault(); addCor(row, c.dataset.g, c.value); }
       });
       row.after(painel);
+      if(salvo) row.dataset.recolhido='1';            // pedido reaberto já vem recolhido
       if(salvo && salvo.mats) row.dataset.matsAntigos=JSON.stringify(salvo.mats);
       renderPainel(row);
       if(!salvo){ preencherProduto(l.nome); sincronizarMateriais(row); }
@@ -10357,7 +10415,7 @@ else appLockInit();
     if(!box){ box=document.createElement('div'); box.id='p-linhas-botoes'; grp.insertBefore(box, grp.firstChild); }
     var ativas=linhas().filter(function(l){ return l.ativo!==false; });
     box.innerHTML = ativas.length
-      ? '<label class="form-label">1. O que vai no pedido</label><div class="ln-dica">Toque no kit. Depois escolha, um a um, o que vai dentro: a peça, o pires, a embalagem e os decorativos. Tudo o que você escolher aparece em <b>Materiais usados</b>, lá embaixo.</div><div class="ln-botoes">'
+      ? '<label class="form-label">1. O que vai no pedido</label><div class="ln-dica">Toque no kit. Depois escolha, um a um, o que vai dentro: a peça, o pires, a embalagem e os decorativos. Tudo o que você escolher aparece em <b>Materiais usados</b>. Terminou um item? Toque em <b>Recolher</b>.</div><div class="ln-botoes">'
         + ativas.map(function(l){ return '<button type="button" class="ln-bt" onclick="_addLinhaPedido(\''+l.id+'\')">'+esc(l.nome)+'</button>'; }).join('')
         + '</div>'
       : '';
@@ -10627,12 +10685,13 @@ else appLockInit();
     var grupos=[];
     document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(ir){
       var mats=matsDaLinha(ir.id);
-      if(mats.length) grupos.push({ titulo:((ir.querySelector('input[type=text]')||{}).value||'Item do pedido'), mats:mats });
+      if(mats.length) grupos.push({ id:ir.id, titulo:((ir.querySelector('input[type=text]')||{}).value||'Item do pedido'), mats:mats });
     });
     if(!grupos.length) return;
     var soltos=[].slice.call(lista.querySelectorAll('.material-row')).filter(function(m){ return !m.dataset.deLinha; });
     grupos.forEach(function(gp){
       var h=document.createElement('div'); h.className='mat-grupo'; h.textContent=gp.titulo;
+      h.dataset.for=gp.id; h.title='Tocar para recolher ou abrir';
       lista.appendChild(h);
       gp.mats.forEach(function(m){ lista.appendChild(m); });
     });
@@ -10640,6 +10699,16 @@ else appLockInit();
       var h2=document.createElement('div'); h2.className='mat-grupo'; h2.textContent='Outros materiais';
       lista.appendChild(h2);
       soltos.forEach(function(m){ lista.appendChild(m); });
+    }
+    aplicarRecolhidoMateriais();
+    // tocar no cabeçalho do grupo recolhe ou abre o item inteiro
+    if(!lista.dataset.ouveGrupo){
+      lista.dataset.ouveGrupo='1';
+      lista.addEventListener('click', function(ev){
+        var h=ev.target.closest('.mat-grupo[data-for]'); if(!h) return;
+        var dono=document.getElementById(h.dataset.for);
+        if(dono) recolher(dono, dono.dataset.recolhido!=='1');
+      });
     }
   }
   var coletarMatOrig=window.coletarMateriaisPedido;
@@ -10674,6 +10743,10 @@ else appLockInit();
       ir.dataset.matsAntigos='';
     });
     agruparMateriais();
+    // o resumo do item recolhido precisa contar os materiais que acabaram de chegar
+    document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(ir){
+      if(ir.dataset.linhaId && painelDe(ir)) renderPainel(ir);
+    });
   };
   window.reconstruirListaCompras=function(){
     var mapa={};
