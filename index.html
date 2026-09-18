@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v18/09-c36';
+    var ver='v18/09-c37';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9532,6 +9532,12 @@ else appLockInit();
 .ln-botoes{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .ln-bt{border:1.5px solid var(--pink);background:#fff;color:var(--pink);border-radius:18px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer}
 .ln-dica{font-size:11px;color:var(--gray-d);line-height:1.5;margin:2px 0 6px}
+#aviso-versao{position:fixed;left:10px;right:10px;z-index:9999;display:flex;align-items:center;gap:10px;
+  background:var(--pink,#EC2A7F);color:#fff;border-radius:14px;padding:10px 12px 10px 16px;
+  box-shadow:0 6px 18px rgba(236,42,127,.35);font-size:13px;font-weight:700;max-width:560px;margin:0 auto}
+#aviso-versao .av-txt{flex:1}
+#aviso-versao button{background:#fff;color:var(--pink,#EC2A7F);border:none;border-radius:10px;padding:8px 14px;font-size:13px;font-weight:800;cursor:pointer}
+#aviso-versao button:disabled{opacity:.7}
 .ln-opc,.ln-vinil,.ln-txt{width:100%;border:1px solid #e7d3dd;border-radius:8px;padding:8px;font-size:13px;background:#fff;box-sizing:border-box}
 .linha-painel{background:#FDF2F7;border-radius:10px;padding:8px 10px;margin:0 0 8px}
 .linha-painel .lg{margin-bottom:6px}
@@ -10736,6 +10742,69 @@ else appLockInit();
       +'<button type="button" class="btn btn-pink btn-sm" onclick="_abrirLinhas()">Abrir</button>';
     if(cab && cab.nextSibling) tela.insertBefore(d, cab.nextSibling); else tela.insertBefore(d, tela.firstChild);
   }
+
+  /* ── AVISO DE VERSÃO NOVA (Suzana, 18/09) ───────────────────────────
+     Faixa rosa em cima da barra de baixo quando o GitHub já tem uma versão
+     mais nova que a que está rodando. O app confere ao abrir, ao voltar
+     para ele e a cada 5 minutos. "Atualizar" não passa por cima de
+     formulário aberto: pede para salvar antes.
+     A versão é lida do próprio arquivo (a linha do selo, que continua
+     sendo a única fonte). A expressão abaixo é montada por partes de
+     propósito, para o PUBLICAR não confundir esta linha com o selo.   */
+  var RX_VER=new RegExp("var\\s+ver\\s*=\\s*'(v\\d{2}/\\d{2}-c\\d+)'");
+  function versaoRodando(){ var m=document.documentElement.innerHTML.match(RX_VER); return m ? m[1] : ''; }
+  function posicionarAviso(bar){
+    var nav=document.querySelector('.bottom-nav'), baixo=12;
+    if(nav){
+      var r=nav.getBoundingClientRect();
+      if(r.height && r.top > window.innerHeight/2) baixo=Math.round(window.innerHeight - r.top) + 6;   // barra embaixo: fica logo acima dela
+    }
+    bar.style.bottom=baixo+'px';
+  }
+  function mostrarAviso(v){
+    var bar=document.getElementById('aviso-versao');
+    if(!bar){
+      bar=document.createElement('div'); bar.id='aviso-versao';
+      bar.innerHTML='<span class="av-txt">Versão nova do app disponível</span><button type="button">Atualizar</button>';
+      document.body.appendChild(bar);
+      bar.querySelector('button').addEventListener('click', atualizarAgora);
+      window.addEventListener('resize', function(){ posicionarAviso(bar); });
+    }
+    bar.dataset.versao=v||'';
+    posicionarAviso(bar);
+    bar.hidden=false;
+  }
+  /* compara o arquivo que está no ar com o que está rodando */
+  window._avaliarVersao=function(textoDoServidor){
+    var m=String(textoDoServidor||'').match(RX_VER), atual=versaoRodando();
+    if(m && atual && m[1]!==atual){ mostrarAviso(m[1]); return true; }
+    return false;
+  };
+  function checarVersao(){
+    if(typeof fetch!=='function' || (navigator.onLine===false)) return;
+    fetch('./index.html?v='+Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.text() : ''; })
+      .then(window._avaliarVersao)
+      .catch(function(){});
+  }
+  function atualizarAgora(){
+    if(window._telaOcupada && window._telaOcupada()){
+      toast('Salve ou feche o que está aberto e toque em Atualizar de novo');
+      return;
+    }
+    var b=document.querySelector('#aviso-versao button'); if(b){ b.disabled=true; b.textContent='Atualizando...'; }
+    var passos=[];
+    if(navigator.serviceWorker && navigator.serviceWorker.getRegistration){
+      passos.push(navigator.serviceWorker.getRegistration().then(function(r){ return r && r.update(); }).catch(function(){}));
+    }
+    if(window.caches && caches.keys){
+      passos.push(caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); }).catch(function(){}));
+    }
+    Promise.all(passos).then(function(){ location.reload(); }, function(){ location.reload(); });
+  }
+  setTimeout(checarVersao, 8000);
+  setInterval(checarVersao, 5*60*1000);
+  document.addEventListener('visibilitychange', function(){ if(!document.hidden) checarVersao(); });
 
   /* Materiais usados sobe para logo depois das linhas do pedido (Suzana,
      18/09): antes ficavam lá embaixo, depois de observação e lucro. Só a
