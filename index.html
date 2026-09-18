@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v17/09-c35';
+    var ver='v18/09-c36';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9532,7 +9532,7 @@ else appLockInit();
 .ln-botoes{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 .ln-bt{border:1.5px solid var(--pink);background:#fff;color:var(--pink);border-radius:18px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer}
 .ln-dica{font-size:11px;color:var(--gray-d);line-height:1.5;margin:2px 0 6px}
-.ln-opc{width:100%;border:1px solid #e7d3dd;border-radius:8px;padding:8px;font-size:13px;background:#fff}
+.ln-opc,.ln-vinil,.ln-txt{width:100%;border:1px solid #e7d3dd;border-radius:8px;padding:8px;font-size:13px;background:#fff;box-sizing:border-box}
 .linha-painel{background:#FDF2F7;border-radius:10px;padding:8px 10px;margin:0 0 8px}
 .linha-painel .lg{margin-bottom:6px}
 .linha-painel .lg-t{font-size:10px;font-weight:800;color:var(--gray-d);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
@@ -9696,7 +9696,8 @@ else appLockInit();
        cores, base e acabamento; arco tem tamanho, formato e entrega. Cada
        campo só aparece quando a escolha de cima pede. */
     {id:'ln_baloes', nome:'Balões', desc:'arranjos e arcos', grupos:[
-      gLista1('Tipo',['Arranjo','Arco']),
+      gLista1('Tipo',['Arranjo','Arco','Bouquet de balões']),
+      gTexto('Observação do bouquet','Ex: número 15, estrela dourada, nome Ana',{g:'Tipo', v:['Bouquet de balões']}),
       gLista1('Tipo de arranjo',['Bubble 10"','Bubble 18"','Bubble 24"','Foil Número 16"','Foil Estrela 16"','Foil Coração 16"','Foil Redondo 16"'],{g:'Tipo', v:['Arranjo']}),
       gTexto('Números','Ex: 15',{g:'Tipo de arranjo', v:['Foil Número 16"']}),
       gLista1('Base do arranjo',['Base simples','Base orgânica'],{g:'Tipo', v:['Arranjo']}),
@@ -9711,7 +9712,7 @@ else appLockInit();
       (function(){ var g=gDecorativos(); delete g.sempre; delete g.padraoItens; return g; })()]}
   ];
   var IDS_PADRAO=LINHAS_PADRAO.map(function(l){ return l.id; });
-  var ESTRUTURA=6;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
+  var ESTRUTURA=7;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
   // campos que saíram: viraram "Itens decorativos" ou mudaram de lugar
   var GRUPOS_APOSENTADOS=['Palha decorativa','Papel sujinho','Fita de cetim','Fio de led','Cartão personalizado','Balão'];
 
@@ -9857,8 +9858,22 @@ else appLockInit();
       out.push({n:'PAPEL SUBLIMAÇÃO JOJO ROSA', q:1});
       out.push({n:'IMPRESSÃO SUBLIMAÇÃO', q:1});
     }
-    if(/com personaliza/.test(txt) && /bal[ãa]o|bubble|penca|arco|arranjo|montagem/.test(txt)) out.push({n:'FOLHA VINIL BRANCO', q:1});
+    // vinil: a cor é escolhida no painel (não entra mais branco sozinho)
+    if(window._precisaVinil(l, sel) && sel && sel['__vinil']) out.push({n:sel['__vinil'], q:1});
     return out.filter(function(x){ return !!achaItem(x.n); });
+  };
+  /* balão personalizado leva vinil, e a cor do vinil quem escolhe é ela */
+  window._precisaVinil=function(l, sel){
+    var nomes=[l.nome];
+    (l.grupos||[]).forEach(function(g){
+      if(!visivel(l, sel, g) || g.tipo) return;
+      ((sel&&sel[g.nome])||[]).forEach(function(n){ nomes.push(n); });
+    });
+    var txt=nomes.join(' ').toLowerCase();
+    return /com personaliza/.test(txt) && /bal[ãa]o|bubble|penca|arco|arranjo|bouquet/.test(txt);
+  };
+  window._opcoesVinil=function(){
+    return window._registroItens().filter(function(x){ return /vinil/i.test(x.nome); });
   };
   window._PAPEIS_CARTAO=['PAPEL GLOSSY 180G','PAPEL ADESIVO GLOSSY'];
 
@@ -10075,6 +10090,14 @@ else appLockInit();
           }).join('')
         + '</div></div>';
     }).join('');
+    // cor do vinil: só aparece em balão com personalização
+    if(window._precisaVinil(l, sel)){
+      var vins=window._opcoesVinil(), vAtual=sel['__vinil']||'';
+      html+='<div class="lg"><div class="lg-t">Cor do vinil</div>'
+        +'<select class="ln-vinil"><option value="">— escolher a cor do vinil —</option>'
+        + vins.map(function(x){ return '<option value="'+esc(x.nome)+'"'+(vAtual===x.nome?' selected':'')+'>'+esc(x.nome)+(x.custo>0?(' · '+fmt(x.custo)):'')+'</option>'; }).join('')
+        +'</select></div>';
+    }
     // papel do cartão: só aparece quando há cartão escolhido
     var insumos=window._insumosAutomaticos(l, sel);
     if(insumos.some(function(x){ return window._PAPEIS_CARTAO.indexOf(x.n)>=0; })){
@@ -10203,6 +10226,11 @@ else appLockInit();
       painel.addEventListener('change', function(ev){
         var s=ev.target;
         if(s.classList && s.classList.contains('ln-sel')){ addItem(row, s.dataset.g, s.value, 1); return; }
+        if(s.classList && s.classList.contains('ln-vinil')){    // cor do vinil
+          var sv=selDe(row);
+          if(s.value) sv['__vinil']=s.value; else delete sv['__vinil'];
+          mudou(row, sv); return;
+        }
         if(s.classList && s.classList.contains('ln-opc')){      // grupo de botões mostrado como lista
           var sel2=selDe(row);
           if(s.value) sel2[s.dataset.g]=[s.value]; else delete sel2[s.dataset.g];
@@ -10709,9 +10737,22 @@ else appLockInit();
     if(cab && cab.nextSibling) tela.insertBefore(d, cab.nextSibling); else tela.insertBefore(d, tela.firstChild);
   }
 
+  /* Materiais usados sobe para logo depois das linhas do pedido (Suzana,
+     18/09): antes ficavam lá embaixo, depois de observação e lucro. Só a
+     posição muda; o bloco e os nomes dos campos são os mesmos. */
+  function materiaisPertoDosItens(){
+    var lista=document.getElementById('p-materiais-lista');
+    var itens=document.getElementById('p-itens-lista');
+    if(!lista || !itens) return;
+    var bloco=lista.parentElement;
+    if(!bloco || bloco.dataset.subiu) return;
+    itens.parentNode.insertBefore(bloco, itens.nextSibling);
+    bloco.dataset.subiu='1';
+    bloco.style.marginTop='10px';
+  }
   function iniciar(){
     try{
-      window._seedItens(); window._seedLinhas(); criarModal(); botaoPrecificacao(); ajustarMenu();
+      window._seedItens(); window._seedLinhas(); criarModal(); botaoPrecificacao(); ajustarMenu(); materiaisPertoDosItens();
       if(!document.getElementById('ts-cores-datalist')){
         var dl=document.createElement('datalist'); dl.id='ts-cores-datalist'; document.body.appendChild(dl);
       }
