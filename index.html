@@ -1464,7 +1464,7 @@ html, body {
       <div class="field-group" style="margin-bottom:8px">
         <label class="form-label">GASTO COM MATERIAIS (R$)</label>
         <input type="number" id="p-custo" class="form-input" placeholder="0,00" step="0.01" min="0" oninput="calcularLucro()">
-        <div style="font-size:10px;color:var(--gray-d);margin-top:3px">Soma automática dos materiais abaixo (pode ajustar). Gasto real: <b id="p-gasto-real" style="color:var(--cyan-d)">R$ 0,00</b></div>
+        <div style="font-size:10px;color:var(--gray-d);margin-top:3px">Soma automática dos materiais acima (pode ajustar). Gasto real: <b id="p-gasto-real" style="color:var(--cyan-d)">R$ 0,00</b></div>
       </div>
       <div style="background:var(--pink-l);border-radius:12px;padding:10px 14px;margin-bottom:8px">
         <span style="font-size:11px;color:var(--brown);font-weight:700">LUCRO REAL DO PEDIDO</span>
@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v19/09-c39';
+    var ver='v19/09-c40';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10965,18 +10965,24 @@ else appLockInit();
   setInterval(checarVersao, 5*60*1000);
   document.addEventListener('visibilitychange', function(){ if(!document.hidden) checarVersao(); });
 
-  /* Materiais usados sobe para logo depois das linhas do pedido (Suzana,
-     18/09): antes ficavam lá embaixo, depois de observação e lucro. Só a
-     posição muda; o bloco e os nomes dos campos são os mesmos. */
+  /* Ordem do pedido (Suzana, 19/09): primeiro os dados do pedido (cliente,
+     entrega, status, pagamento, observações), depois os itens com o total,
+     e lá embaixo o que é material: Materiais usados, gasto e lucro.
+     Só a posição muda; os campos e os nomes são os mesmos. */
   function materiaisPertoDosItens(){
+    var body=document.querySelector('#modal-pedido .modal-body');
     var lista=document.getElementById('p-materiais-lista');
-    var itens=document.getElementById('p-itens-lista');
-    if(!lista || !itens) return;
+    if(!body || !lista || body.dataset.ordem) return;
+    function grupo(id, sel){ var el=document.getElementById(id); return el ? el.closest(sel||'.form-group') : null; }
+    var produto=grupo('p-produto');
+    var dados=[grupo('p-data','.form-row'), grupo('p-pgto'), grupo('p-origem'), grupo('p-obs')];
+    var ref=produto;
+    dados.forEach(function(el){ if(el && ref){ ref.parentNode.insertBefore(el, ref.nextSibling); ref=el; } });
     var bloco=lista.parentElement;
-    if(!bloco || bloco.dataset.subiu) return;
-    itens.parentNode.insertBefore(bloco, itens.nextSibling);
-    bloco.dataset.subiu='1';
-    bloco.style.marginTop='10px';
+    bloco.style.marginTop='14px';
+    [bloco, grupo('p-custo','.field-group'), (document.getElementById('p-lucro-display')||{}).parentElement]
+      .forEach(function(el){ if(el) body.appendChild(el); });
+    body.dataset.ordem='1';
   }
   function iniciar(){
     try{
