@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v18/09-c38';
+    var ver='v19/09-c39';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9542,6 +9542,8 @@ else appLockInit();
 .ln-recolher{width:100%;margin-top:8px;background:#fff;border:1.5px solid #E9C6D6;color:var(--pink);border-radius:9px;
   padding:7px;font-size:12px;font-weight:700;cursor:pointer}
 .material-row.oculto{display:none!important}
+.ln-recolher.pronto{background:var(--pink);border-color:var(--pink);color:#fff;font-size:13px;padding:10px}
+.ln-chip.ln-sn{min-width:64px}
 .mat-grupo[data-for]{cursor:pointer}
 .mat-grupo[data-for]::before{content:attr(data-seta) ' '}
 #aviso-versao{position:fixed;left:10px;right:10px;z-index:9999;display:flex;align-items:center;gap:10px;
@@ -9649,7 +9651,12 @@ else appLockInit();
      O que é 'item'/'lista' NÃO entra no custo por unidade da linha: vira
      linha de Materiais do pedido, para aparecer na comanda de produção e
      ser somado uma vez só.                                             */
-  function gTamanho(){ return {nome:'Tamanho', varios:false, mostrarNome:false, opcoes:[{nome:'Individual',custo:0},{nome:'Duplo',custo:0,vezes:2}]}; }
+  function gTamanho(){ return {nome:'Tamanho', varios:false, mostrarNome:false, inicial:'Individual', opcoes:[{nome:'Individual',custo:0},{nome:'Duplo',custo:0,vezes:2}]}; }
+  /* campo com pergunta Sim/Não antes (passo a passo, 19/09) */
+  function comPergunta(g, pergunta){ g.pergunta=pergunta; return g; }
+  function gPersonalizacao(){
+    return {nome:'Personalização', tipo:'texto', pergunta:'Tem personalização?', dica:'Escreva o que vai na arte: nome, idade, frase...', opcoes:[]};
+  }
   /* Pires virou LISTA DE ITEM (17/09, 2ª conversa): como botão ele não ia
      para os Materiais, e ela precisa ver o pires certo lá embaixo. */
   function gPires(){ return gItem('Pires','pires'); }
@@ -9687,10 +9694,14 @@ else appLockInit();
     g.sempre=true; g.padraoItens=DECOR_PADRAO.slice();
     return g;
   }
+  /* ordem das perguntas pedida pela Suzana: tamanho, modelo da peça,
+     embalagem, pires, decorativos, personalização */
   function camposKit(peca, comPires){
-    return [gItem(peca, peca.toLowerCase())].concat(comPires?[gPires()]:[]).concat([gItem('Embalagem','caixa|sacol')])
-      .concat([gDecorativos(), gLista1('Personalização',['Sem personalização','Com personalização']),
-               gTexto('O que vai escrito','Ex: nome e idade',{g:'Personalização', v:['Com personalização']})]);
+    var modelo=gItem(peca, peca==='Xícara' ? '^xicara' : '^caneca');   // só a peça, sem pires nem suporte
+    modelo.rotulo='Modelo da '+peca.toLowerCase();
+    return [modelo, comPergunta(gItem('Embalagem','caixa|sacol'),'Vai embalagem?')]
+      .concat(comPires ? [comPergunta(gPires(),'Vai pires?')] : [])
+      .concat([comPergunta(gDecorativos(),'Vai itens decorativos?'), gPersonalizacao()]);
   }
   var ITENS_CESTA=['Suco de Uva 500ml','Suco de uva caixinha','Bolinho Bauducco','Wafle','Potinho de mumu ou geleia','Torradas','Cookies','Chocolate Kit Kat','Ferrero Rocher un','Chocolate Trento','Bala Fini','Iogurte','Sucrilhos','Bombom ouro branco','Palito com frios','Nutella','Chocolate Nutella','Vasinho de flor','Batata Pringles','Ruffles','Refrigerante lata','Espumante','Ferrero Rocher c/3','Ferrero Rocher c/4','Ferrero Rocher c/8','Fotos Polaroid','Fio de Led','Cartão personalizado'];
   var MAQUINA='Desgaste de máquina';
@@ -9702,14 +9713,14 @@ else appLockInit();
     {id:'ln_kit_canecas_completo', nome:'Kit Canecas Completo', desc:'com pires e colheres', grupos:[gTamanho()].concat(camposKit('Caneca', true))},
     {id:'ln_kit_canecas_simples',  nome:'Kit Canecas Simples',  desc:'somente as canecas',  grupos:[gTamanho()].concat(camposKit('Caneca', false))},
     {id:'ln_festa_caixa_personalizada', nome:'Festa na Caixa Personalizada', desc:'', grupos:[
-      gItem('Embalagem','caixa|sacol'), gLista('Itens da cesta', ITENS_CESTA), gDecorativos(),
-      gLista1('Personalização',['Sem personalização','Com personalização'])]},
+      comPergunta(gItem('Embalagem','caixa|sacol'),'Vai embalagem?'), gLista('Itens da cesta', ITENS_CESTA),
+      comPergunta(gDecorativos(),'Vai itens decorativos?'), gPersonalizacao()]},
     {id:'ln_festa_caixa_completa', nome:'Festa na Caixa Completa', desc:'serve para qualquer modelo', grupos:[
-      gItem('Embalagem','caixa|sacol'), gLista('Itens da cesta', ITENS_CESTA), gDecorativos(),
+      comPergunta(gItem('Embalagem','caixa|sacol'),'Vai embalagem?'), gLista('Itens da cesta', ITENS_CESTA),
+      comPergunta(gDecorativos(),'Vai itens decorativos?'),
       gLista1('Balão',['Sem balão','Bubble','Penca c/ 8']),
-      gCores(),
-      gLista1('Personalização',['Sem personalização','Com personalização']),
-      gTexto('O que vai escrito','Ex: Maria Isadora - 6 anos',{g:'Personalização', v:['Com personalização']})]},
+      (function(){ var g=gCores(); g.mostrarSe={g:'Balão', v:['Bubble','Penca c/ 8']}; return g; })(),
+      gPersonalizacao()]},
     /* BALÕES, como a Suzana descreveu em 17/09 à noite: arranjo tem tipo,
        cores, base e acabamento; arco tem tamanho, formato e entrega. Cada
        campo só aparece quando a escolha de cima pede. */
@@ -9725,14 +9736,13 @@ else appLockInit();
       gLista1('Formato do arco',['Orgânico','Desconstruído','Tradicional'],{g:'Tipo', v:['Arco']}),
       gLista1('Entrega',['Montagem externa','Delivery'],{g:'Tipo', v:['Arco']}),
       gCores(),
-      gLista1('Personalização',['Sem personalização','Com personalização']),
-      gTexto('O que vai escrito','Ex: Feliz aniversário, Ana',{g:'Personalização', v:['Com personalização']}),
-      (function(){ var g=gDecorativos(); delete g.sempre; delete g.padraoItens; return g; })()]}
+      gPersonalizacao(),
+      (function(){ var g=comPergunta(gDecorativos(),'Vai itens decorativos?'); delete g.sempre; delete g.padraoItens; return g; })()]}
   ];
   var IDS_PADRAO=LINHAS_PADRAO.map(function(l){ return l.id; });
-  var ESTRUTURA=7;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
-  // campos que saíram: viraram "Itens decorativos" ou mudaram de lugar
-  var GRUPOS_APOSENTADOS=['Palha decorativa','Papel sujinho','Fita de cetim','Fio de led','Cartão personalizado','Balão'];
+  var ESTRUTURA=8;   // sobe quando os campos padrão mudam: as linhas antigas se atualizam
+  // campos que saíram: viraram "Itens decorativos", pergunta de personalização, etc.
+  var GRUPOS_APOSENTADOS=['Palha decorativa','Papel sujinho','Fita de cetim','Fio de led','Cartão personalizado','O que vai escrito'];
 
   /* ── dados ─────────────────────────────────────────────────────── */
   window._seedLinhas=function(){
@@ -9763,16 +9773,24 @@ else appLockInit();
       copia(d.grupos).forEach(function(novo, pos){
         var velho=atual.grupos.filter(function(g){ return g && g.nome===novo.nome; })[0];
         if(!velho){ atual.grupos.splice(Math.min(pos, atual.grupos.length), 0, novo); return; }
-        if(novo.tipo && !velho.tipo){
-          // virou campo de lista de item: os botões antigos não servem mais
-          velho.tipo=novo.tipo; velho.opcoes=[]; velho.filtro=novo.filtro||'';
+        if(novo.tipo && velho.tipo!==novo.tipo){
+          // mudou de tipo (botão virou lista de item, lista virou pergunta...):
+          // o que era do tipo antigo não serve mais
+          velho.tipo=novo.tipo; velho.opcoes=copia(novo.opcoes||[]); delete velho.comoLista; delete velho.varios;
         }
-        if(novo.filtro && !velho.filtro) velho.filtro=novo.filtro;
-        if(novo.sempre) velho.sempre=true;
-        if(novo.comoLista) velho.comoLista=true;
-        (novo.opcoes||[]).forEach(function(o){
+        // o jeito de perguntar vem sempre do padrão (passo a passo, 19/09)
+        ['filtro','pergunta','rotulo','sempre','padraoItens','inicial','mostrarSe','comoLista','dica'].forEach(function(k){
+          if(novo[k]!==undefined) velho[k]=copia(novo[k]);
+        });
+        if(velho.tipo!=='texto') (novo.opcoes||[]).forEach(function(o){
           if(!(velho.opcoes||[]).some(function(x){ return x.nome===o.nome; })){ velho.opcoes=velho.opcoes||[]; velho.opcoes.push(o); }
         });
+      });
+      // perguntas na ordem do padrão; o que ela criou vai para o fim
+      var ordem=d.grupos.map(function(g){ return g.nome; });
+      atual.grupos.sort(function(a,b){
+        var ia=ordem.indexOf(a.nome), ib=ordem.indexOf(b.nome);
+        return (ia<0?999:ia)-(ib<0?999:ib);
       });
       atual.estrutura=ESTRUTURA; mexeu++;
     });
@@ -9862,7 +9880,7 @@ else appLockInit();
   window._insumosAutomaticos=function(l, sel){
     var nomes=[l.nome];
     (l.grupos||[]).forEach(function(g){
-      if(!visivel(l, sel, g)) return;
+      if(!ativo(l, sel, g)) return;
       if(g.tipo==='item' || g.tipo==='lista') itensSel(sel,g).forEach(function(x){ nomes.push(x.n); });
       else if(!g.tipo) ((sel&&sel[g.nome])||[]).forEach(function(n){ nomes.push(n); });
     });
@@ -9884,7 +9902,10 @@ else appLockInit();
   window._precisaVinil=function(l, sel){
     var nomes=[l.nome];
     (l.grupos||[]).forEach(function(g){
-      if(!visivel(l, sel, g) || g.tipo) return;
+      if(!ativo(l, sel, g)) return;
+      // personalização virou pergunta Sim/Não com campo de escrever
+      if(g.nome==='Personalização' && g.tipo==='texto'){ nomes.push('com personalização'); return; }
+      if(g.tipo) return;
       ((sel&&sel[g.nome])||[]).forEach(function(n){ nomes.push(n); });
     });
     var txt=nomes.join(' ').toLowerCase();
@@ -9909,7 +9930,7 @@ else appLockInit();
   window._custoCheioLinha=function(l, sel){
     var vezes=vezesDe(l, sel), soma=0;
     (l.grupos||[]).forEach(function(g){
-      if(!visivel(l, sel, g)) return;
+      if(!ativo(l, sel, g)) return;
       if(g.tipo==='item' || g.tipo==='lista') itensSel(sel,g).forEach(function(x){ soma+=custoDe(x.n)*x.q; });
     });
     (window._insumosAutomaticos(l,sel)||[]).forEach(function(x){ soma+=custoDe(x.n)*(parseFloat(x.q)||1); });
@@ -9919,7 +9940,7 @@ else appLockInit();
     var partes=[];
     (l.grupos||[]).forEach(function(g){
       if(g.tipo==='item' || g.tipo==='lista') return;        // o que vai dentro aparece em Materiais
-      if(!visivel(l, sel, g)) return;                        // campo escondido não entra no nome
+      if(!ativo(l, sel, g)) return;                          // campo escondido ou com "Não" não entra no nome
       var marc=((sel&&sel[g.nome])||[]).filter(function(n){
         return (g.tipo==='cores' || g.tipo==='texto') ? true : (g.opcoes||[]).some(function(o){ return o.nome===n; });
       });
@@ -10004,7 +10025,7 @@ else appLockInit();
     var lista=[];
     (l.grupos||[]).forEach(function(g){
       if(g.tipo!=='item' && g.tipo!=='lista') return;
-      if(!visivel(l, sel, g)) return;
+      if(!ativo(l, sel, g)) return;                // "Não" na pergunta: nada daquele campo entra
       var escolhidos=itensSel(sel,g);
       escolhidos.forEach(function(x){ lista.push({n:x.n, q:x.q}); });
       // campo marcado como "sempre" entra na lista de materiais mesmo sem
@@ -10037,11 +10058,13 @@ else appLockInit();
   }
   function selectItens(gNome, filtro, valor){
     // o filtro aceita várias palavras separadas por | (ex.: caixa|sacol)
-    var termos=String(filtro||'').toLowerCase().split('|').map(function(s){ return s.trim(); }).filter(Boolean);
+    // termo com ^ na frente = o NOME começa com ele (xícara sem pegar "pires porta xícaras")
+    function semAcento(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+    var termos=semAcento(filtro).split('|').map(function(s){ return s.trim(); }).filter(Boolean);
     var itens=window._registroItens().filter(function(x){
       if(!termos.length) return true;
-      var alvo=(x.nome+' '+(x.cat||'')).toLowerCase();
-      return termos.some(function(t){ return alvo.indexOf(t)>=0; });
+      var nome=semAcento(x.nome), alvo=nome+' '+semAcento(x.cat);
+      return termos.some(function(t){ return t.charAt(0)==='^' ? nome.indexOf(t.slice(1))===0 : alvo.indexOf(t)>=0; });
     });
     if(!itens.length) itens=window._registroItens();
     return '<select class="ln-sel" data-g="'+esc(gNome)+'">'
@@ -10061,12 +10084,55 @@ else appLockInit();
       + '<button type="button" class="ln-x" data-g="'+esc(gNome)+'" data-i="'+i+'">×</button>'
       + '</div>';
   }
+  /* ── PASSO A PASSO (Suzana, 19/09) ─────────────────────────────────
+     O painel pergunta uma coisa de cada vez: a próxima pergunta só aparece
+     depois que a anterior foi respondida. Campo com "pergunta" começa com
+     Sim/Não, e a lista só abre no Sim. Ao terminar, o botão Recolher
+     fica em destaque e o item vira uma linha só.                       */
+  function respDe(sel, g){
+    var r=(sel && sel.__resp && sel.__resp[g.nome]) || '';
+    if(!r && ((sel && sel[g.nome]) || []).length) r='sim';   // já tinha escolha salva: vale como "sim"
+    return r;
+  }
+  /* campo que conta para materiais, custo e nome: visível e, se tem
+     pergunta, respondido com Sim */
+  function ativo(l, sel, g){ return visivel(l, sel, g) && (!g.pergunta || respDe(sel, g)==='sim'); }
+  function respondido(l, sel, g){
+    if(g.pergunta){
+      var r=respDe(sel, g);
+      if(!r) return false;
+      if(r==='nao') return true;
+      return g.tipo==='item' ? itensSel(sel, g).length>0 : true;
+    }
+    if(g.tipo==='item') return itensSel(sel, g).length>0;
+    if(g.tipo==='lista' || g.tipo==='cores' || g.tipo==='texto') return true;   // não travam o passo seguinte
+    return ((sel && sel[g.nome]) || []).length>0;
+  }
+  function blocoDoGrupo(g, sel){
+    if(!g.pergunta) return controleDoGrupo(g, sel, false);
+    var r=respDe(sel, g);
+    var q='<div class="lg"><div class="lg-t">'+esc(g.pergunta)+'</div><div class="chips">'
+      +'<button type="button" class="ln-chip ln-sn'+(r==='sim'?' on':'')+'" data-g="'+esc(g.nome)+'" data-resp="sim">Sim</button>'
+      +'<button type="button" class="ln-chip ln-sn'+(r==='nao'?' on':'')+'" data-g="'+esc(g.nome)+'" data-resp="nao">Não</button>'
+      +'</div></div>';
+    return r==='sim' ? q+controleDoGrupo(g, sel, true) : q;
+  }
   function renderPainel(row){
     var p=painelDe(row); var l=porId(row.dataset.linhaId); if(!p || !l) return;
     var sel=selDe(row);
-    var html=(l.grupos||[]).map(function(g){
-      if(!visivel(l, sel, g)) return '';          // campo que depende de outra escolha
-      var titulo='<div class="lg-t">'+esc(g.nome)+(g.varios&&!g.tipo?' · pode marcar vários':'')+'</div>';
+    var html='', completo=true;
+    (l.grupos||[]).forEach(function(g){
+      if(!completo) return;                        // passo seguinte só depois de responder este
+      if(!visivel(l, sel, g)) return;              // campo que depende de outra escolha
+      html+=blocoDoGrupo(g, sel);
+      if(!respondido(l, sel, g)) completo=false;
+    });
+    row.dataset.completo = completo ? '1' : '';
+    html+=extrasDoPainel(row, l, sel, completo);
+    fecharPainel(row, p, html, completo);
+  }
+  function controleDoGrupo(g, sel, dentroDaPergunta){
+      var titulo = dentroDaPergunta ? '' : '<div class="lg-t">'+esc(g.rotulo||g.nome)+(g.varios&&!g.tipo?' · pode marcar vários':'')+'</div>';
       if(g.tipo==='texto'){
         var v=((sel[g.nome]||[])[0])||'';
         return '<div class="lg">'+titulo
@@ -10107,7 +10173,9 @@ else appLockInit();
             return '<button type="button" class="ln-chip'+(marc.indexOf(o.nome)>=0?' on':'')+'" data-g="'+esc(g.nome)+'" data-o="'+esc(o.nome)+'">'+esc(o.nome)+'</button>';
           }).join('')
         + '</div></div>';
-    }).join('');
+  }
+  function extrasDoPainel(row, l, sel, completo){
+    var html='';
     // cor do vinil: só aparece em balão com personalização
     if(window._precisaVinil(l, sel)){
       var vins=window._opcoesVinil(), vAtual=sel['__vinil']||'';
@@ -10129,7 +10197,10 @@ else appLockInit();
       html+='<div class="ln-auto">Entram sozinhos: '+insumos.map(function(x){ return esc(x.n); }).join(' · ')+'</div>';
     }
     // guardar esta montagem como a que já vem marcada da próxima vez
-    html+='<button type="button" class="ln-padrao" data-padrao="1">Salvar esta montagem como padrão do '+esc(l.nome)+'</button>';
+    if(completo) html+='<button type="button" class="ln-padrao" data-padrao="1">Salvar esta montagem como padrão do '+esc(l.nome)+'</button>';
+    return html;
+  }
+  function fecharPainel(row, p, html, completo){
     if(!html) html='<div class="le-ajuda" style="margin:0">Esta linha ainda não tem campos. Configure em Precificação, Linhas do pedido.</div>';
     /* RECOLHER (Suzana, 18/09): com vários itens o pedido ficava gigante.
        Recolhido, o bloco mostra só o resumo; os materiais dele recolhem
@@ -10138,7 +10209,8 @@ else appLockInit();
     var resumo='<div class="ln-resumo" data-abrir="1"><span>▸ '+(nMats ? (nMats+' materiais dentro') : 'nada escolhido ainda')
       +' · custo '+fmt(custoTotalDaLinha(row))+'</span><b>Abrir</b></div>';
     p.innerHTML=resumo+html+'<div class="ln-custo"></div>'
-      +'<button type="button" class="ln-recolher" data-recolher="1">Recolher este item</button>';
+      +'<button type="button" class="ln-recolher'+(completo?' pronto':'')+'" data-recolher="1">'
+      +(completo ? 'Pronto, recolher este item' : 'Recolher este item')+'</button>';
     p.classList.toggle('recolhido', row.dataset.recolhido==='1');
     var dl=document.getElementById('ts-cores-datalist');
     if(dl) dl.innerHTML=coresSalvas().map(function(c){ return '<option value="'+esc(c)+'">'; }).join('');
@@ -10236,10 +10308,15 @@ else appLockInit();
     var l=porId(row.dataset.linhaId); if(!l) return;
     var sel=selDe(row), padrao={};
     (l.grupos||[]).forEach(function(g){
-      if(g.tipo==='cores') return;
+      if(g.tipo==='cores' || g.tipo==='texto') return;     // cor e texto da arte são de cada pedido
       var v=sel[g.nome]; if(v && v.length) padrao[g.nome]=copia(v);
     });
     if(sel['__papel']) padrao['__papel']=sel['__papel'];
+    // respostas Sim/Não também viram padrão (menos a de personalização)
+    if(sel.__resp){
+      padrao.__resp={};
+      Object.keys(sel.__resp).forEach(function(k){ if(k!=='Personalização') padrao.__resp[k]=sel.__resp[k]; });
+    }
     var quantos=0; for(var k in padrao) quantos++;
     if(!quantos){ toast('Marque o que vai no kit antes de salvar o padrão'); return; }
     if(!confirm('Salvar esta montagem como padrão do "'+l.nome+'"?\n\nTodo '+l.nome+' novo já vem com ela marcada. Os pedidos já salvos não mudam.')) return;
@@ -10260,6 +10337,8 @@ else appLockInit();
     }
     // kit novo já nasce com a montagem padrão que ela salvou
     var sel=(salvo && salvo.opcoes) || window._padraoDaLinha(l);
+    // e com a escolha inicial dos campos que têm uma (Tamanho: Individual)
+    if(!salvo && l) (l.grupos||[]).forEach(function(g){ if(g.inicial && !(sel[g.nome]||[]).length) sel[g.nome]=[g.inicial]; });
     var nomeIni = salvo ? salvo.nome : (l ? window._nomeLinha(l, sel) : '');
     adicionarItemPedido(nomeIni, salvo ? salvo.qtd : 1, salvo ? salvo.preco : '', salvo ? salvo.un : 'un');
     var row=li.lastElementChild; if(!row) return;
@@ -10275,6 +10354,12 @@ else appLockInit();
         if(b.dataset.recolher!=null){ recolher(row, true); return; }
         if(b.dataset.abrir!=null){ recolher(row, false); return; }
         if(b.dataset.padrao!=null){ salvarPadrao(row); return; }
+        if(b.dataset.resp!=null){                           // pergunta Sim/Não do passo a passo
+          var sr=selDe(row); sr.__resp=sr.__resp||{};
+          sr.__resp[b.dataset.g]=b.dataset.resp;
+          if(b.dataset.resp==='nao') delete sr[b.dataset.g];   // "não": some o que tinha sido escolhido ali
+          mudou(row, sr); return;
+        }
         if(b.dataset.papel!=null){ var s=selDe(row); s['__papel']=b.dataset.papel; mudou(row, s); return; }
         if(b.dataset.add!=null){ addItem(row, b.dataset.g, b.dataset.add, 1); return; }
         if(b.dataset.cor!=null){ tiraCor(row, b.dataset.g, b.dataset.cor); return; }
@@ -10622,7 +10707,8 @@ else appLockInit();
           (g.opcoes||[]).forEach(function(o){ if(o.nome===de) o.nome=para; });
         });
         if(L.padrao) Object.keys(L.padrao).forEach(function(k){
-          L.padrao[k]=(L.padrao[k]||[]).map(function(v){
+          if(!Array.isArray(L.padrao[k])) return;       // __resp e __papel não são listas de itens
+          L.padrao[k]=L.padrao[k].map(function(v){
             if(typeof v==='string') return v===de?para:v;
             if(v && v.n===de) v.n=para;
             return v;
