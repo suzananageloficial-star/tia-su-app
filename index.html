@@ -7311,6 +7311,10 @@ function renderFornecedores(){
 #sidebar-footer{display:none!important;}
 @media (min-width:768px){#sidebar-footer{display:flex!important;}}
 
+/* título de cada coluna dos dados */
+.p-col-t{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--pink);
+  border-bottom:1.5px solid var(--pink-l);padding-bottom:5px;margin-bottom:10px}
+
 /* gasto e lucro com a mesma cara, lado a lado */
 #p-fechamento{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 8px}
 #p-fechamento > *{flex:1 1 220px;background:var(--pink-l);border-radius:12px;padding:10px 14px;margin:0}
@@ -7320,17 +7324,17 @@ function renderFornecedores(){
    No celular continua igual. Na tela do computador o pedido ocupa mais
    espaço, porque tem muito item e muito material para ver de uma vez. */
 @media (min-width:900px){
-  #modal-pedido .modal{ max-width:900px; max-height:94dvh; }
+  #modal-pedido .modal{ max-width:96vw; max-height:96dvh; }
   #modal-pedido .modal-body{ padding:18px 26px; }
   #modal-pedido .linha-painel{ padding:14px 16px; }
-  /* dados da cliente em duas colunas: cabe tudo sem rolar tanto */
-  #p-dados-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 20px; align-items:start; }
+  /* dados da cliente de um lado, dados do pedido do outro */
+  #p-dados-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 26px; align-items:start; }
   #p-dados-grid > *{ min-width:0; }
-  #p-dados-grid #p-obs{ min-height:86px; }
+  #p-dados-grid #p-obs{ min-height:120px; }
 }
 @media (min-width:1280px){
-  #modal-pedido .modal{ max-width:1120px; }
-  #modal-pedido .modal-body > .form-row{ max-width:760px; }
+  #modal-pedido .modal{ max-width:1440px; }
+
 }
 </style>
 <script>
@@ -9434,7 +9438,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c48';
+    var ver='v20/09-c49';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -11182,19 +11186,24 @@ else appLockInit();
     if(!body || !lista || body.dataset.ordem) return;
     function grupo(id, sel){ var el=document.getElementById(id); return el ? el.closest(sel||'.form-group') : null; }
 
-    /* 1. DADOS DA CLIENTE: numa caixa só, que no computador fica em duas
-       colunas (endereço ao lado dos dados) — Suzana, 20/09 */
+    /* 1. DUAS COLUNAS COM SENTIDO (Suzana, 20/09): de um lado quem é a
+       cliente, do outro o que ela pediu. No celular vira uma coluna só. */
     var caixa=document.createElement('div'); caixa.id='p-dados-grid';
+    var colA=document.createElement('div'); colA.className='p-col';
+    var colB=document.createElement('div'); colB.className='p-col';
+    colA.innerHTML='<div class="p-col-t">Dados da cliente</div>';
+    colB.innerHTML='<div class="p-col-t">Dados do pedido</div>';
+    caixa.appendChild(colA); caixa.appendChild(colB);
     var cliente=grupo('p-cliente');
     if(cliente && cliente.parentNode) cliente.parentNode.insertBefore(caixa, cliente);
-    ['p-cliente','p-whats','p-cep','p-produto','p-origem','p-obs'].forEach(function(id){
-      var g=grupo(id); if(g) caixa.appendChild(g);
-    });
-    var hist=document.getElementById('cliente-historico'); if(hist) caixa.appendChild(hist);
+    ['p-cliente','p-whats','p-cep'].forEach(function(id){ var g=grupo(id); if(g) colA.appendChild(g); });
+    var hist=document.getElementById('cliente-historico'); if(hist) colA.appendChild(hist);
+    ['p-produto','p-origem','p-obs'].forEach(function(id){ var g=grupo(id); if(g) colB.appendChild(g); });
 
-    /* 2. ENTREGA, STATUS E PAGAMENTO ficam logo abaixo do Total do pedido */
-    var total=document.getElementById('p-total-box');
-    var ref=total;
+    /* 2. ENTREGA, STATUS E PAGAMENTO ficam depois dos itens e do total */
+    var itensBox=document.getElementById('p-itens-lista');
+    var depoisDosItens=itensBox ? itensBox.parentElement : null;
+    var ref=depoisDosItens;
     [grupo('p-data','.form-row'), grupo('p-pgto')].forEach(function(el){
       if(el && ref && ref.parentNode){ ref.parentNode.insertBefore(el, ref.nextSibling); ref=el; }
     });
