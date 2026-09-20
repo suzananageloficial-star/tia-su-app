@@ -9485,7 +9485,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c56';
+    var ver='v20/09-c57';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10938,6 +10938,14 @@ else appLockInit();
     if(row && !row.dataset.montado){ row.dataset.montado='1'; montarItem(row, null); }
     return ret;
   };
+  var navOrig=window.navigate;
+  if(typeof navOrig==='function'){
+    window.navigate=function(tela){
+      var r=navOrig.apply(this, arguments);
+      if(tela==='preco') try{ botaoPrecificacao(); }catch(e){ console.warn('[enxuto] tela preço', e); }
+      return r;
+    };
+  }
   var openOrig=window.openModal;
   window.openModal=function(id, isNew){
     if(id==='modal-pedido'){ window._seedLinhas(); window._atualizarListaProdutos(); window._sugerirMateriais(); }
@@ -11336,18 +11344,150 @@ else appLockInit();
     var b=document.getElementById('nav-estoque');
     if(!b) return;
     b.setAttribute('onclick','_abrirProdutos()');
-    var lb=b.querySelector('.nav-label'); if(lb) lb.textContent='Produtos';
+    var lb=b.querySelector('.nav-label'); if(lb) lb.textContent='Materiais';
   }
 
+  /* ── PRECIFICAÇÃO = CALCULADORA SIMPLES (Suzana, 20/09) ────────────
+     A tela inteira virou a lista dos produtos: material somado × fator
+     (2 · 2,5 · 3) = preço de venda. O catálogo com foto saiu do app.   */
+  var calcAberto={};
   function botaoPrecificacao(){
-    var tela=document.getElementById('screen-preco'); if(!tela || document.getElementById('le-atalho')) return;
-    var cab=tela.querySelector('.page-header');
-    var d=document.createElement('div'); d.id='le-atalho';
-    d.style.cssText='background:#FDF2F7;border:1.5px solid #F4C6D9;border-radius:14px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px';
-    d.innerHTML='<div style="flex:1"><div style="font-weight:800;font-size:14px;color:var(--pink)">Preço das linhas</div>'
-      +'<div style="font-size:11px;color:var(--gray-d);margin-top:2px">Soma o material de cada linha e multiplica pelo fator (2 · 2,5 · 3) para achar o preço de venda.</div></div>'
-      +'<button type="button" class="btn btn-pink btn-sm" onclick="_abrirPrecos()">Abrir</button>';
-    if(cab && cab.nextSibling) tela.insertBefore(d, cab.nextSibling); else tela.insertBefore(d, tela.firstChild);
+    var tela=document.getElementById('screen-preco'); if(!tela) return;
+    if(!tela.dataset.calc){
+      [].slice.call(tela.children).forEach(function(c){
+        if(c.classList && c.classList.contains('page-header')) return;
+        c.style.display='none';
+      });
+      var sub=tela.querySelector('.page-sub'); if(sub) sub.textContent='Material × fator = preço de venda';
+      var box=document.createElement('div'); box.id='calc-preco';
+      tela.appendChild(box);
+      box.addEventListener('click', calcClique);
+      box.addEventListener('change', calcMudou);
+      tela.dataset.calc='1';
+    }
+    desenharCalc();
+  }
+  window._telaPreco=botaoPrecificacao;
+  function produtosDaCalc(){
+    var m=montagens(), out=[];
+    Object.keys(m).forEach(function(k){
+      var x=m[k]; if(!x || !x.nome) return;
+      var prod=(typeof catalogo!=='undefined'?catalogo:[]).filter(function(c){
+        return c && c.avulso && chaveNome(c.nome)===k; })[0];
+      out.push({ chave:k, nome:x.nome, mats:(x.mats||[]), preco:prod?(parseFloat(prod.preco)||0):0 });
+    });
+    // produto cadastrado sem montagem também aparece, para ela pôr o preço
+    (typeof catalogo!=='undefined'?catalogo:[]).forEach(function(c){
+      if(!c || !c.avulso || !c.nome) return;
+      var k=chaveNome(c.nome);
+      if(out.some(function(o){ return o.chave===k; })) return;
+      if(!(parseFloat(c.preco)>0)) return;           // material puro fica na tela Materiais
+      out.push({ chave:k, nome:c.nome, mats:[], preco:parseFloat(c.preco)||0 });
+    });
+    return out.sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); });
+  }
+  function custoDosMats(mats){
+    return R2((mats||[]).reduce(function(sm,x){ return sm+(parseFloat(x.q)||0)*(parseFloat(x.v)||0); },0));
+  }
+  function desenharCalc(){
+    var box=document.getElementById('calc-preco'); if(!box) return;
+    var lista=produtosDaCalc();
+    box.innerHTML='<div class="le-ajuda" style="margin-bottom:10px">Cada produto que você salva no pedido aparece aqui. O app soma o material e multiplica pelo <b>fator</b>: toque em × 2, × 2,5 ou × 3 e o preço de venda entra. Esse preço volta sozinho no próximo pedido.</div>'
+      +'<button type="button" class="le-add" data-cal="novo" style="margin-bottom:10px">+ novo produto</button>'
+      +(lista.length ? '' : '<div class="le-mini" style="display:block">Nada ainda. Monte um item no pedido e toque em <b>Salvar como produto</b>, ou crie aqui.</div>')
+      +'<div id="calc-lista">'
+      + lista.map(function(pr){
+          var custo=custoDosMats(pr.mats), aberto=!!calcAberto[pr.chave];
+          return '<div class="le-card" data-ch="'+esc(pr.chave)+'">'
+            +'<div class="le-row"><input type="text" data-cal="nome" data-ch="'+esc(pr.chave)+'" value="'+esc(pr.nome)+'" style="flex:1;font-weight:700">'
+            +'<button type="button" class="le-x" data-cal="del" data-ch="'+esc(pr.chave)+'" title="Excluir produto">×</button></div>'
+            +'<div class="le-mini" style="display:block;margin-bottom:6px">Material: <b>'+fmt(custo)+'</b>'
+            +((pr.mats||[]).length ? (' · '+pr.mats.length+' itens') : ' · sem materiais ainda')+'</div>'
+            +'<div class="le-row" style="gap:6px;flex-wrap:wrap">'
+            + [2,2.5,3].map(function(f){
+                return '<button type="button" class="ln-chip" data-cal="fator" data-ch="'+esc(pr.chave)+'" data-f="'+f+'">× '+String(f).replace('.',',')+' = '+fmt(R2(custo*f))+'</button>';
+              }).join('')
+            +'</div>'
+            +'<div class="le-row" style="margin-top:8px;align-items:center"><span class="le-mini" style="flex:1">Preço de venda</span><span class="le-mini">R$</span>'
+            +'<input type="number" step="0.01" min="0" data-cal="preco" data-ch="'+esc(pr.chave)+'" value="'+num(pr.preco)+'" placeholder="0,00" style="width:100px"></div>'
+            +(pr.preco>0 ? ('<div class="le-mini" style="display:block;margin-top:4px">Sobra '+fmt(R2(pr.preco-custo))+' por unidade'
+                +(custo>0?(' · fator '+String(Math.round((pr.preco/custo)*100)/100).replace('.',',')):'')+'</div>') : '')
+            +'<button type="button" class="le-add" data-cal="vermats" data-ch="'+esc(pr.chave)+'">'+(aberto?'esconder os materiais':'ver os materiais')+'</button>'
+            +(aberto ? ((pr.mats||[]).map(function(x,xi){
+                return '<div class="le-row"><input type="text" data-cal="mn" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+esc(x.n)+'" list="estoque-datalist" style="flex:1">'
+                  +'<input type="number" step="0.1" min="0" data-cal="mq" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+(parseFloat(x.q)||0)+'" style="width:56px">'
+                  +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-cal="mv" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+num(x.v)+'" style="width:80px">'
+                  +'<button type="button" class="le-x" data-cal="delm" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'">×</button></div>';
+              }).join('')
+              +'<button type="button" class="le-add" data-cal="addm" data-ch="'+esc(pr.chave)+'">+ material</button>') : '')
+            +'</div>';
+        }).join('')
+      +'</div>';
+  }
+  /* grava a montagem e o produto de uma vez */
+  function gravarCalc(chave, nome, mats, preco){
+    var g=montagens();
+    var nova=chaveNome(nome);
+    if(nova!==chave) delete g[chave];
+    g[nova]={nome:nome, mats:mats||[], em:Date.now()};
+    try{ localStorage.setItem(K_MONT, JSON.stringify(g)); }catch(e){}
+    var custo=custoDosMats(mats);
+    var prod=catalogo.filter(function(c){ return c && c.avulso && (chaveNome(c.nome)===chave || chaveNome(c.nome)===nova); })[0];
+    if(prod){ prod.nome=nome; prod.custo=custo; prod.preco=R2(preco); prod.updatedAt=Date.now(); }
+    else catalogo.push({id:'av_'+uid(), nome:nome, avulso:true, custo:custo, preco:R2(preco), un:'un', cat:'Produtos', updatedAt:Date.now()});
+    save();
+    if(window._atualizarListaProdutos) window._atualizarListaProdutos();
+    if(window._sugerirMateriais) window._sugerirMateriais();
+    if(calcAberto[chave] && nova!==chave){ calcAberto[nova]=true; delete calcAberto[chave]; }
+    desenharCalc();
+  }
+  function produtoDaCalc(chave){
+    return produtosDaCalc().filter(function(x){ return x.chave===chave; })[0];
+  }
+  function calcClique(ev){
+    var b=ev.target.closest('[data-cal]'); if(!b) return;
+    var acao=b.dataset.cal, ch=b.dataset.ch, xi=parseInt(b.dataset.xi,10);
+    if(acao==='novo'){
+      var nome=prompt('Nome do produto novo:'); nome=(nome||'').trim();
+      if(!nome) return;
+      if(produtoDaCalc(chaveNome(nome))){ toast('Esse produto já está na lista'); return; }
+      calcAberto[chaveNome(nome)]=true;
+      gravarCalc(chaveNome(nome), nome, [], 0);
+      return;
+    }
+    var pr=ch ? produtoDaCalc(ch) : null; if(!pr) return;
+    if(acao==='vermats'){ calcAberto[ch]=!calcAberto[ch]; desenharCalc(); return; }
+    if(acao==='fator'){
+      var f=parseFloat(b.dataset.f)||0;
+      gravarCalc(ch, pr.nome, pr.mats, R2(custoDosMats(pr.mats)*f));
+      return;
+    }
+    if(acao==='addm'){ pr.mats.push({n:'', q:1, v:0}); calcAberto[ch]=true; gravarCalc(ch, pr.nome, pr.mats, pr.preco); return; }
+    if(acao==='delm'){ pr.mats.splice(xi,1); gravarCalc(ch, pr.nome, pr.mats, pr.preco); return; }
+    if(acao==='del'){
+      if(!confirm('Excluir o produto "'+pr.nome+'"?\n\nEle sai da lista e da sugestão do pedido. Os pedidos já salvos não mudam.')) return;
+      var g=montagens(); delete g[ch];
+      try{ localStorage.setItem(K_MONT, JSON.stringify(g)); }catch(e){}
+      catalogo=catalogo.filter(function(c){ return !(c && c.avulso && chaveNome(c.nome)===ch); });
+      save();
+      if(window._atualizarListaProdutos) window._atualizarListaProdutos();
+      desenharCalc();
+      toast('Produto excluído');
+      return;
+    }
+  }
+  function calcMudou(ev){
+    var t=ev.target; var acao=t.dataset && t.dataset.cal; if(!acao) return;
+    var ch=t.dataset.ch, xi=parseInt(t.dataset.xi,10);
+    var pr=produtoDaCalc(ch); if(!pr) return;
+    if(acao==='nome'){
+      var novo=(t.value||'').trim(); if(!novo) return;
+      gravarCalc(ch, novo, pr.mats, pr.preco); return;
+    }
+    if(acao==='preco'){ gravarCalc(ch, pr.nome, pr.mats, parseFloat(t.value)||0); return; }
+    if(acao==='mn' && pr.mats[xi]){ pr.mats[xi].n=(t.value||'').trim(); gravarCalc(ch, pr.nome, pr.mats, pr.preco); return; }
+    if(acao==='mq' && pr.mats[xi]){ pr.mats[xi].q=parseFloat(t.value)||0; gravarCalc(ch, pr.nome, pr.mats, pr.preco); return; }
+    if(acao==='mv' && pr.mats[xi]){ pr.mats[xi].v=parseFloat(t.value)||0; gravarCalc(ch, pr.nome, pr.mats, pr.preco); return; }
   }
 
   /* ── AVISO DE VERSÃO NOVA (Suzana, 18/09) ───────────────────────────
