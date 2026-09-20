@@ -7311,6 +7311,19 @@ function renderFornecedores(){
 #sidebar-footer{display:none!important;}
 @media (min-width:768px){#sidebar-footer{display:flex!important;}}
 
+/* número de cada item do pedido */
+.item-pedido-row{grid-template-columns:20px 1fr 44px 42px 66px 26px}
+.pi-num{font-size:11px;font-weight:800;color:var(--pink);text-align:center}
+#modal-pedido .item-pedido-row .pi-preco{text-align:right}
+
+/* colunas dos materiais: cabeçalho igual à linha, com a caixinha comprar */
+.linha-painel .material-row{grid-template-columns:1fr 50px 104px 64px 18px 14px}
+.linha-painel .material-row .mat-comprar{gap:3px}
+.linha-painel .material-row .mat-comprar span{display:inline;font-size:8px;color:#9a8b90}
+.linha-painel .material-row .mat-comprar input{width:15px;height:15px;border:1.5px solid var(--gray-d);border-radius:3px}
+.linha-painel .ln-mats-cab{grid-template-columns:1fr 50px 104px 64px 18px 14px}
+.linha-painel .ln-mats-cab span:nth-child(4){text-align:center}
+
 /* item avulso: sem faixa rosa, só um link pequeno para virar composto */
 .linha-painel.avulso{background:none;border:0;box-shadow:none;padding:0;margin:0 0 4px;text-align:right}
 .linha-painel.avulso.recolhido{display:none}
@@ -9445,7 +9458,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c50';
+    var ver='v20/09-c51';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10052,15 +10065,12 @@ else appLockInit();
     var mats=[].slice.call(p.querySelectorAll('.material-row'));
     var custo=custoTotalDaLinha(row, mats);
     var q=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
-    var un=custoUnitarioDaLinha(row, mats);
     if(row.dataset.tipoItem==='avulso' && !mats.length){
-      el.textContent = un>0
-        ? ('Custo deste avulso: '+fmt(un)+(q>1?(' cada · '+fmt(custo)+' nas '+q):'' ))
-        : 'Sem custo cadastrado para este item.';
+      el.textContent = custo>0 ? ('Custo deste avulso: '+fmt(custo)) : 'Sem custo cadastrado para este item.';
       return;
     }
-    el.textContent = un>0
-      ? ('Material de 1 unidade: '+fmt(un)+(q>1 ? (' · '+fmt(custo)+' nas '+q+' unidades') : '')+' · entra no gasto do pedido')
+    el.textContent = custo>0
+      ? ('Material deste item: '+fmt(custo)+(q>1 ? (' · dá '+fmt(R2(custo/q))+' por unidade') : '')+' · entra no gasto do pedido')
       : 'Sem custo ainda. Preencha o R$ de cada material.';
   }
   /* ── ITEM DO PEDIDO DO JEITO DA SUZANA (20/09) ─────────────────────
@@ -10102,7 +10112,34 @@ else appLockInit();
     dl.innerHTML=window._nomesDeItem().map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
     return dl;
   };
-  function nomeDoItem(row){ var i=row.querySelector('input[type=text]'); return i ? String(i.value||'').trim() : ''; }
+  function nomeDoItem(row){
+    var i=row.querySelector('.pi-desc') || row.querySelector('input[type=text]');
+    return i ? String(i.value||'').trim() : '';
+  }
+  /* preço do item escrito como dinheiro: 10 vira 10,00 (Suzana, 20/09) */
+  function precoDoItem(row){
+    var el=row.querySelector('.pi-preco');
+    return el ? window._parseMoeda(el.value) : 0;
+  }
+  function arrumarCampoPreco(row){
+    var el=row.querySelector('.pi-preco'); if(!el || el.dataset.moeda) return;
+    var v=parseFloat(el.value)||0;
+    el.type='text'; el.setAttribute('inputmode','decimal');
+    el.value = v>0 ? window._moedaBR(v) : '';
+    el.dataset.moeda='1';
+    el.addEventListener('input', function(){ window._maskMoeda(el); recalcularTotal(); calcularLucro(); });
+  }
+  /* numera as linhas: item 1, 2, 3… (Suzana, 20/09) */
+  function numerarItens(){
+    var i=0;
+    document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(r){
+      i++;
+      var n=r.querySelector('.pi-num');
+      if(!n){ n=document.createElement('span'); n.className='pi-num'; r.insertBefore(n, r.firstChild); }
+      n.textContent=i;
+    });
+  }
+  window._numerarItens=numerarItens;
   /* item avulso: o custo vem do produto cadastrado com esse nome */
   function custoDoAvulso(row){
     var prod=produtoExato(nomeDoItem(row));
@@ -10166,7 +10203,7 @@ else appLockInit();
       return;
     }else{
       miolo='<div class="lg"><div class="lg-t">Materiais deste item</div>'
-        +(mats.length ? '<div class="ln-mats-cab"><span>MATERIAL</span><span>QTD</span><span>R$ DA LINHA</span><span></span><span></span></div>' : '')
+        +(mats.length ? '<div class="ln-mats-cab"><span>MATERIAL</span><span>QTD</span><span>R$ DA LINHA</span><span>COMPRAR</span><span></span><span></span></div>' : '')
         +'<div class="ln-mats"></div>'
         +(mats.length ? '' : '<div class="ln-auto">Escreva o material ou escolha da lista. Da próxima vez que este item aparecer, eles já vêm juntos.</div>')
         +'<button type="button" class="ln-chip ln-addmat" data-addmat="1">+ Adicionar material</button></div>'
@@ -10191,12 +10228,11 @@ else appLockInit();
     s+=(parseFloat(row.dataset.custoUn)||0);
     return R2(s);
   }
-  /* custo do item inteiro: a lista de material é de UMA unidade, então
-     multiplica pela quantidade do pedido (9 centros de mesa = 9 vezes o
-     material de um) — Suzana, 20/09 */
+  /* custo do item: é a soma do que está escrito nos materiais DELE. A
+     Suzana preenche a quantidade total (9 bases para 9 centros), então o
+     app NÃO multiplica de novo pela quantidade do item (20/09). */
   function custoTotalDaLinha(row, mats){
-    var q=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
-    return R2(custoUnitarioDaLinha(row, mats)*q);
+    return custoUnitarioDaLinha(row, mats);
   }
   function recolher(row, sim){
     row.dataset.recolhido = sim ? '1' : '';
@@ -10225,6 +10261,9 @@ else appLockInit();
   /* prepara um item: painel de materiais embaixo + lista de nomes no campo */
   function montarItem(row, salvo){
     var ni=row.querySelector('input[type=text]');
+    if(ni) ni.classList.add('pi-desc');
+    arrumarCampoPreco(row);
+    numerarItens();
     if(ni){
       window._atualizarListaProdutos();
       ni.setAttribute('list','ts-produtos-datalist');
@@ -10580,7 +10619,7 @@ else appLockInit();
       var nome=((row.querySelector('input[type=text]')||{}).value||'').trim();
       var qtd=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
       var un=((row.querySelector('.pi-un')||{}).value||'').trim()||'un';
-      var preco=parseFloat((row.querySelector('.pi-preco')||{}).value)||0;
+      var preco=precoDoItem(row);
       if(!(nome || preco)) return;
       var it={nome:nome, qtd:qtd, un:un, preco:preco};
       // quais materiais são deste item, para o pedido reabrir agrupado
@@ -10628,6 +10667,31 @@ else appLockInit();
     var disp=document.getElementById('p-gasto-real'); if(disp) disp.textContent='R$ '+total.toFixed(2).replace('.',',');
     var c=document.getElementById('p-custo'); if(c && total>0) c.value=total.toFixed(2);
     calcularLucro();
+  };
+
+  /* total do pedido: o preço agora é texto com vírgula */
+  window.recalcularTotal=function(){
+    var total=0, linhas=document.querySelectorAll('#p-itens-lista .item-pedido-row');
+    linhas.forEach(function(row){
+      total+=(parseFloat((row.querySelector('.pi-qtd')||{}).value)||0)*precoDoItem(row);
+    });
+    var box=document.getElementById('p-total-box'), manual=document.getElementById('p-valor-manual-box');
+    var escondido=document.getElementById('p-valor');
+    if(linhas.length){
+      if(box) box.style.display='block';
+      if(manual) manual.style.display='none';
+      var disp=document.getElementById('p-total-display'); if(disp) disp.textContent=fmt(total);
+      if(escondido) escondido.value=total;
+      var sinal=parseFloat((document.getElementById('p-sinal')||{}).value)||0;
+      var rest=document.getElementById('p-restante-display');
+      if(rest) rest.textContent=fmt(R2(total-sinal));
+    }else{
+      if(box) box.style.display='none';
+      if(manual) manual.style.display='block';
+      if(escondido) escondido.value=(document.getElementById('p-valor-manual')||{}).value||0;
+    }
+    numerarItens();
+    if(typeof calcularLucro==='function') calcularLucro();
   };
 
   /* o salvarPedido original só soma materiais no custoReal, que é o custo
