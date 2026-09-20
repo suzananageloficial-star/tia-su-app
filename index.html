@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c43';
+    var ver='v20/09-c44';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10000,6 +10000,7 @@ else appLockInit();
      ou na opção escolhida. Sem isso, "Fita de cetim" duplicava ao reabrir
      o pedido, porque a busca por nome não encontrava a linha antiga. */
   function nomeDoMaterial(row){
+    if(row.dataset.matNome) return String(row.dataset.matNome).trim();
     var i=row.querySelector('.mat-nome');
     if(i && String(i.value||'').trim()) return String(i.value).trim();
     var s=row.querySelector('.mat-sel');
@@ -10101,11 +10102,12 @@ else appLockInit();
       +'<div class="ln-mats"></div>'
       +(mats.length ? '' : '<div class="ln-auto">Escreva o material ou escolha da lista. Da próxima vez que este item aparecer, eles já vêm juntos.</div>')
       +'<button type="button" class="ln-chip ln-addmat" data-addmat="1">+ Adicionar material</button></div>'
+      +(mats.length ? '<button type="button" class="ln-padrao" data-mae="1">Salvar "'+esc(nomeDoItem(row)||'este item')+'" como produto</button>' : '')
       +'<div class="ln-custo"></div>'
       +'<button type="button" class="ln-recolher'+(completo?' pronto':'')+'" data-recolher="1">'
       +(completo ? 'Pronto, recolher este item' : 'Recolher este item')+'</button>';
     var box=p.querySelector('.ln-mats');
-    mats.forEach(function(m){ box.appendChild(m); });
+    mats.forEach(function(m){ box.appendChild(m); if(ehLinhaDeCor(m)) recarregarCores(m); });
     p.classList.toggle('recolhido', row.dataset.recolhido==='1');
     atualizaCustoPainel(row);
   }
@@ -10158,7 +10160,7 @@ else appLockInit();
     if(painelDe(row)) return;
     var painel=document.createElement('div'); painel.className='linha-painel'; painel.dataset.for=row.id;
     painel.addEventListener('click', function(ev){
-      var b=ev.target.closest('.ln-resumo, .ln-recolher, .ln-addmat, .material-del');
+      var b=ev.target.closest('.ln-resumo, .ln-recolher, .ln-addmat, .ln-padrao, .material-del');
       if(!b) return;
       if(b.classList.contains('material-del')){     // o ✕ do material já apaga a linha
         setTimeout(function(){ renderPainel(row); calcularGastoReal(); }, 0); return;
@@ -10171,6 +10173,7 @@ else appLockInit();
         if(campo) campo.focus();
         calcularGastoReal(); return;
       }
+      if(b.dataset.mae!=null){ salvarProdutoMae(row); return; }
       if(b.dataset.recolher!=null){ recolher(row, true); return; }
       if(b.dataset.abrir!=null){ recolher(row, false); return; }
     });
@@ -10289,6 +10292,85 @@ else appLockInit();
     dl.innerHTML=nomes.sort(function(a,b){ return a.localeCompare(b,'pt'); })
       .map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
   };
+  /* ── COR DO BALÃO VEM DO CADASTRO DE PRODUTOS (Suzana, 20/09) ──────
+     Ela não controla estoque: tudo o que compra vira PRODUTO. Então a
+     lista de cor de um balão ou fita é montada com os produtos que ela
+     cadastrou daquele tamanho, e não com o estoque.                   */
+  function ehLinhaDeCor(row){ return !!(row && row.querySelector('.mat-sel')); }
+  function coresDoCadastro(sz, ehFita){
+    return window._todosOsMateriais().filter(function(x){
+      var tipoOk = ehFita ? _ehFita(x.nome) : (_ehBalao(x.nome) && !_naoEBalao(x.nome));
+      if(!tipoOk) return false;
+      if(chaveNome(x.nome)===chaveNome(sz)) return false;      // o genérico não é cor
+      return ehFita ? matchFita(x.nome, sz) : matchSize(x.nome, sz);
+    });
+  }
+  function recarregarCores(row){
+    var sel=row.querySelector('.mat-sel'); if(!sel) return;
+    var sz=row.dataset.balaoSize||'';
+    var lista=coresDoCadastro(sz, row.dataset.tipo==='fita');
+    var atual=row.dataset.matNome||'';
+    sel.innerHTML='<option value="">escolher a cor — '+esc(sz)+'</option>'
+      + lista.map(function(x){
+          return '<option value="'+esc(x.nome)+'"'+(chaveNome(atual)===chaveNome(x.nome)?' selected':'')+'>'
+            + esc(x.nome) + (x.custo>0 ? (' · R$ '+x.custo.toFixed(2).replace('.',',')) : '') + '</option>';
+        }).join('')
+      + '<option value="__texto">escrever na mão</option>';
+  }
+  window._recarregarCores=recarregarCores;
+  /* a linha de cor vira linha de texto (quando a cor não está cadastrada) */
+  function virarTexto(row){
+    var dono=row.dataset.deLinha||'';
+    var q=parseFloat((row.querySelector('.mat-qtd')||{}).value)||1;
+    var nome=row.dataset.matNome||row.dataset.balaoSize||'';
+    var r=document.getElementById(dono);
+    row.remove();
+    if(r){ addMaterialAoItem(r, nome, q, 0); renderPainel(r); calcularGastoReal(); }
+  }
+  var balOrig=window._balaoSelecionado;
+  window._balaoSelecionado=function(rowId){
+    var row=document.getElementById(rowId); if(!row) return;
+    var sel=row.querySelector('.mat-sel');
+    if(!sel || !row.dataset.deLinha) return balOrig.apply(this, arguments);
+    var v=sel.value;
+    if(v==='__texto'){ virarTexto(row); return; }
+    var prod=window._todosOsMateriais().filter(function(x){ return chaveNome(x.nome)===chaveNome(v); })[0];
+    row.dataset.matNome = prod ? prod.nome : '';
+    row.dataset.itemId = (prod && prod.estoqueId) ? prod.estoqueId : '';
+    row.dataset.status = 'pendente';
+    var q=parseFloat((row.querySelector('.mat-qtd')||{}).value)||1;
+    if(prod && prod.custo>0){
+      row.dataset.matUnit=String(prod.custo);
+      var vv=row.querySelector('.mat-valor'); if(vv) vv.value=window._moedaBR(prod.custo*q);
+    }
+    var dono=document.getElementById(row.dataset.deLinha);
+    if(dono) atualizaCustoPainel(dono);
+    calcularGastoReal();
+  };
+  /* PRODUTO MÃE: guarda a montagem deste item e cadastra o produto, para
+     ele aparecer na lista dos próximos pedidos */
+  function salvarProdutoMae(row){
+    var nome=nomeDoItem(row);
+    if(!nome){ toast('Escreva o nome do item antes de salvar'); return; }
+    var mats=matsDaLinha(row.id);
+    if(!mats.length){ toast('Coloque os materiais antes de salvar'); return; }
+    if(!confirm('Salvar "'+nome+'" como produto?\n\nOs materiais de hoje ficam guardados e voltam sozinhos no próximo pedido com esse nome. A cor do balão você escolhe a cada pedido.')) return;
+    guardarMontagemDaLinha(row);
+    var custo=custoTotalDaLinha(row, mats);
+    var preco=parseFloat((row.querySelector('.pi-preco')||{}).value)||0;
+    var ja=catalogo.filter(function(p){ return p && p.avulso && chaveNome(p.nome)===chaveNome(nome); })[0];
+    if(ja){
+      ja.custo=custo; if(preco>0) ja.preco=preco; ja.updatedAt=Date.now();
+    }else{
+      catalogo.push({id:'av_'+uid(), nome:nome, avulso:true, custo:custo, preco:preco, un:'un', cat:'Produtos', updatedAt:Date.now()});
+    }
+    save();
+    window._atualizarListaProdutos(); window._sugerirMateriais();
+    toast(nome+' salvo como produto');
+    renderPainel(row);
+  }
+  window._salvarProdutoMae=function(rowId){ var r=document.getElementById(rowId); if(r) salvarProdutoMae(r); };
+
   /* item novo pela lista de produtos antigos (linha ou avulso cadastrado) */
   window._addLinhaPedido=function(linhaId, salvo){
     var li=lista(); if(!li) return;
@@ -10391,17 +10473,21 @@ else appLockInit();
   /* o que ela montou fica guardado pelo NOME do item: no próximo pedido
      com o mesmo nome, os materiais voltam sozinhos */
   function guardarMontagensDaTela(){
-    document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(row){
-      var nome=nomeDoItem(row); if(!nome) return;
-      var mats=matsDaLinha(row.id).map(function(m){
-        var q=parseFloat((m.querySelector('.mat-qtd')||{}).value)||1;
-        var tot=window._parseMoeda((m.querySelector('.mat-valor')||{}).value);
-        var un=parseFloat(m.dataset.matUnit);
-        return { n:nomeDoMaterial(m), q:q, v:(!isNaN(un) ? un : (q>0 ? R2(tot/q) : tot)) };
-      }).filter(function(x){ return x.n; });
-      window._guardarMontagem(nome, mats);
-    });
+    document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(row){ guardarMontagemDaLinha(row); });
     window._atualizarListaProdutos();
+  }
+  function guardarMontagemDaLinha(row){
+    var nome=nomeDoItem(row); if(!nome) return;
+    var mats=matsDaLinha(row.id).map(function(m){
+      var q=parseFloat((m.querySelector('.mat-qtd')||{}).value)||1;
+      var tot=window._parseMoeda((m.querySelector('.mat-valor')||{}).value);
+      var un=parseFloat(m.dataset.matUnit);
+      // balão e fita guardam o GENÉRICO ("BALÃO 9 POLEGADAS"): a cor é
+      // escolhida em cada pedido, não fica grudada no produto mãe
+      var n=(m.dataset.balaoSize ? m.dataset.balaoSize : nomeDoMaterial(m));
+      return { n:n, q:q, v:(!isNaN(un) ? un : (q>0 ? R2(tot/q) : tot)) };
+    }).filter(function(x){ return x.n; });
+    window._guardarMontagem(nome, mats);
   }
 
   /* seletor do pedido: botões das linhas + avulsos e produtos antigos */
@@ -10454,15 +10540,7 @@ else appLockInit();
     var inp=velha && velha.querySelector('.mat-nome');
     var nm=inp ? String(inp.value||'').trim() : '';
     if(nm){
-      var fita=(typeof _ehFita==='function') && _ehFita(nm);
-      var temCor=(typeof estoque!=='undefined'?estoque:[]).some(function(e){
-        if(!e || !e.nome) return false;
-        var mesmoTipo = fita
-          ? ((typeof _ehFita==='function') && _ehFita(e.nome))
-          : ((typeof _ehBalao==='function') && _ehBalao(e.nome));
-        if(!mesmoTipo) return false;
-        return (typeof matchSize==='function') ? matchSize(e.nome, nm) : false;
-      });
+      var temCor=coresDoCadastro(nm, (typeof _ehFita==='function') && _ehFita(nm)).length>0;
       if(!temCor) return;
     }
     var antes=document.querySelectorAll('#modal-pedido .material-row').length;
@@ -10766,6 +10844,18 @@ else appLockInit();
     document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(ir){
       if(ir.dataset.linhaId && painelDe(ir)) renderPainel(ir);
     });
+  };
+  /* linha de cor: o que vai salvo é o produto escolhido, não "Balao <x>" */
+  var coletarMatCor=window.coletarMateriaisPedido;
+  window.coletarMateriaisPedido=function(){
+    var mats=coletarMatCor.apply(this, arguments);
+    var linhas=[].slice.call(document.querySelectorAll('#modal-pedido .material-row'));
+    mats.forEach(function(m){
+      var row=linhas.filter(function(r){ return r.dataset.matId===m.id; })[0]; if(!row) return;
+      if(row.dataset.matNome) m.nome=row.dataset.matNome;
+      else if(row.dataset.balaoSize && !row.querySelector('.mat-nome')) m.nome=row.dataset.balaoSize;
+    });
+    return mats;
   };
   window.reconstruirListaCompras=function(){
     var mapa={};
