@@ -9458,7 +9458,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c51';
+    var ver='v20/09-c52';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10145,6 +10145,20 @@ else appLockInit();
     var prod=produtoExato(nomeDoItem(row));
     row.dataset.custoUn = (prod && prod.custo>0) ? String(prod.custo) : '';
   }
+  /* o preço de venda que ela cadastrou no produto entra sozinho na linha
+     do pedido (a taxa de entrega é sempre 20,00) — Suzana, 20/09.
+     Só preenche quando o campo está vazio: valor digitado nunca é trocado. */
+  function precoDeVendaDoProduto(row){
+    var el=row.querySelector('.pi-preco'); if(!el) return;
+    if(window._parseMoeda(el.value)>0) return;
+    var nome=nomeDoItem(row); if(!nome) return;
+    var k=chaveNome(nome);
+    var prod=(typeof catalogo!=='undefined'?catalogo:[]).filter(function(c){
+      return c && c.avulso && chaveNome(c.nome)===k && parseFloat(c.preco)>0; })[0];
+    if(!prod) return;
+    el.value=window._moedaBR(parseFloat(prod.preco));
+    recalcularTotal(); calcularLucro();
+  }
   /* materiais deste item: ficam dentro do painel dele */
   function addMaterialAoItem(row, nome, qtd, custo){
     adicionarMaterialPedido(nome||'', parseFloat(qtd)||1, 'pendente', '', 'normal', '', '', parseFloat(custo)||0);
@@ -10270,9 +10284,10 @@ else appLockInit();
       ni.setAttribute('placeholder','O que vai no pedido (ex.: Bouquet de balões)');
       ni.addEventListener('change', function(){
         puxarMontagem(row);
+        precoDeVendaDoProduto(row);
         if(row.dataset.tipoItem==='avulso'){ custoDoAvulso(row); renderPainel(row); calcularGastoReal(); }
       });
-      ni.addEventListener('blur', function(){ puxarMontagem(row); });
+      ni.addEventListener('blur', function(){ puxarMontagem(row); precoDeVendaDoProduto(row); });
     }
     row.dataset.montado='1';
     ligarRow(row);
@@ -10570,10 +10585,11 @@ else appLockInit();
     cadastrarMateriaisNovos();
     guardarMontagemDaLinha(row);
     var custo=custoTotalDaLinha(row, mats);
-    var preco=parseFloat((row.querySelector('.pi-preco')||{}).value)||0;
+    var preco=precoDoItem(row);
     var ja=catalogo.filter(function(p){ return p && p.avulso && chaveNome(p.nome)===chaveNome(nome); })[0];
     if(ja){
       ja.custo=custo; if(preco>0) ja.preco=preco; ja.updatedAt=Date.now();
+      toast('Preço de "'+nome+'" guardado: '+fmt(preco||ja.preco||0));
     }else{
       catalogo.push({id:'av_'+uid(), nome:nome, avulso:true, custo:custo, preco:preco, un:'un', cat:'Produtos', updatedAt:Date.now()});
     }
