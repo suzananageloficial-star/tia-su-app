@@ -7348,21 +7348,40 @@ function renderFornecedores(){
 #p-fechamento > *{flex:1 1 220px;background:var(--pink-l);border-radius:12px;padding:10px 14px;margin:0}
 #p-fechamento #p-custo{background:#fff}
 
-/* ── PEDIDO GRANDE NO COMPUTADOR (Suzana, 20/09) ──────────────────────
-   No celular continua igual. Na tela do computador o pedido ocupa mais
-   espaço, porque tem muito item e muito material para ver de uma vez. */
+/* ── TELAS GRANDES NO COMPUTADOR (Suzana, 20/09) ──────────────────────
+   No celular continua tudo igual. No computador TODAS as telas usam a
+   largura da tela, como a do pedido, e o conteúdo se espalha em colunas
+   em vez de ficar numa coluna fina no meio.                            */
 @media (min-width:900px){
-  #modal-pedido .modal{ max-width:96vw; max-height:96dvh; }
-  #modal-pedido .modal-body{ padding:18px 26px; }
+  .modal-overlay .modal{ max-width:96vw; max-height:96dvh; }
+  .modal-overlay .modal-body{ padding:18px 26px; }
+  /* janelinhas de confirmação continuam pequenas */
+  #modal-senha .modal, #modal-baixa .modal, #modal-apikey .modal,
+  #modal-rec .modal, #modal-match .modal, #modal-comprar-item .modal,
+  #modal-estoque-compra .modal{ max-width:560px; }
   #modal-pedido .linha-painel{ padding:14px 16px; }
   /* dados da cliente de um lado, dados do pedido do outro */
   #p-dados-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 26px; align-items:start; }
   #p-dados-grid > *{ min-width:0; }
   #p-dados-grid #p-obs{ min-height:120px; }
+  /* Produtos e Preço das linhas: cartões em colunas */
+  #le-conteudo{ display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:10px; align-items:start; }
+  #le-conteudo > .le-ajuda, #le-conteudo > .le-row, #le-conteudo > .le-mini,
+  #le-conteudo > .le-add{ grid-column:1/-1; }
+  /* Financeiro e cadastros: dois campos por linha */
+  #modal-fin .modal-body, #modal-estoque .modal-body, #modal-fornecedor .modal-body,
+  #modal-ativo-edit .modal-body, #modal-custos-fixos .modal-body{
+    display:grid; grid-template-columns:1fr 1fr; gap:0 22px; align-items:start;
+  }
+  #modal-fin .modal-body > *, #modal-estoque .modal-body > *, #modal-fornecedor .modal-body > *,
+  #modal-ativo-edit .modal-body > *, #modal-custos-fixos .modal-body > *{ min-width:0; }
+  /* blocos que precisam da largura inteira */
+  #modal-fin #f-estoque-block, #modal-fin .form-actions,
+  #modal-estoque .form-actions{ grid-column:1/-1; }
 }
 @media (min-width:1280px){
-  #modal-pedido .modal{ max-width:1440px; }
-
+  .modal-overlay .modal{ max-width:1440px; }
+  #le-conteudo{ grid-template-columns:repeat(auto-fill,minmax(400px,1fr)); }
 }
 </style>
 <script>
@@ -9466,7 +9485,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c55';
+    var ver='v20/09-c56';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10941,7 +10960,7 @@ else appLockInit();
     m.addEventListener('change', aoDigitar);
     m.addEventListener('click', aoClicar);
   }
-  function num(v){ return (parseFloat(v)||0)>0 ? v : ''; }
+  function num(v){ var n=parseFloat(v)||0; return n>0 ? R2(n) : ''; }   // sem 5,60000001
   function desenhar(){
     var box=document.getElementById('le-conteudo'); if(!box || !rasc) return;
     var tit=document.getElementById('le-titulo');
