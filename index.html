@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c41';
+    var ver='v20/09-c42';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10367,6 +10367,24 @@ else appLockInit();
   window._maybeConvertColor=function(rowId){
     var velha=document.getElementById(rowId);
     var dono=velha ? velha.dataset.deLinha : '';
+    /* 20/09: material que ela digitou e NÃO está no cadastro fica como
+       texto, com o preço do lado. Só vira seletor de cor quando existe
+       cor cadastrada daquele balão ou fita — senão ela ficava presa
+       numa lista vazia (caso do FOIL 28" Número 7 dourado). */
+    var inp=velha && velha.querySelector('.mat-nome');
+    var nm=inp ? String(inp.value||'').trim() : '';
+    if(nm){
+      var fita=(typeof _ehFita==='function') && _ehFita(nm);
+      var temCor=(typeof estoque!=='undefined'?estoque:[]).some(function(e){
+        if(!e || !e.nome) return false;
+        var mesmoTipo = fita
+          ? ((typeof _ehFita==='function') && _ehFita(e.nome))
+          : ((typeof _ehBalao==='function') && _ehBalao(e.nome));
+        if(!mesmoTipo) return false;
+        return (typeof matchSize==='function') ? matchSize(e.nome, nm) : false;
+      });
+      if(!temCor) return;
+    }
     var antes=document.querySelectorAll('#modal-pedido .material-row').length;
     var ret=convOrig.apply(this, arguments);
     var depois=document.querySelectorAll('#modal-pedido .material-row').length;
