@@ -7311,6 +7311,11 @@ function renderFornecedores(){
 #sidebar-footer{display:none!important;}
 @media (min-width:768px){#sidebar-footer{display:flex!important;}}
 
+/* gasto e lucro com a mesma cara, lado a lado */
+#p-fechamento{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 8px}
+#p-fechamento > *{flex:1 1 220px;background:var(--pink-l);border-radius:12px;padding:10px 14px;margin:0}
+#p-fechamento #p-custo{background:#fff}
+
 /* ── PEDIDO GRANDE NO COMPUTADOR (Suzana, 20/09) ──────────────────────
    No celular continua igual. Na tela do computador o pedido ocupa mais
    espaço, porque tem muito item e muito material para ver de uma vez. */
@@ -7318,14 +7323,14 @@ function renderFornecedores(){
   #modal-pedido .modal{ max-width:900px; max-height:94dvh; }
   #modal-pedido .modal-body{ padding:18px 26px; }
   #modal-pedido .linha-painel{ padding:14px 16px; }
-  #modal-pedido .ln-mats-cab{ grid-template-columns:1fr 70px 120px; }
+  /* dados da cliente em duas colunas: cabe tudo sem rolar tanto */
+  #p-dados-grid{ display:grid; grid-template-columns:1fr 1fr; gap:0 20px; align-items:start; }
+  #p-dados-grid > *{ min-width:0; }
+  #p-dados-grid #p-obs{ min-height:86px; }
 }
 @media (min-width:1280px){
   #modal-pedido .modal{ max-width:1120px; }
-  /* os dados da cliente em duas colunas, para o pedido caber na tela */
-  #modal-pedido .modal-body > .form-group,
-  #modal-pedido .modal-body > .form-row,
-  #modal-pedido #cliente-historico{ max-width:720px; }
+  #modal-pedido .modal-body > .form-row{ max-width:760px; }
 }
 </style>
 <script>
@@ -9429,7 +9434,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c47';
+    var ver='v20/09-c48';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9585,9 +9590,9 @@ else appLockInit();
 .ln-sel{width:100%;border:1px solid #e7d3dd;border-radius:8px;padding:7px;font-size:12px;background:#fff;margin-top:2px}
 .ln-cor-box{display:flex;gap:6px;align-items:center;margin-top:4px}
 .ln-cor{flex:1;border:1px solid #e7d3dd;border-radius:8px;padding:7px;font-size:12px;background:#fff}
-.ln-mats-cab{display:grid;grid-template-columns:1fr 56px 96px;gap:6px;font-size:9px;color:#9a8b90;letter-spacing:.04em;padding:0 2px 2px}
+.ln-mats-cab{display:grid;grid-template-columns:1fr 50px 104px 18px 14px;gap:5px;font-size:9px;color:#9a8b90;letter-spacing:.04em;padding:0 6px 3px}
 .ln-mats-cab span:nth-child(2){text-align:center}
-.ln-mats-cab span:nth-child(3){text-align:center}
+.ln-mats-cab span:nth-child(3){text-align:right}
 .ln-auto{font-size:11px;color:#7a6a70;background:#fff;border-radius:8px;padding:6px 8px;margin-top:4px;line-height:1.4}
 .ln-padrao{width:100%;margin-top:6px;border:1.5px dashed var(--pink);background:#fff;color:var(--pink);border-radius:9px;padding:7px;font-size:11px;font-weight:700;cursor:pointer}
 /* "comprar" ao lado do preço, para a linha não crescer (Suzana, 17/09) */
@@ -9997,6 +10002,7 @@ else appLockInit();
   function custoItensTela(){
     var s=0;
     document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(r){
+      if(painelDe(r)) return;                 // já contado em calcularGastoReal
       var u=parseFloat(r.dataset.custoUn);
       if(u>0) s+=u*(parseFloat((r.querySelector('.pi-qtd')||{}).value)||0);
     });
@@ -10004,7 +10010,7 @@ else appLockInit();
   }
   function ligarRow(row){
     var q=row.querySelector('.pi-qtd');
-    if(q) q.addEventListener('input', function(){ atualizaCustoPainel(row); calcularGastoReal(); });
+    if(q) q.addEventListener('input', function(){ renderPainel(row); calcularGastoReal(); });
     var d=row.querySelector('.material-del');
     if(d) d.addEventListener('click', function(){
       var p=painelDe(row); if(p) p.remove();
@@ -10034,8 +10040,16 @@ else appLockInit();
     var el=p.querySelector('.ln-custo'); if(!el) return;
     var mats=[].slice.call(p.querySelectorAll('.material-row'));
     var custo=custoTotalDaLinha(row, mats);
-    el.textContent = custo>0
-      ? ('Material deste item: '+fmt(custo)+' · entra no gasto do pedido')
+    var q=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
+    var un=custoUnitarioDaLinha(row, mats);
+    if(row.dataset.tipoItem==='avulso' && !mats.length){
+      el.textContent = un>0
+        ? ('Custo deste avulso: '+fmt(un)+(q>1?(' cada · '+fmt(custo)+' nas '+q):'' ))
+        : 'Sem custo cadastrado para este item.';
+      return;
+    }
+    el.textContent = un>0
+      ? ('Material de 1 unidade: '+fmt(un)+(q>1 ? (' · '+fmt(custo)+' nas '+q+' unidades') : '')+' · entra no gasto do pedido')
       : 'Sem custo ainda. Preencha o R$ de cada material.';
   }
   /* ── ITEM DO PEDIDO DO JEITO DA SUZANA (20/09) ─────────────────────
@@ -10078,6 +10092,11 @@ else appLockInit();
     return dl;
   };
   function nomeDoItem(row){ var i=row.querySelector('input[type=text]'); return i ? String(i.value||'').trim() : ''; }
+  /* item avulso: o custo vem do produto cadastrado com esse nome */
+  function custoDoAvulso(row){
+    var prod=produtoExato(nomeDoItem(row));
+    row.dataset.custoUn = (prod && prod.custo>0) ? String(prod.custo) : '';
+  }
   /* materiais deste item: ficam dentro do painel dele */
   function addMaterialAoItem(row, nome, qtd, custo){
     adicionarMaterialPedido(nome||'', parseFloat(qtd)||1, 'pendente', '', 'normal', '', '', parseFloat(custo)||0);
@@ -10094,6 +10113,7 @@ else appLockInit();
     var nome=nomeDoItem(row); if(!nome) return;
     if(matsDaLinha(row.id).length) return;
     var mats=window._montagemDe(nome); if(!mats) return;
+    row.dataset.tipoItem='composto';
     mats.forEach(function(m){ addMaterialAoItem(row, m.n, m.q, m.v); });
     renderPainel(row); calcularGastoReal(); recalcularTotal();
     toast('Materiais de "'+nome+'" vieram da última vez');
@@ -10103,7 +10123,10 @@ else appLockInit();
     var p=painelDe(row); if(!p) return;
     var mats=matsDaLinha(row.id);
     mats.forEach(function(m){ if(m.parentNode) m.parentNode.removeChild(m); });  // guarda para recolocar
-    var completo=!!(nomeDoItem(row) && mats.length);
+    if(mats.length) row.dataset.tipoItem='composto';
+    var completo = row.dataset.tipoItem==='avulso'
+      ? !!nomeDoItem(row)
+      : !!(nomeDoItem(row) && mats.length);
     row.dataset.completo = completo ? '1' : '';
     fecharPainel(row, p, mats, completo);
   }
@@ -10111,32 +10134,54 @@ else appLockInit();
      Recolhido, o bloco mostra só o resumo. Nada é apagado: só deixa de
      aparecer. As linhas de material voltam para dentro do painel. */
   function fecharPainel(row, p, mats, completo){
-    var resumo='<div class="ln-resumo" data-abrir="1"><span>▸ '+(mats.length ? (mats.length+' materiais dentro') : 'sem materiais ainda')
-      +' · custo '+fmt(custoTotalDaLinha(row, mats))+'</span><b>Abrir</b></div>';
-    p.innerHTML=resumo
-      +'<div class="lg"><div class="lg-t">Materiais deste item</div>'
-      +(mats.length ? '<div class="ln-mats-cab"><span>MATERIAL</span><span>QTD</span><span>R$ DA LINHA</span></div>' : '')
-      +'<div class="ln-mats"></div>'
-      +(mats.length ? '' : '<div class="ln-auto">Escreva o material ou escolha da lista. Da próxima vez que este item aparecer, eles já vêm juntos.</div>')
-      +'<button type="button" class="ln-chip ln-addmat" data-addmat="1">+ Adicionar material</button></div>'
-      +(mats.length ? '<button type="button" class="ln-padrao" data-mae="1">Salvar "'+esc(nomeDoItem(row)||'este item')+'" como produto</button>' : '')
+    var tipo=row.dataset.tipoItem||'';
+    var resumoTexto = (tipo==='avulso' && !mats.length)
+      ? 'item avulso · só a linha do pedido'
+      : ((mats.length ? (mats.length+' materiais dentro') : 'sem materiais ainda')
+          + ' · custo '+fmt(custoTotalDaLinha(row, mats)));
+    var resumo='<div class="ln-resumo" data-abrir="1"><span>▸ '+resumoTexto+'</span><b>Abrir</b></div>';
+    var miolo;
+    if(!tipo && !mats.length){
+      // item novo: ela escolhe se é avulso ou composto (Suzana, 20/09)
+      miolo='<div class="lg"><div class="lg-t">Este item é…</div><div class="chips">'
+        +'<button type="button" class="ln-chip" data-tipoitem="avulso">Avulso · só o preço</button>'
+        +'<button type="button" class="ln-chip" data-tipoitem="composto">Composto · tem materiais</button>'
+        +'</div><div class="ln-auto">Avulso é o que você vende pronto (taxa de entrega, um foil sozinho). Composto abre a lista de materiais e soma o custo.</div></div>';
+    }else if(tipo==='avulso' && !mats.length){
+      miolo='<div class="ln-auto">Item avulso: fica só a linha do pedido, sem materiais.</div>'
+        +'<button type="button" class="ln-chip" data-tipoitem="composto">Virar composto e listar materiais</button>';
+    }else{
+      miolo='<div class="lg"><div class="lg-t">Materiais deste item</div>'
+        +(mats.length ? '<div class="ln-mats-cab"><span>MATERIAL</span><span>QTD</span><span>R$ DA LINHA</span><span></span><span></span></div>' : '')
+        +'<div class="ln-mats"></div>'
+        +(mats.length ? '' : '<div class="ln-auto">Escreva o material ou escolha da lista. Da próxima vez que este item aparecer, eles já vêm juntos.</div>')
+        +'<button type="button" class="ln-chip ln-addmat" data-addmat="1">+ Adicionar material</button></div>'
+        +(mats.length ? '<button type="button" class="ln-padrao" data-mae="1">Salvar "'+esc(nomeDoItem(row)||'este item')+'" como produto</button>' : '');
+    }
+    p.innerHTML=resumo+miolo
       +'<div class="ln-custo"></div>'
       +'<button type="button" class="ln-recolher'+(completo?' pronto':'')+'" data-recolher="1">'
       +(completo ? 'Pronto, recolher este item' : 'Recolher este item')+'</button>';
     var box=p.querySelector('.ln-mats');
-    mats.forEach(function(m){ box.appendChild(m); if(ehLinhaDeCor(m)) recarregarCores(m); });
+    if(box) mats.forEach(function(m){ box.appendChild(m); if(ehLinhaDeCor(m)) recarregarCores(m); });
     p.classList.toggle('recolhido', row.dataset.recolhido==='1');
     atualizaCustoPainel(row);
   }
   function preencherProduto(nome){ var el=document.getElementById('p-produto'); if(el && !el.value.trim()) el.value=nome; }
 
-  /* custo deste item: o que os materiais dele somam */
-  function custoTotalDaLinha(row, mats){
+  /* custo de UMA unidade do item: o que os materiais dele somam */
+  function custoUnitarioDaLinha(row, mats){
     var s=0;
     (mats || matsDaLinha(row.id)).forEach(function(m){ s+=window._parseMoeda((m.querySelector('.mat-valor')||{}).value); });
-    var q=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
-    s+=(parseFloat(row.dataset.custoUn)||0)*q;
+    s+=(parseFloat(row.dataset.custoUn)||0);
     return R2(s);
+  }
+  /* custo do item inteiro: a lista de material é de UMA unidade, então
+     multiplica pela quantidade do pedido (9 centros de mesa = 9 vezes o
+     material de um) — Suzana, 20/09 */
+  function custoTotalDaLinha(row, mats){
+    var q=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
+    return R2(custoUnitarioDaLinha(row, mats)*q);
   }
   function recolher(row, sim){
     row.dataset.recolhido = sim ? '1' : '';
@@ -10169,7 +10214,10 @@ else appLockInit();
       window._atualizarListaProdutos();
       ni.setAttribute('list','ts-produtos-datalist');
       ni.setAttribute('placeholder','O que vai no pedido (ex.: Bouquet de balões)');
-      ni.addEventListener('change', function(){ puxarMontagem(row); });
+      ni.addEventListener('change', function(){
+        puxarMontagem(row);
+        if(row.dataset.tipoItem==='avulso'){ custoDoAvulso(row); renderPainel(row); calcularGastoReal(); }
+      });
       ni.addEventListener('blur', function(){ puxarMontagem(row); });
     }
     row.dataset.montado='1';
@@ -10177,7 +10225,7 @@ else appLockInit();
     if(painelDe(row)) return;
     var painel=document.createElement('div'); painel.className='linha-painel'; painel.dataset.for=row.id;
     painel.addEventListener('click', function(ev){
-      var b=ev.target.closest('.ln-resumo, .ln-recolher, .ln-addmat, .ln-padrao, .material-del');
+      var b=ev.target.closest('.ln-resumo, .ln-recolher, .ln-addmat, .ln-padrao, .material-del, [data-tipoitem]');
       if(!b) return;
       if(b.classList.contains('material-del')){     // o ✕ do material já apaga a linha
         setTimeout(function(){ renderPainel(row); calcularGastoReal(); }, 0); return;
@@ -10188,6 +10236,15 @@ else appLockInit();
         renderPainel(row);
         var campo=painel.querySelector('.material-row:last-child .mat-nome');
         if(campo) campo.focus();
+        calcularGastoReal(); return;
+      }
+      if(b.dataset.tipoitem!=null){
+        row.dataset.tipoItem=b.dataset.tipoitem;
+        if(b.dataset.tipoitem==='avulso') custoDoAvulso(row);
+        renderPainel(row);
+        if(b.dataset.tipoitem==='composto' && !matsDaLinha(row.id).length){
+          addMaterialAoItem(row, '', 1, 0); renderPainel(row);
+        }
         calcularGastoReal(); return;
       }
       if(b.dataset.mae!=null){ salvarProdutoMae(row); return; }
@@ -10531,7 +10588,8 @@ else appLockInit();
       var row=ultimoItem();
       if(row){
         if(it.custoUn!=null) row.dataset.custoUn=String(R2(it.custoUn));
-        if(it.mats && it.mats.length) row.dataset.matsAntigos=JSON.stringify(it.mats);
+        if(it.mats && it.mats.length){ row.dataset.matsAntigos=JSON.stringify(it.mats); row.dataset.tipoItem='composto'; }
+        else row.dataset.tipoItem='avulso';
         row.dataset.recolhido='1';
         renderPainel(row);
       }
@@ -10542,8 +10600,14 @@ else appLockInit();
   /* gasto do pedido = materiais (como antes) + custo das linhas e avulsos */
   window.calcularGastoReal=function(){
     var mat=0;
+    // material solto (não é de nenhum item) entra como está
     document.querySelectorAll('#modal-pedido .material-row').forEach(function(row){
+      if(row.dataset.deLinha) return;
       mat+=window._parseMoeda((row.querySelector('.mat-valor')||{}).value);
+    });
+    // cada item entra com o material dele multiplicado pela quantidade
+    document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(r){
+      if(painelDe(r)) mat+=custoTotalDaLinha(r);
     });
     var total=R2(mat+custoItensTela());
     var disp=document.getElementById('p-gasto-real'); if(disp) disp.textContent='R$ '+total.toFixed(2).replace('.',',');
@@ -11117,14 +11181,34 @@ else appLockInit();
     var lista=document.getElementById('p-materiais-lista');
     if(!body || !lista || body.dataset.ordem) return;
     function grupo(id, sel){ var el=document.getElementById(id); return el ? el.closest(sel||'.form-group') : null; }
-    var produto=grupo('p-produto');
-    var dados=[grupo('p-data','.form-row'), grupo('p-pgto'), grupo('p-origem'), grupo('p-obs')];
-    var ref=produto;
-    dados.forEach(function(el){ if(el && ref){ ref.parentNode.insertBefore(el, ref.nextSibling); ref=el; } });
-    var bloco=lista.parentElement;
-    bloco.style.marginTop='14px';
-    [bloco, grupo('p-custo','.field-group'), (document.getElementById('p-lucro-display')||{}).parentElement]
-      .forEach(function(el){ if(el) body.appendChild(el); });
+
+    /* 1. DADOS DA CLIENTE: numa caixa só, que no computador fica em duas
+       colunas (endereço ao lado dos dados) — Suzana, 20/09 */
+    var caixa=document.createElement('div'); caixa.id='p-dados-grid';
+    var cliente=grupo('p-cliente');
+    if(cliente && cliente.parentNode) cliente.parentNode.insertBefore(caixa, cliente);
+    ['p-cliente','p-whats','p-cep','p-produto','p-origem','p-obs'].forEach(function(id){
+      var g=grupo(id); if(g) caixa.appendChild(g);
+    });
+    var hist=document.getElementById('cliente-historico'); if(hist) caixa.appendChild(hist);
+
+    /* 2. ENTREGA, STATUS E PAGAMENTO ficam logo abaixo do Total do pedido */
+    var total=document.getElementById('p-total-box');
+    var ref=total;
+    [grupo('p-data','.form-row'), grupo('p-pgto')].forEach(function(el){
+      if(el && ref && ref.parentNode){ ref.parentNode.insertBefore(el, ref.nextSibling); ref=el; }
+    });
+
+    /* 3. "Outros materiais" sai da tela: material agora é sempre de um item */
+    var bloco=lista.parentElement; if(bloco) bloco.style.display='none';
+
+    /* 4. GASTO e LUCRO no mesmo padrão, lado a lado */
+    var fech=document.createElement('div'); fech.id='p-fechamento';
+    body.appendChild(fech);
+    var gasto=grupo('p-custo','.field-group');
+    var lucro=(document.getElementById('p-lucro-display')||{}).parentElement;
+    if(gasto) fech.appendChild(gasto);
+    if(lucro) fech.appendChild(lucro);
     body.dataset.ordem='1';
   }
   function iniciar(){
