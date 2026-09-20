@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c42';
+    var ver='v20/09-c43';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10199,13 +10199,93 @@ else appLockInit();
     try{ localStorage.setItem('ts_matnomes', JSON.stringify(nomes.slice(-300))); }catch(e){}
     window._sugerirMateriais();
   }
+  /* A caixinha de sugestão do material só olhava o estoque. O que ela
+     cadastra pelo Financeiro ("cadastrar como produto") vira AVULSO e não
+     aparecia (caso do FOIL 28" Número 7 dourado, 20/09). Agora sugere o
+     cadastro inteiro — estoque, avulsos e o que ela já digitou — e traz o
+     preço junto.                                                        */
+  window._matSugerir=function(rowId){
+    var row=document.getElementById(rowId); if(!row) return;
+    var inp=row.querySelector('.mat-nome'); if(!inp) return;
+    var q=String(inp.value||'').trim();
+    var box=document.getElementById('mat-sug-box');
+    if(!box){
+      box=document.createElement('div'); box.id='mat-sug-box';
+      box.style.cssText='position:absolute;left:0;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:99999;max-height:230px;overflow:auto';
+    }
+    if(q.length<2){ box.style.display='none'; return; }
+    var alvo=chaveNome(q);
+    var achados=window._todosOsMateriais().filter(function(x){ return chaveNome(x.nome).indexOf(alvo)>=0; }).slice(0,15);
+    if(!achados.length){ box.style.display='none'; return; }
+    row.style.position='relative';
+    if(box.parentNode!==row) row.appendChild(box);
+    box.style.top=(inp.offsetTop+inp.offsetHeight+2)+'px';
+    box.style.left=inp.offsetLeft+'px';
+    box.style.width=inp.offsetWidth+'px';
+    box.style.display='block';
+    box.innerHTML=achados.map(function(x){
+      var onde = x.estoqueId ? (x.qtd+' '+(x.un||'un')+' em estoque')
+               : (x.custo>0 ? ('R$ '+x.custo.toFixed(2).replace('.',',')+' · '+x.origem) : x.origem);
+      var aspa=String.fromCharCode(39);
+      var acao = x.estoqueId
+        ? ('_matEscolher('+aspa+rowId+aspa+','+aspa+x.estoqueId+aspa+')')
+        : ('_matEscolherNome('+aspa+rowId+aspa+',this.dataset.n,this.dataset.c)');
+      return '<div data-n="'+esc(x.nome)+'" data-c="'+x.custo+'" onmousedown="'+acao+'" style="padding:9px 11px;font-size:12px;cursor:pointer;border-bottom:1px solid #f3f3f3">'
+        + esc(x.nome) + ' · <span style="color:#9a8b90">' + esc(onde) + '</span></div>';
+    }).join('');
+  };
+  /* tudo o que pode ser material: estoque, avulso e nome digitado antes */
+  window._todosOsMateriais=function(){
+    var out=[], visto={};
+    (typeof estoque!=='undefined'?estoque:[]).forEach(function(e){
+      if(!e || !e.nome) return;
+      var k=chaveNome(e.nome); if(visto[k]) return; visto[k]=1;
+      out.push({nome:e.nome, custo:parseFloat(e.preco)||0, un:e.un||'un', qtd:(e.qtd||0), estoqueId:e.id, origem:'estoque'});
+    });
+    avulsos().forEach(function(a){
+      if(!a.nome) return;
+      var k=chaveNome(a.nome); if(visto[k]) return; visto[k]=1;
+      out.push({nome:a.nome, custo:parseFloat(a.custo)||0, un:a.un||'un', qtd:0, estoqueId:'', origem:'produto avulso'});
+    });
+    try{
+      (JSON.parse(localStorage.getItem('ts_matnomes')||'[]')||[]).forEach(function(n){
+        var k=chaveNome(n); if(!k || visto[k]) return; visto[k]=1;
+        out.push({nome:n, custo:precoLembrado(n), un:'un', qtd:0, estoqueId:'', origem:'você já usou'});
+      });
+    }catch(e){}
+    return out.sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); });
+  };
+  /* preço da última vez que ela usou esse material num pedido */
+  function precoLembrado(nome){
+    var k=chaveNome(nome), m=montagens(), achado=0;
+    Object.keys(m).forEach(function(id){
+      ((m[id]||{}).mats||[]).forEach(function(x){ if(chaveNome(x.n)===k && parseFloat(x.v)>0) achado=parseFloat(x.v); });
+    });
+    return achado;
+  }
+  /* escolher um material que não é do estoque: leva o nome e o preço */
+  window._matEscolherNome=function(rowId, nome, custo){
+    var box=document.getElementById('mat-sug-box'); if(box) box.style.display='none';
+    var row=document.getElementById(rowId); if(!row) return;
+    var inp=row.querySelector('.mat-nome'); if(inp) inp.value=nome;
+    if(typeof atualizarStatusMaterial==='function') atualizarStatusMaterial(rowId);
+    var c=parseFloat(custo)||0;
+    if(c>0){
+      row.dataset.matUnit=String(c);
+      var v=row.querySelector('.mat-valor');
+      var q=parseFloat((row.querySelector('.mat-qtd')||{}).value)||1;
+      if(v) v.value=window._moedaBR(c*q);
+    }
+    if(typeof _maybeConvertColor==='function') _maybeConvertColor(rowId);
+    var dono=row.dataset.deLinha && document.getElementById(row.dataset.deLinha);
+    if(dono) renderPainel(dono);
+    calcularGastoReal();
+  };
+
   /* a lista do campo de material: estoque, avulsos e o que ela já digitou */
   window._sugerirMateriais=function(){
     var dl=document.getElementById('estoque-datalist'); if(!dl) return;
-    var nomes=[], visto={};
-    function add(n){ var k=chaveNome(n); if(!k || visto[k]) return; visto[k]=1; nomes.push(String(n).trim()); }
-    (window._registroItens()||[]).forEach(function(x){ add(x.nome); });
-    try{ (JSON.parse(localStorage.getItem('ts_matnomes')||'[]')||[]).forEach(add); }catch(e){}
+    var nomes=window._todosOsMateriais().map(function(x){ return x.nome; });
     dl.innerHTML=nomes.sort(function(a,b){ return a.localeCompare(b,'pt'); })
       .map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
   };
