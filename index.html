@@ -9429,7 +9429,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c46';
+    var ver='v20/09-c47';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10254,18 +10254,26 @@ else appLockInit();
         + esc(x.nome) + ' · <span style="color:#9a8b90">' + esc(onde) + '</span></div>';
     }).join('');
   };
-  /* tudo o que pode ser material: estoque, avulso e nome digitado antes */
+  /* tudo o que pode ser material: produto cadastrado, estoque antigo e
+     nome que ela já digitou. O PRODUTO vem primeiro: é o que ela atualiza
+     quando lança a compra no Financeiro (Suzana, 20/09). */
   window._todosOsMateriais=function(){
     var out=[], visto={};
-    (typeof estoque!=='undefined'?estoque:[]).forEach(function(e){
-      if(!e || !e.nome) return;
-      var k=chaveNome(e.nome); if(visto[k]) return; visto[k]=1;
-      out.push({nome:e.nome, custo:parseFloat(e.preco)||0, un:e.un||'un', qtd:(e.qtd||0), estoqueId:e.id, origem:'estoque'});
-    });
     avulsos().forEach(function(a){
       if(!a.nome) return;
       var k=chaveNome(a.nome); if(visto[k]) return; visto[k]=1;
-      out.push({nome:a.nome, custo:parseFloat(a.custo)||0, un:a.un||'un', qtd:0, estoqueId:'', origem:'produto avulso'});
+      out.push({nome:a.nome, custo:parseFloat(a.custo)||0, un:a.un||'un', qtd:0, estoqueId:'', origem:'produto'});
+    });
+    (typeof estoque!=='undefined'?estoque:[]).forEach(function(e){
+      if(!e || !e.nome) return;
+      var k=chaveNome(e.nome);
+      if(visto[k]){
+        // mesmo nome nos dois lugares: se o produto está sem preço, vale o do estoque
+        out.forEach(function(x){ if(chaveNome(x.nome)===k && !(x.custo>0)) x.custo=parseFloat(e.preco)||0; });
+        return;
+      }
+      visto[k]=1;
+      out.push({nome:e.nome, custo:parseFloat(e.preco)||0, un:e.un||'un', qtd:(e.qtd||0), estoqueId:e.id, origem:'estoque'});
     });
     try{
       (JSON.parse(localStorage.getItem('ts_matnomes')||'[]')||[]).forEach(function(n){
@@ -10314,18 +10322,42 @@ else appLockInit();
      lista de cor de um balão ou fita é montada com os produtos que ela
      cadastrou daquele tamanho, e não com o estoque.                   */
   function ehLinhaDeCor(row){ return !!(row && row.querySelector('.mat-sel')); }
-  function coresDoCadastro(sz, ehFita){
+  /* As cores de um material são os produtos cadastrados cujo nome COMEÇA
+     com o que ela escreveu. "BALÃO 9 POLEGADAS" abre azul, rosa, cromado.
+     Já "FOIL 28 NÚMERO 7 PRATA" é um produto inteiro: não abre lista
+     nenhuma, é ele mesmo (Suzana, 20/09).                              */
+  function coresDoCadastro(sz){
+    var base=chaveNome(sz); if(!base) return [];
     return window._todosOsMateriais().filter(function(x){
-      var tipoOk = ehFita ? _ehFita(x.nome) : (_ehBalao(x.nome) && !_naoEBalao(x.nome));
-      if(!tipoOk) return false;
-      if(chaveNome(x.nome)===chaveNome(sz)) return false;      // o genérico não é cor
-      return ehFita ? matchFita(x.nome, sz) : matchSize(x.nome, sz);
+      var k=chaveNome(x.nome);
+      return k!==base && k.indexOf(base)===0;
     });
+  }
+  /* o produto exato que tem esse nome, se estiver cadastrado */
+  function produtoExato(nome){
+    var k=chaveNome(nome);
+    return window._todosOsMateriais().filter(function(x){ return chaveNome(x.nome)===k; })[0] || null;
+  }
+  /* põe na linha o preço do produto cadastrado */
+  function precoDoProduto(row, prod){
+    if(!prod || !(prod.custo>0)) return;
+    var q=parseFloat((row.querySelector('.mat-qtd')||{}).value)||1;
+    row.dataset.matUnit=String(prod.custo);
+    var v=row.querySelector('.mat-valor');
+    if(v && !window._parseMoeda(v.value)) v.value=window._moedaBR(prod.custo*q);
   }
   function recarregarCores(row){
     var sel=row.querySelector('.mat-sel'); if(!sel) return;
     var sz=row.dataset.balaoSize||'';
-    var lista=coresDoCadastro(sz, row.dataset.tipo==='fita');
+    var lista=coresDoCadastro(sz);
+    /* linha que virou "escolher a cor" mas não tem cor nenhuma cadastrada
+       volta a ser campo de texto, com o nome e o preço que ela já tinha
+       (era o que estava deixando linha antiga com R$ 0,00) */
+    if(!lista.length && !row.dataset.voltando){
+      row.dataset.voltando='1';
+      setTimeout(function(){ virarTexto(row); }, 0);
+      return;
+    }
     var atual=row.dataset.matNome||'';
     sel.innerHTML='<option value="">escolher a cor — '+esc(sz)+'</option>'
       + lista.map(function(x){
@@ -10340,10 +10372,28 @@ else appLockInit();
     var dono=row.dataset.deLinha||'';
     var q=parseFloat((row.querySelector('.mat-qtd')||{}).value)||1;
     var nome=row.dataset.matNome||row.dataset.balaoSize||'';
+    // guarda o preço que a linha já tinha (ou o do produto cadastrado)
+    var un=parseFloat(row.dataset.matUnit);
+    if(isNaN(un)){
+      var tot=window._parseMoeda((row.querySelector('.mat-valor')||{}).value);
+      un = (q>0 && tot>0) ? R2(tot/q) : NaN;
+    }
+    if(isNaN(un)){ var prod=produtoExato(nome); if(prod && prod.custo>0) un=prod.custo; }
     var r=document.getElementById(dono);
     row.remove();
-    if(r){ addMaterialAoItem(r, nome, q, 0); renderPainel(r); calcularGastoReal(); }
+    if(r){
+      // a linha nova tem que nascer como TEXTO, senão o app olha o nome,
+      // vê "balão" e monta outra vez o seletor de cor
+      window._forcarTexto=true;
+      try{ addMaterialAoItem(r, nome, q, (isNaN(un)?0:un)); }
+      finally{ window._forcarTexto=false; }
+      renderPainel(r); calcularGastoReal();
+    }
   }
+  /* enquanto _forcarTexto estiver ligado, nada é tratado como balão ou fita */
+  var ehBalaoOrig=window._ehBalao, ehFitaOrig=window._ehFita;
+  window._ehBalao=function(){ return window._forcarTexto ? false : ehBalaoOrig.apply(this, arguments); };
+  window._ehFita=function(){ return window._forcarTexto ? false : ehFitaOrig.apply(this, arguments); };
   var balOrig=window._balaoSelecionado;
   window._balaoSelecionado=function(rowId){
     var row=document.getElementById(rowId); if(!row) return;
@@ -10580,6 +10630,21 @@ else appLockInit();
   /* o item do estoque não vira material sozinho: quem manda agora é a
      lista de materiais de dentro do item */
   window._espelharMaterialDoItem=function(){};
+  /* preço que entra sozinho: vale o do produto cadastrado */
+  var autoPrecoOrig=window.autoPreencherPrecoMaterial;
+  window.autoPreencherPrecoMaterial=function(rowId){
+    var row=document.getElementById(rowId); if(!row) return;
+    var campo=row.querySelector('.mat-valor'); if(!campo) return;
+    if(campo.value && window._parseMoeda(campo.value)>0) return;
+    var nome=((row.querySelector('.mat-nome')||{}).value||'').trim();
+    var prod=nome ? produtoExato(nome) : null;
+    if(prod && prod.custo>0){
+      row.dataset.matUnit=String(prod.custo);
+      window._matAtualizaTotal(row);
+      return;
+    }
+    return autoPrecoOrig.apply(this, arguments);
+  };
   /* material de balão ou fita vira seletor de cor: a linha é refeita, e a
      nova precisa continuar dentro do item que a trouxe */
   var convOrig=window._maybeConvertColor;
@@ -10593,8 +10658,10 @@ else appLockInit();
     var inp=velha && velha.querySelector('.mat-nome');
     var nm=inp ? String(inp.value||'').trim() : '';
     if(nm){
-      var temCor=coresDoCadastro(nm, (typeof _ehFita==='function') && _ehFita(nm)).length>0;
-      if(!temCor) return;
+      // já é um produto cadastrado: fica como está, só puxa o preço dele
+      var exato=produtoExato(nm);
+      if(exato){ precoDoProduto(velha, exato); calcularGastoReal(); return; }
+      if(!coresDoCadastro(nm).length) return;
     }
     var antes=document.querySelectorAll('#modal-pedido .material-row').length;
     var ret=convOrig.apply(this, arguments);
