@@ -3830,7 +3830,15 @@ function fecharMatch() {
 function _resolverItemEstoque(m){
   if(!m) return null;
   if(m.itemId){ const it=estoque.find(e=>e.id===m.itemId); if(it) return it; }
-  return _matchEstoque(m.nome); // mesma regra rigorosa do checarEstoqueNome
+  const achado=_matchEstoque(m.nome);
+  if(achado) return achado;
+  // 20/09: material agora costuma ser PRODUTO (avulso). O pedido entregue
+  // baixa a quantidade dele do mesmo jeito.
+  if(typeof catalogo!=='undefined' && m.nome && window._chaveProduto){
+    const k=window._chaveProduto(m.nome);
+    return catalogo.filter(function(p){ return p && p.avulso && window._chaveProduto(p.nome)===k; })[0] || null;
+  }
+  return null;
 }
 function sincronizarBaixaPedido(pedido, opt){
   opt=opt||{};
@@ -9458,7 +9466,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c53';
+    var ver='v20/09-c54';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9888,7 +9896,7 @@ else appLockInit();
     var m={}, out=[];
     (typeof estoque!=='undefined'?estoque:[]).forEach(function(e){
       if(!e || !e.nome) return;
-      m[String(e.nome).toLowerCase().trim()]={ id:e.id, nome:e.nome, custo:parseFloat(e.preco)||0, cat:e.cat||'', un:e.un||'un' };
+      m[String(e.nome).toLowerCase().trim()]={ id:e.id, nome:e.nome, custo:parseFloat(e.preco)||0, cat:e.cat||'', un:e.un||'un', qtd:parseFloat(e.qtd)||0 };
     });
     catalogo.filter(function(p){ return p && p.avulso; }).forEach(function(a){
       if(!a.nome) return;
@@ -9897,7 +9905,7 @@ else appLockInit();
       // o mesmo nome pode estar nos dois lugares (produto e avulso):
       // vale o que TEM preço, para não zerar o custo do kit
       if(m[k] && !(custo>0) && m[k].custo>0) return;
-      m[k]={ id:a.id, nome:a.nome, custo:custo, cat:'Avulso', un:a.un||'un' };
+      m[k]={ id:a.id, nome:a.nome, custo:custo, cat:a.cat||'Material', un:a.un||'un', qtd:parseFloat(a.qtd)||0 };
     });
     for(var k in m) out.push(m[k]);
     return out.sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); });
@@ -10574,6 +10582,75 @@ else appLockInit();
   }
   window._cadastrarMateriaisNovos=cadastrarMateriaisNovos;
 
+  /* ── ESTOQUE DOS MATERIAIS (Suzana, 20/09) ─────────────────────────
+     Ela não quer planilha de estoque, mas quer saber quanto tem. Então:
+     toda compra lançada no Financeiro pergunta se quer ajustar, já
+     mostrando o que tinha e o que comprou. Quem não responde, nada muda. */
+  function produtoOuEstoque(nome){
+    var k=chaveNome(nome);
+    var e=(typeof estoque!=='undefined'?estoque:[]).filter(function(x){ return x && chaveNome(x.nome)===k; })[0];
+    if(e) return {tipo:'estoque', obj:e, qtd:parseFloat(e.qtd)||0};
+    var a=(typeof catalogo!=='undefined'?catalogo:[]).filter(function(x){ return x && x.avulso && chaveNome(x.nome)===k; })[0];
+    if(a) return {tipo:'produto', obj:a, qtd:parseFloat(a.qtd)||0};
+    return null;
+  }
+  window._chaveProduto=chaveNome;
+  window._quantoTem=function(nome){ var r=produtoOuEstoque(nome); return r ? r.qtd : 0; };
+  window._guardarQuantidade=function(nome, qtd){
+    var r=produtoOuEstoque(nome); if(!r) return false;
+    r.obj.qtd=Math.max(0, R2(qtd)); r.obj.updatedAt=Date.now();
+    return true;
+  };
+  function modalEstoque(){
+    var m=document.getElementById('modal-estoque-compra');
+    if(m) return m;
+    m=document.createElement('div'); m.className='modal-overlay'; m.id='modal-estoque-compra';
+    m.innerHTML='<div class="modal"><div class="modal-handle"></div>'
+      +'<div class="modal-title">Quer ajustar o estoque?</div>'
+      +'<div class="modal-body"><div class="le-ajuda">Você acabou de comprar estes materiais. Confira quanto fica no estoque. '
+      +'Se não quiser controlar, é só tocar em <b>Agora não</b>: nada muda.</div><div id="mec-lista"></div></div>'
+      +'<div class="form-actions"><button class="btn btn-outline" onclick="closeModal(\'modal-estoque-compra\')">Agora não</button>'
+      +'<button class="btn btn-pink" style="flex:1" onclick="_salvarEstoqueCompra()">Salvar quantidades</button></div></div>';
+    document.body.appendChild(m);
+    return m;
+  }
+  window._perguntarEstoqueCompra=function(entradas){
+    entradas=(entradas||[]).filter(function(e){ return e && e.nome && parseFloat(e.qtd)>0; });
+    if(!entradas.length) return;
+    var m=modalEstoque();
+    var box=m.querySelector('#mec-lista');
+    box.innerHTML=entradas.map(function(e,i){
+      var tem=window._quantoTem(e.nome), fica=R2(tem+(parseFloat(e.qtd)||0));
+      return '<div class="le-card" style="padding:10px">'
+        +'<div style="font-weight:700;font-size:13px;color:var(--brown)">'+esc(e.nome)+'</div>'
+        +'<div class="le-mini" style="display:block;margin:2px 0 6px">tinha '+tem+' · comprou '+e.qtd+'</div>'
+        +'<div class="le-row" style="margin:0;align-items:center"><span class="le-mini" style="flex:1">Fica com</span>'
+        +'<input type="number" step="0.1" min="0" class="mec-qtd" data-nome="'+esc(e.nome)+'" value="'+fica+'" style="width:100px">'
+        +'</div></div>';
+    }).join('');
+    openModal('modal-estoque-compra');
+  };
+  window._salvarEstoqueCompra=function(){
+    var n=0;
+    document.querySelectorAll('#mec-lista .mec-qtd').forEach(function(inp){
+      if(window._guardarQuantidade(inp.dataset.nome, parseFloat(inp.value)||0)) n++;
+    });
+    save();
+    closeModal('modal-estoque-compra');
+    toast(n ? ('Estoque ajustado em '+n+' material(is)') : 'Nada para ajustar');
+  };
+  /* a compra lançada no Financeiro chama a pergunta */
+  var salvarFinOrig=window.salvarFin;
+  window.salvarFin=function(){
+    var ret=salvarFinOrig.apply(this, arguments);
+    try{
+      var nova=(typeof financeiro!=='undefined'?financeiro:[]).filter(function(f){
+        return f && f.avulsosCadastrados && f.avulsosCadastrados.length && !f._perguntei; })[0];
+      if(nova){ nova._perguntei=1; setTimeout(function(){ window._perguntarEstoqueCompra(nova.avulsosCadastrados); }, 350); }
+    }catch(e){ console.warn('[enxuto] estoque da compra', e); }
+    return ret;
+  };
+
   /* PRODUTO MÃE: guarda a montagem deste item e cadastra o produto, para
      ele aparecer na lista dos próximos pedidos */
   function salvarProdutoMae(row){
@@ -10881,6 +10958,7 @@ else appLockInit();
               +'<div class="le-row"><input type="text" data-k="r.nome" data-ri="'+ri+'" value="'+esc(x.nome)+'" style="flex:1;font-weight:600">'
               +'<button type="button" class="le-x" data-act="delr" data-ri="'+ri+'" title="Excluir material">×</button></div>'
               +'<div class="le-row" style="margin-bottom:0"><span class="le-mini" style="flex:1">'+esc(x.cat||'sem categoria')+'</span>'
+              +'<span class="le-mini">tem</span><input type="number" step="0.1" min="0" data-k="r.qtd" data-ri="'+ri+'" value="'+(parseFloat(x.qtd)||0)+'" title="Quanto tem no estoque" style="width:64px">'
               +'<span class="le-mini">R$ por unidade</span><input type="number" step="0.01" min="0" data-k="r.custo" data-ri="'+ri+'" value="'+num(x.custo)+'" placeholder="0,00" style="width:90px"></div>'
               +'</div>';
           }).join('')
@@ -10926,6 +11004,7 @@ else appLockInit();
       case 'mm.v': if(MM){ MM.v=R2(val); desenhar(); } break;
       case 'g.filtro': if(G) G.filtro=val; break;
       case 'r.custo': if(R){ R.custo=R2(val); R.mexido=true; } break;
+      case 'r.qtd': if(R){ R.qtd=parseFloat(val)||0; R.mexido=true; } break;
       case 'r.nome': if(R){ R.nome=val; R.mexido=true; } break;
       case 'l.nome': if(L) L.nome=val; break;
       case 'l.ativo': if(L) L.ativo=val; break;
@@ -11049,12 +11128,13 @@ else appLockInit();
       var e=(typeof estoque!=='undefined'?estoque:[]).filter(function(y){ return y && y.id===x.id; })[0];
       if(e){
         if(nome && nome!==e.nome){ renomearNasLinhas(e.nome, nome); e.nome=nome; }
-        e.preco=R2(x.custo); return;
+        e.preco=R2(x.custo); if(x.qtd!=null) e.qtd=parseFloat(x.qtd)||0; return;
       }
       var a=catalogo.filter(function(p){ return p && p.id===x.id; })[0];
       if(a){
         if(nome && nome!==a.nome){ renomearNasLinhas(a.nome, nome); a.nome=nome; }
         a.custo=R2(x.custo); a.matCusto=a.custo;
+        if(x.qtd!=null) a.qtd=parseFloat(x.qtd)||0;
       }
     });
     (rasc.removidosR||[]).forEach(function(id){
