@@ -9458,7 +9458,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c52';
+    var ver='v20/09-c53';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10856,8 +10856,8 @@ else appLockInit();
     if(document.getElementById('modal-linhas')) return;
     var m=document.createElement('div'); m.className='modal-overlay'; m.id='modal-linhas';
     m.innerHTML='<div class="modal"><div class="modal-handle"></div>'
-      +'<div class="modal-title">Linhas do pedido e itens avulsos</div>'
-      +'<div class="modal-body"><div class="le-tabs"><button type="button" data-aba="l">Linhas</button><button type="button" data-aba="i">Itens e preços</button><button type="button" data-aba="a">Avulsos</button></div><div id="le-conteudo"></div></div>'
+      +'<div class="modal-title">Produtos</div>'
+      +'<div class="modal-body"><div class="le-tabs"><button type="button" data-aba="p">Linhas</button><button type="button" data-aba="m">Materiais</button></div><div id="le-conteudo"></div></div>'
       +'<div class="form-actions"><button class="btn btn-outline" onclick="closeModal(\'modal-linhas\')">Cancelar</button><button class="btn btn-pink" style="flex:1" onclick="_leSalvar()">Salvar</button></div></div>';
     document.body.appendChild(m);
     m.addEventListener('input', aoDigitar);
@@ -10868,80 +10868,62 @@ else appLockInit();
   function desenhar(){
     var box=document.getElementById('le-conteudo'); if(!box || !rasc) return;
     document.querySelectorAll('#modal-linhas .le-tabs button').forEach(function(b){ b.className=(b.dataset.aba===aba)?'on':''; });
-    if(aba==='i'){
+    if(aba==='m'){
+      /* MATERIAIS: tudo o que entra dentro de um item, com o preço */
       var busca=(rasc.busca||'').toLowerCase();
       var itens=rasc.itens.filter(function(x){ return !busca || x.nome.toLowerCase().indexOf(busca)>=0; });
-      box.innerHTML='<div class="le-ajuda">Tudo o que está cadastrado, em ordem alfabética: os produtos do estoque antigo e os avulsos das compras. Dá para <b>corrigir o nome</b>, ajustar o <b>preço por unidade</b> e excluir o que não usa mais. Quem multiplica pela quantidade é o pedido.</div>'
-        +'<div class="le-row"><input type="text" id="le-busca" value="'+esc(rasc.busca||'')+'" placeholder="Buscar produto" style="flex:1"></div>'
-        +'<div class="le-mini" style="margin-bottom:6px">'+itens.length+' produtos'+(busca?(' de '+rasc.itens.length):'')+'</div>'
+      box.innerHTML='<div class="le-ajuda">Tudo o que você compra e usa dentro dos itens, em ordem alfabética. O que você lança no Financeiro cai aqui sozinho. Dá para corrigir o nome, o <b>preço por unidade</b> e excluir o que não usa mais.</div>'
+        +'<div class="le-row"><input type="text" id="le-busca" value="'+esc(rasc.busca||'')+'" placeholder="Buscar material" style="flex:1"></div>'
+        +'<div class="le-mini" style="margin-bottom:6px">'+itens.length+' materiais'+(busca?(' de '+rasc.itens.length):'')+'</div>'
         + itens.map(function(x){
             var ri=rasc.itens.indexOf(x);
             return '<div class="le-card" style="padding:8px">'
               +'<div class="le-row"><input type="text" data-k="r.nome" data-ri="'+ri+'" value="'+esc(x.nome)+'" style="flex:1;font-weight:600">'
-              +'<button type="button" class="le-x" data-act="delr" data-ri="'+ri+'" title="Excluir produto">×</button></div>'
+              +'<button type="button" class="le-x" data-act="delr" data-ri="'+ri+'" title="Excluir material">×</button></div>'
               +'<div class="le-row" style="margin-bottom:0"><span class="le-mini" style="flex:1">'+esc(x.cat||'sem categoria')+'</span>'
-              +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-k="r.custo" data-ri="'+ri+'" value="'+num(x.custo)+'" placeholder="0,00" style="width:90px"></div>'
+              +'<span class="le-mini">R$ por unidade</span><input type="number" step="0.01" min="0" data-k="r.custo" data-ri="'+ri+'" value="'+num(x.custo)+'" placeholder="0,00" style="width:90px"></div>'
               +'</div>';
           }).join('')
-        + '<button type="button" class="le-add" data-act="addr">+ novo produto</button>';
+        + '<button type="button" class="le-add" data-act="addr">+ novo material</button>';
       var b=document.getElementById('le-busca');
       if(b) b.addEventListener('input', function(){ rasc.busca=b.value; desenhar(); setTimeout(function(){ var n=document.getElementById('le-busca'); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } },0); });
       return;
     }
-    if(aba==='a'){
-      box.innerHTML='<div class="le-ajuda">Os avulsos também nascem sozinhos quando você lança uma compra no Financeiro e marca <b>Cadastrar como itens avulsos</b>. Aqui você corrige nome, custo e preço de venda.</div>'
-        + rasc.avulsos.map(function(a,ai){
-            return '<div class="le-card"><div class="le-row"><input type="text" data-k="a.nome" data-ai="'+ai+'" value="'+esc(a.nome)+'" placeholder="Nome do item" style="flex:1;font-weight:700"><button type="button" class="le-x" data-act="dela" data-ai="'+ai+'" title="Excluir">×</button></div>'
-              +'<div class="le-row"><span class="le-mini">Custo R$</span><input type="number" step="0.01" min="0" data-k="a.custo" data-ai="'+ai+'" value="'+num(a.custo)+'" placeholder="0,00" style="width:90px"><span class="le-mini">Venda R$</span><input type="number" step="0.01" min="0" data-k="a.preco" data-ai="'+ai+'" value="'+num(a.preco)+'" placeholder="0,00" style="width:90px"></div></div>';
-          }).join('')
-        + '<button type="button" class="le-add" data-act="adda">+ item avulso</button>';
-      return;
-    }
-    box.innerHTML='<div class="le-ajuda"><b>Como o custo é calculado:</b> custo base + custo de cada opção marcada no pedido. Opção com <b>×2</b> multiplica o kit inteiro (use no Duplo). Mudar um custo aqui não altera pedido já salvo.</div>'
-      + rasc.linhas.map(function(l,li){
-          var padrao=IDS_PADRAO.indexOf(l.id)>=0;
+    /* LINHAS: os produtos que ela salva no pedido, com a montagem deles */
+    box.innerHTML='<div class="le-ajuda">Cada linha aqui é um produto que você salvou no pedido (o bouquet, o centro de mesa). Ela guarda os materiais que entram e o preço de venda. No pedido, é só digitar o nome que tudo isso volta — a cor do balão você escolhe na hora.</div>'
+      + (rasc.montagens.length ? '' : '<div class="le-mini" style="display:block;margin-bottom:8px">Nenhuma linha salva ainda. No pedido, monte um item e toque em <b>Salvar como produto</b>.</div>')
+      + rasc.montagens.map(function(mt,mi){
           return '<div class="le-card">'
-            +'<div class="le-row"><input type="text" data-k="l.nome" data-li="'+li+'" value="'+esc(l.nome)+'" style="flex:1;font-weight:700">'
-            +'<label class="le-mini"><input type="checkbox" data-k="l.ativo" data-li="'+li+'"'+(l.ativo!==false?' checked':'')+'> aparece no pedido</label>'
-            +(padrao?'':'<button type="button" class="le-x" data-act="dell" data-li="'+li+'" title="Excluir linha">×</button>')+'</div>'
-            +'<div class="le-row"><span class="le-mini" style="flex:1;white-space:normal">Custo base por unidade</span><span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-k="l.custoBase" data-li="'+li+'" value="'+num(l.custoBase)+'" placeholder="0,00" style="width:90px"></div>'
-            + (l.grupos||[]).map(function(g,gi){
-                if(g.tipo==='item' || g.tipo==='lista' || g.tipo==='cores'){
-                  var expl = g.tipo==='cores' ? 'cores digitadas, guardadas para a próxima vez'
-                    : (g.tipo==='item' ? 'um item da lista cadastrada, com quantidade' : 'vários itens da lista, com quantidade');
-                  return '<div class="le-grupo">'
-                    +'<div class="le-row"><input type="text" data-k="g.nome" data-li="'+li+'" data-gi="'+gi+'" value="'+esc(g.nome)+'" style="flex:1;font-weight:700">'
-                    +'<button type="button" class="le-x" data-act="delg" data-li="'+li+'" data-gi="'+gi+'" title="Excluir campo">×</button></div>'
-                    +'<div class="le-mini" style="white-space:normal;display:block;margin-bottom:4px">'+expl+'. O preço vem da aba Itens e preços.</div>'
-                    + (g.tipo==='cores' ? '' :
-                       '<div class="le-row"><span class="le-mini">Mostrar itens com</span><input type="text" data-k="g.filtro" data-li="'+li+'" data-gi="'+gi+'" value="'+esc(g.filtro||'')+'" placeholder="palavra do nome, ex: caixa" style="flex:1"></div>')
-                    + (g.tipo==='lista' ? ('<div class="le-mini">'+((g.opcoes||[]).length)+' sugestões de atalho</div>') : '')
-                    +'</div>';
-                }
-                return '<div class="le-grupo">'
-                  +'<div class="le-row"><input type="text" data-k="g.nome" data-li="'+li+'" data-gi="'+gi+'" value="'+esc(g.nome)+'" placeholder="Nome do grupo" style="flex:1;font-weight:700">'
-                  +'<label class="le-mini"><input type="checkbox" data-k="g.varios" data-li="'+li+'" data-gi="'+gi+'"'+(g.varios?' checked':'')+'> vários</label>'
-                  +'<button type="button" class="le-x" data-act="delg" data-li="'+li+'" data-gi="'+gi+'" title="Excluir grupo">×</button></div>'
-                  + (g.opcoes||[]).map(function(o,oi){
-                      var v=parseFloat(o.vezes)||1;
-                      return '<div class="le-row"><input type="text" data-k="o.nome" data-li="'+li+'" data-gi="'+gi+'" data-oi="'+oi+'" value="'+esc(o.nome)+'" placeholder="Opção" style="flex:1">'
-                        +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-k="o.custo" data-li="'+li+'" data-gi="'+gi+'" data-oi="'+oi+'" value="'+num(o.custo)+'" placeholder="0,00" style="width:74px">'
-                        +'<select data-k="o.vezes" data-li="'+li+'" data-gi="'+gi+'" data-oi="'+oi+'" title="Multiplica o custo do kit inteiro"><option value="1"'+(v===1?' selected':'')+'>×1</option><option value="2"'+(v===2?' selected':'')+'>×2</option><option value="3"'+(v===3?' selected':'')+'>×3</option></select>'
-                        +'<button type="button" class="le-x" data-act="delo" data-li="'+li+'" data-gi="'+gi+'" data-oi="'+oi+'" title="Excluir opção">×</button></div>';
-                    }).join('')
-                  +'<button type="button" class="le-add" data-act="addo" data-li="'+li+'" data-gi="'+gi+'">+ opção</button></div>';
+            +'<div class="le-row"><input type="text" data-k="mt.nome" data-mi="'+mi+'" value="'+esc(mt.nome)+'" style="flex:1;font-weight:700">'
+            +'<button type="button" class="le-x" data-act="delmt" data-mi="'+mi+'" title="Excluir linha">×</button></div>'
+            +'<div class="le-row"><span class="le-mini" style="flex:1">Preço de venda</span><span class="le-mini">R$</span>'
+            +'<input type="number" step="0.01" min="0" data-k="mt.preco" data-mi="'+mi+'" value="'+num(mt.preco)+'" placeholder="0,00" style="width:90px"></div>'
+            +'<div class="le-mini" style="display:block;margin:2px 0 6px">Material: <b>'+fmt(custoDaMontagem(mt))+'</b>'
+            + (mt.preco>0 ? (' · sobra '+fmt(R2(mt.preco-custoDaMontagem(mt)))+' por unidade') : '')+'</div>'
+            + (mt.mats||[]).map(function(x,xi){
+                return '<div class="le-row"><input type="text" data-k="mm.n" data-mi="'+mi+'" data-xi="'+xi+'" value="'+esc(x.n)+'" list="estoque-datalist" style="flex:1">'
+                  +'<input type="number" step="0.1" min="0" data-k="mm.q" data-mi="'+mi+'" data-xi="'+xi+'" value="'+x.q+'" title="Quantidade" style="width:56px">'
+                  +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-k="mm.v" data-mi="'+mi+'" data-xi="'+xi+'" value="'+num(x.v)+'" title="Preço por unidade" style="width:80px">'
+                  +'<button type="button" class="le-x" data-act="delmm" data-mi="'+mi+'" data-xi="'+xi+'" title="Tirar material">×</button></div>';
               }).join('')
-            +'<button type="button" class="le-add" data-act="addg" data-li="'+li+'">+ grupo de opções</button></div>';
-        }).join('')
-      + '<button type="button" class="le-add" data-act="addl">+ nova linha</button>';
+            +'<button type="button" class="le-add" data-act="addmm" data-mi="'+mi+'">+ material desta linha</button>'
+            +'</div>';
+        }).join('');
   }
   function idx(el, k){ var v=el.dataset[k]; return v==null ? -1 : parseInt(v,10); }
   function aoDigitar(ev){
     var t=ev.target; var k=t.dataset && t.dataset.k; if(!k || !rasc) return;
     var val=(t.type==='checkbox') ? t.checked : t.value;
     var li=idx(t,'li'), gi=idx(t,'gi'), oi=idx(t,'oi'), ai=idx(t,'ai'), ri=idx(t,'ri');
+    var mi=idx(t,'mi'), xi=idx(t,'xi');
     var L=rasc.linhas[li], G=L&&L.grupos?L.grupos[gi]:null, O=G&&G.opcoes?G.opcoes[oi]:null, A=rasc.avulsos[ai], R=rasc.itens[ri];
+    var MT=(rasc.montagens||[])[mi], MM=MT&&MT.mats?MT.mats[xi]:null;
     switch(k){
+      case 'mt.nome': if(MT) MT.nome=val; break;
+      case 'mt.preco': if(MT){ MT.preco=R2(val); desenhar(); } break;
+      case 'mm.n': if(MM) MM.n=val; break;
+      case 'mm.q': if(MM){ MM.q=parseFloat(val)||0; desenhar(); } break;
+      case 'mm.v': if(MM){ MM.v=R2(val); desenhar(); } break;
       case 'g.filtro': if(G) G.filtro=val; break;
       case 'r.custo': if(R){ R.custo=R2(val); R.mexido=true; } break;
       case 'r.nome': if(R){ R.nome=val; R.mexido=true; } break;
@@ -10963,8 +10945,17 @@ else appLockInit();
     if(tab){ aba=tab.dataset.aba; desenhar(); return; }
     var b=ev.target.closest('[data-act]'); if(!b || !rasc) return;
     var li=idx(b,'li'), gi=idx(b,'gi'), oi=idx(b,'oi'), ai=idx(b,'ai');
+    var mi=idx(b,'mi'), xi=idx(b,'xi');
+    var MT=(rasc.montagens||[])[mi];
     var L=rasc.linhas[li];
     switch(b.dataset.act){
+      case 'addmm': if(MT){ MT.mats=MT.mats||[]; MT.mats.push({n:'', q:1, v:0}); } break;
+      case 'delmm': if(MT && MT.mats) MT.mats.splice(xi,1); break;
+      case 'delmt':
+        if(MT && confirm('Excluir a linha "'+MT.nome+'"? Os pedidos já salvos não mudam.')){
+          rasc.removidosM.push(MT.chave); rasc.montagens.splice(mi,1);
+        }
+        break;
       case 'addl':
         rasc.linhas.push({id:'ln_'+uid(), linha:true, nome:'Nova linha', desc:'', custoBase:0, ativo:true, cat:'Linha do pedido',
           ordem:rasc.linhas.reduce(function(m,x){ return Math.max(m, x.ordem||0); },0)+1, grupos:[]});
@@ -10988,10 +10979,27 @@ else appLockInit();
     }
     desenhar();
   }
+  /* as linhas que ela vai salvando (produto mãe + os materiais dele) */
+  function montagensParaEditar(){
+    var m=montagens(), out=[];
+    Object.keys(m).forEach(function(k){
+      var x=m[k]; if(!x || !x.nome) return;
+      var prod=(typeof catalogo!=='undefined'?catalogo:[]).filter(function(c){
+        return c && c.avulso && chaveNome(c.nome)===chaveNome(x.nome); })[0];
+      out.push({ chave:k, nome:x.nome, nomeOrig:x.nome,
+                 preco:prod?(parseFloat(prod.preco)||0):0,
+                 mats:(x.mats||[]).map(function(y){ return {n:y.n, q:parseFloat(y.q)||1, v:parseFloat(y.v)||0}; }) });
+    });
+    return out.sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); });
+  }
+  function custoDaMontagem(mt){
+    return R2((mt.mats||[]).reduce(function(s,x){ return s+(parseFloat(x.q)||0)*(parseFloat(x.v)||0); },0));
+  }
   window._abrirLinhas=function(){
     window._seedItens(); window._seedLinhas(); criarModal();
-    rasc={linhas:copia(linhas()), avulsos:copia(avulsos()), itens:copia(window._registroItens()), busca:'', removidosL:[], removidosA:[], removidosR:[]};
-    aba='l'; desenhar();
+    rasc={linhas:copia(linhas()), avulsos:copia(avulsos()), itens:copia(window._registroItens()),
+          montagens:montagensParaEditar(), busca:'', removidosL:[], removidosA:[], removidosR:[], removidosM:[]};
+    aba='p'; desenhar();
     openModal('modal-linhas');
   };
   window._leSalvar=function(){
@@ -11055,10 +11063,27 @@ else appLockInit();
     });
     var fora=rasc.removidosL.concat(rasc.removidosA);
     if(fora.length) catalogo=catalogo.filter(function(p){ return !(p && fora.indexOf(p.id)>=0); });
+    /* linhas salvas: montagem + preço de venda do produto */
+    var guardadas=montagens();
+    (rasc.removidosM||[]).forEach(function(k){ delete guardadas[k]; });
+    (rasc.montagens||[]).forEach(function(mt){
+      var nome=(mt.nome||'').trim(); if(!nome) return;
+      var mats=(mt.mats||[]).map(function(x){ return {n:(x.n||'').trim(), q:parseFloat(x.q)||1, v:parseFloat(x.v)||0}; })
+                            .filter(function(x){ return x.n; });
+      if(chaveNome(nome)!==mt.chave) delete guardadas[mt.chave];
+      guardadas[chaveNome(nome)]={nome:nome, mats:mats, em:Date.now()};
+      var custo=R2(mats.reduce(function(sm,x){ return sm+x.q*x.v; },0));
+      var prod=catalogo.filter(function(c){ return c && c.avulso && chaveNome(c.nome)===chaveNome(nome); })[0];
+      if(prod){ prod.nome=nome; prod.custo=custo; prod.preco=R2(mt.preco); prod.updatedAt=Date.now(); }
+      else catalogo.push({id:'av_'+uid(), nome:nome, avulso:true, custo:custo, preco:R2(mt.preco), un:'un', cat:'Produtos', updatedAt:Date.now()});
+    });
+    try{ localStorage.setItem(K_MONT, JSON.stringify(guardadas)); }catch(e){}
     save();
     closeModal('modal-linhas');
     if(typeof renderCatalogo==='function') try{ renderCatalogo(); }catch(e){}
-    toast('Linhas e avulsos salvos');
+    if(window._atualizarListaProdutos) window._atualizarListaProdutos();
+    if(window._sugerirMateriais) window._sugerirMateriais();
+    toast('Produtos salvos');
   };
 
   /* ── CAIXINHA "COMPRAR" NO MATERIAL (pedido da Suzana, 17/09) ──────
@@ -11185,7 +11210,7 @@ else appLockInit();
   };
 
   /* menu: Estoque virou Produtos e abre o cadastro de itens e preços */
-  window._abrirProdutos=function(){ window._abrirLinhas(); aba='i'; desenhar(); };
+  window._abrirProdutos=function(){ window._abrirLinhas(); aba='m'; desenhar(); };
   function ajustarMenu(){
     var b=document.getElementById('nav-estoque');
     if(!b) return;
