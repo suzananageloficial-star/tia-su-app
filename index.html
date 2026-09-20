@@ -7319,6 +7319,44 @@ function renderFornecedores(){
 #sidebar-footer{display:none!important;}
 @media (min-width:768px){#sidebar-footer{display:flex!important;}}
 
+/* ── PRECIFICAÇÃO COLORIDA (Suzana, 20/09) ────────────────────────── */
+#calc-preco .calc-topo{background:linear-gradient(135deg,#FF2079,#FF6FA5);color:#fff;border-radius:16px;
+  padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+#calc-preco .calc-topo .t{font-weight:800;font-size:14px}
+#calc-preco .calc-topo .s{font-size:11px;opacity:.92;line-height:1.4;flex:1;min-width:220px}
+#calc-preco .calc-novo{background:#fff;color:var(--pink);border:none;border-radius:20px;padding:8px 16px;
+  font-family:var(--font-main);font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+#calc-preco .calc-card{background:#fff;border:1.5px solid var(--pink-l);border-left:5px solid var(--pink);
+  border-radius:16px;padding:12px 14px;margin-bottom:12px;box-shadow:0 2px 10px rgba(255,32,121,.06)}
+#calc-preco .calc-nome{flex:1;font-weight:800;font-size:13px;color:var(--brown);background:var(--pink-l);
+  border:1.5px solid transparent;border-radius:10px;padding:9px 11px;font-family:var(--font-main)}
+#calc-preco .calc-nome:focus{border-color:var(--pink);background:#fff;outline:none}
+#calc-preco .calc-del{background:var(--red-l);color:var(--red);border:none;border-radius:10px;width:32px;height:32px;
+  font-size:17px;line-height:1;cursor:pointer;flex:0 0 auto}
+#calc-preco .calc-mat{display:inline-block;background:#E6F7FB;color:var(--cyan-d);border-radius:20px;
+  padding:4px 10px;font-size:11px;font-weight:700;margin:8px 0}
+#calc-preco .calc-aviso{display:block;font-size:10px;color:#B07A1E;background:#FEF7E6;border-radius:8px;
+  padding:5px 8px;margin-bottom:8px}
+#calc-preco .calc-fatores{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+#calc-preco .calc-fator{border:1.5px solid;border-radius:20px;padding:7px 12px;font-family:var(--font-main);
+  font-size:12px;font-weight:800;cursor:pointer;background:#fff}
+#calc-preco .calc-fator.f1{color:#0E9F6E;border-color:#8FE3C4;background:#EAFBF4}
+#calc-preco .calc-fator.f2{color:var(--cyan-d);border-color:#9BDDEC;background:#E6F7FB}
+#calc-preco .calc-fator.f3{color:var(--pink);border-color:#F8B6D0;background:#FDEBF3}
+#calc-preco .calc-fator.on{box-shadow:0 0 0 2px rgba(255,32,121,.25)}
+#calc-preco .calc-venda{display:flex;align-items:center;gap:8px;background:var(--pink-l);border-radius:12px;padding:8px 12px}
+#calc-preco .calc-venda .rot{flex:1;font-size:11px;font-weight:800;color:var(--pink);text-transform:uppercase;letter-spacing:.04em}
+#calc-preco .calc-venda input{width:110px;border:1.5px solid var(--pink);border-radius:10px;padding:8px 10px;
+  font-family:var(--font-main);font-size:15px;font-weight:800;color:var(--brown);text-align:right;background:#fff}
+#calc-preco .calc-sobra{display:block;font-size:11px;font-weight:700;margin-top:6px}
+#calc-preco .calc-sobra.bom{color:var(--green)}
+#calc-preco .calc-sobra.ruim{color:var(--red)}
+#calc-preco .calc-ver{width:100%;margin-top:8px;background:none;border:1.5px dashed var(--cyan);color:var(--cyan-d);
+  border-radius:10px;padding:7px;font-family:var(--font-main);font-size:11px;font-weight:700;cursor:pointer}
+#calc-preco .calc-mats{background:var(--gray-l);border-radius:12px;padding:8px;margin-top:8px}
+#calc-preco .calc-vazio{display:block;background:#fff;border:1.5px dashed var(--pink-l);border-radius:14px;
+  padding:16px;text-align:center;color:var(--gray-d);font-size:12px}
+
 /* número de cada item do pedido */
 .item-pedido-row{grid-template-columns:20px 1fr 44px 42px 66px 26px}
 .pi-num{font-size:11px;font-weight:800;color:var(--pink);text-align:center}
@@ -9485,7 +9523,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c58';
+    var ver='v20/09-c59';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -11424,40 +11462,41 @@ else appLockInit();
   function desenharCalc(){
     var box=document.getElementById('calc-preco'); if(!box) return;
     var lista=produtosDaCalc();
-    box.innerHTML='<div class="le-ajuda" style="margin-bottom:10px">Cada produto que você salva no pedido aparece aqui. O app soma o material e multiplica pelo <b>fator</b>: toque em × 2, × 2,5 ou × 3 e o preço de venda entra. Esse preço volta sozinho no próximo pedido.</div>'
-      +'<button type="button" class="le-add" data-cal="novo" style="margin-bottom:10px">+ novo produto</button>'
-      +(lista.length ? '' : '<div class="le-mini" style="display:block">Nada ainda. Monte um item no pedido e toque em <b>Salvar como produto</b>, ou crie aqui.</div>')
-      +'<div id="calc-lista">'
+    box.innerHTML='<div class="calc-topo">'
+      +'<div class="s"><span class="t">Material × fator = preço</span><br>'
+      +'Cada produto que você salva no pedido aparece aqui. Toque em × 2, × 2,5 ou × 3 e o preço de venda entra; ele volta sozinho no próximo pedido.</div>'
+      +'<button type="button" class="calc-novo" data-cal="novo">+ novo produto</button></div>'
+      +(lista.length ? '' : '<div class="calc-vazio">Nada por aqui ainda. Monte um item no pedido e toque em <b>Salvar como produto</b>, ou crie um agora no botão acima.</div>')
       + lista.map(function(pr){
           var custo=custoDosMats(pr.mats), aberto=!!calcAberto[pr.chave];
-          return '<div class="le-card" data-ch="'+esc(pr.chave)+'">'
-            +'<div class="le-row"><input type="text" data-cal="nome" data-ch="'+esc(pr.chave)+'" value="'+esc(pr.nome)+'" style="flex:1;font-weight:700">'
-            +'<button type="button" class="le-x" data-cal="del" data-ch="'+esc(pr.chave)+'" title="Excluir produto">×</button></div>'
-            +'<div class="le-mini" style="display:block;margin-bottom:6px">Material: <b>'+fmt(custo)+'</b>'
-            +((pr.mats||[]).length ? (' · '+pr.mats.length+' itens') : ' · sem materiais ainda')
-            +((pr.mats||[]).some(function(x){ return !(parseFloat(x.v)>0) && window._precoTeto(x.n)>0; })
-               ? ' · balão sem preço entra pelo <b>mais caro do tamanho</b>' : '')+'</div>'
-            +'<div class="le-row" style="gap:6px;flex-wrap:wrap">'
-            + [2,2.5,3].map(function(f){
-                return '<button type="button" class="ln-chip" data-cal="fator" data-ch="'+esc(pr.chave)+'" data-f="'+f+'">× '+String(f).replace('.',',')+' = '+fmt(R2(custo*f))+'</button>';
+          var fatorAtual=(custo>0 && pr.preco>0) ? Math.round((pr.preco/custo)*100)/100 : 0;
+          var semPreco=(pr.mats||[]).some(function(x){ return !(parseFloat(x.v)>0) && window._precoTeto(x.n)>0; });
+          var sobra=R2(pr.preco-custo);
+          return '<div class="calc-card" data-ch="'+esc(pr.chave)+'">'
+            +'<div class="le-row" style="margin-bottom:2px"><input type="text" class="calc-nome" data-cal="nome" data-ch="'+esc(pr.chave)+'" value="'+esc(pr.nome)+'">'
+            +'<button type="button" class="calc-del" data-cal="del" data-ch="'+esc(pr.chave)+'" title="Excluir produto">×</button></div>'
+            +'<span class="calc-mat">Material: '+fmt(custo)+((pr.mats||[]).length?(' · '+pr.mats.length+' itens'):' · sem materiais')+'</span>'
+            +(semPreco?'<span class="calc-aviso">Balão sem preço entra pelo mais caro do tamanho (o cromado).</span>':'')
+            +'<div class="calc-fatores">'
+            + [2,2.5,3].map(function(f,i){
+                return '<button type="button" class="calc-fator f'+(i+1)+(fatorAtual===f?' on':'')+'" data-cal="fator" data-ch="'+esc(pr.chave)+'" data-f="'+f+'">× '+String(f).replace('.',',')+' = '+fmt(R2(custo*f))+'</button>';
               }).join('')
             +'</div>'
-            +'<div class="le-row" style="margin-top:8px;align-items:center"><span class="le-mini" style="flex:1">Preço de venda</span><span class="le-mini">R$</span>'
-            +'<input type="number" step="0.01" min="0" data-cal="preco" data-ch="'+esc(pr.chave)+'" value="'+num(pr.preco)+'" placeholder="0,00" style="width:100px"></div>'
-            +(pr.preco>0 ? ('<div class="le-mini" style="display:block;margin-top:4px">Sobra '+fmt(R2(pr.preco-custo))+' por unidade'
-                +(custo>0?(' · fator '+String(Math.round((pr.preco/custo)*100)/100).replace('.',',')):'')+'</div>') : '')
-            +'<button type="button" class="le-add" data-cal="vermats" data-ch="'+esc(pr.chave)+'">'+(aberto?'esconder os materiais':'ver os materiais')+'</button>'
-            +(aberto ? ((pr.mats||[]).map(function(x,xi){
-                var teto=window._precoTeto(x.n), semPreco=!(parseFloat(x.v)>0) && teto>0;
+            +'<div class="calc-venda"><span class="rot">Preço de venda</span><span class="le-mini">R$</span>'
+            +'<input type="number" step="0.01" min="0" data-cal="preco" data-ch="'+esc(pr.chave)+'" value="'+num(pr.preco)+'" placeholder="0,00"></div>'
+            +(pr.preco>0 ? ('<span class="calc-sobra '+(sobra>=0?'bom':'ruim')+'">'+(sobra>=0?'Sobra ':'Falta ')+fmt(Math.abs(sobra))+' por unidade'
+                +(custo>0?(' · fator '+String(fatorAtual).replace('.',',')):'')+'</span>') : '')
+            +'<button type="button" class="calc-ver" data-cal="vermats" data-ch="'+esc(pr.chave)+'">'+(aberto?'esconder os materiais':'ver os materiais')+'</button>'
+            +(aberto ? ('<div class="calc-mats">'+(pr.mats||[]).map(function(x,xi){
+                var teto=window._precoTeto(x.n), semV=!(parseFloat(x.v)>0) && teto>0;
                 return '<div class="le-row"><input type="text" data-cal="mn" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+esc(x.n)+'" list="estoque-datalist" style="flex:1">'
                   +'<input type="number" step="0.1" min="0" data-cal="mq" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+(parseFloat(x.q)||0)+'" style="width:56px">'
-                  +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-cal="mv" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+num(x.v)+'" placeholder="'+(semPreco?R2(teto):'0,00')+'" title="'+(semPreco?('usando o mais caro do tamanho: R$ '+R2(teto)):'Preço por unidade')+'" style="width:80px'+(semPreco?';border-color:var(--cyan)':'')+'">'
+                  +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-cal="mv" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+num(x.v)+'" placeholder="'+(semV?R2(teto):'0,00')+'" title="'+(semV?('usando o mais caro do tamanho: R$ '+R2(teto)):'Preço por unidade')+'" style="width:84px'+(semV?';border-color:var(--cyan)':'')+'">'
                   +'<button type="button" class="le-x" data-cal="delm" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'">×</button></div>';
               }).join('')
-              +'<button type="button" class="le-add" data-cal="addm" data-ch="'+esc(pr.chave)+'">+ material</button>') : '')
+              +'<button type="button" class="le-add" data-cal="addm" data-ch="'+esc(pr.chave)+'" style="margin-top:4px">+ material</button></div>') : '')
             +'</div>';
-        }).join('')
-      +'</div>';
+        }).join('');
   }
   /* grava a montagem e o produto de uma vez */
   function gravarCalc(chave, nome, mats, preco){
