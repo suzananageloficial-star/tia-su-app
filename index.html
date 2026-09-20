@@ -7311,6 +7311,13 @@ function renderFornecedores(){
 #sidebar-footer{display:none!important;}
 @media (min-width:768px){#sidebar-footer{display:flex!important;}}
 
+/* item avulso: sem faixa rosa, só um link pequeno para virar composto */
+.linha-painel.avulso{background:none;border:0;box-shadow:none;padding:0;margin:0 0 4px;text-align:right}
+.linha-painel.avulso.recolhido{display:none}
+.ln-avulso-link{background:none;border:0;color:#b9a7ae;font-size:10px;font-family:var(--font-main);
+  cursor:pointer;padding:2px 4px;text-decoration:underline}
+.ln-avulso-link:hover{color:var(--pink)}
+
 /* título de cada coluna dos dados */
 .p-col-t{font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--pink);
   border-bottom:1.5px solid var(--pink-l);padding-bottom:5px;margin-bottom:10px}
@@ -9438,7 +9445,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c49';
+    var ver='v20/09-c50';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10152,8 +10159,11 @@ else appLockInit();
         +'<button type="button" class="ln-chip" data-tipoitem="composto">Composto · tem materiais</button>'
         +'</div><div class="ln-auto">Avulso é o que você vende pronto (taxa de entrega, um foil sozinho). Composto abre a lista de materiais e soma o custo.</div></div>';
     }else if(tipo==='avulso' && !mats.length){
-      miolo='<div class="ln-auto">Item avulso: fica só a linha do pedido, sem materiais.</div>'
-        +'<button type="button" class="ln-chip" data-tipoitem="composto">Virar composto e listar materiais</button>';
+      // avulso é só a linha do pedido: o painel some, fica um link miúdo
+      p.className='linha-painel avulso';
+      p.innerHTML='<button type="button" class="ln-avulso-link" data-tipoitem="composto">tem materiais? listar</button>';
+      p.classList.toggle('recolhido', row.dataset.recolhido==='1');
+      return;
     }else{
       miolo='<div class="lg"><div class="lg-t">Materiais deste item</div>'
         +(mats.length ? '<div class="ln-mats-cab"><span>MATERIAL</span><span>QTD</span><span>R$ DA LINHA</span><span></span><span></span></div>' : '')
@@ -10162,6 +10172,7 @@ else appLockInit();
         +'<button type="button" class="ln-chip ln-addmat" data-addmat="1">+ Adicionar material</button></div>'
         +(mats.length ? '<button type="button" class="ln-padrao" data-mae="1">Salvar "'+esc(nomeDoItem(row)||'este item')+'" como produto</button>' : '');
     }
+    p.className='linha-painel';
     p.innerHTML=resumo+miolo
       +'<div class="ln-custo"></div>'
       +'<button type="button" class="ln-recolher'+(completo?' pronto':'')+'" data-recolher="1">'
@@ -11198,15 +11209,18 @@ else appLockInit();
     if(cliente && cliente.parentNode) cliente.parentNode.insertBefore(caixa, cliente);
     ['p-cliente','p-whats','p-cep'].forEach(function(id){ var g=grupo(id); if(g) colA.appendChild(g); });
     var hist=document.getElementById('cliente-historico'); if(hist) colA.appendChild(hist);
-    ['p-produto','p-origem','p-obs'].forEach(function(id){ var g=grupo(id); if(g) colB.appendChild(g); });
+    var gData=grupo('p-data','.form-row');
+    ['p-produto'].forEach(function(id){ var g=grupo(id); if(g) colB.appendChild(g); });
+    if(gData) colB.appendChild(gData);              // entrega e status = combinado com a cliente
+    ['p-origem','p-obs'].forEach(function(id){ var g=grupo(id); if(g) colB.appendChild(g); });
 
-    /* 2. ENTREGA, STATUS E PAGAMENTO ficam depois dos itens e do total */
+    /* 2. FORMA DE PAGAMENTO fica no fim, junto do dinheiro */
     var itensBox=document.getElementById('p-itens-lista');
     var depoisDosItens=itensBox ? itensBox.parentElement : null;
-    var ref=depoisDosItens;
-    [grupo('p-data','.form-row'), grupo('p-pgto')].forEach(function(el){
-      if(el && ref && ref.parentNode){ ref.parentNode.insertBefore(el, ref.nextSibling); ref=el; }
-    });
+    var pg=grupo('p-pgto');
+    if(pg && depoisDosItens && depoisDosItens.parentNode){
+      depoisDosItens.parentNode.insertBefore(pg, depoisDosItens.nextSibling);
+    }
 
     /* 3. "Outros materiais" sai da tela: material agora é sempre de um item */
     var bloco=lista.parentElement; if(bloco) bloco.style.display='none';
