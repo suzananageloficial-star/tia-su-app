@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c44';
+    var ver='v20/09-c45';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10347,6 +10347,40 @@ else appLockInit();
     if(dono) atualizaCustoPainel(dono);
     calcularGastoReal();
   };
+  /* ── MATERIAL DIGITADO VIRA PRODUTO (Suzana, 20/09) ────────────────
+     Ela não controla estoque: o que ela escreve num material e ainda não
+     está na lista de produtos é cadastrado na hora, com o preço que ela
+     pôs. O que já existe só é reaproveitado, sem mexer no preço.      */
+  function cadastrarMateriaisNovos(){
+    var novos=[];
+    document.querySelectorAll('#modal-pedido .material-row').forEach(function(m){
+      // linha de cor sem cor escolhida é genérica: não vira produto
+      if(m.querySelector('.mat-sel') && !m.dataset.matNome) return;
+      var nome=nomeDoMaterial(m); if(!nome) return;
+      var k=chaveNome(nome);
+      // vale o CADASTRO (produtos e estoque); nome que ela só digitou antes
+      // não conta como cadastrado
+      var existe=(window._registroItens()||[]).some(function(x){ return chaveNome(x.nome)===k; });
+      if(existe) return;
+      var q=parseFloat((m.querySelector('.mat-qtd')||{}).value)||1;
+      var tot=window._parseMoeda((m.querySelector('.mat-valor')||{}).value);
+      var un=parseFloat(m.dataset.matUnit);
+      var custo=!isNaN(un) ? un : (q>0 ? R2(tot/q) : tot);
+      var servico=window._ehServicoNome(nome);
+      catalogo.push({ id:'av_'+uid(), nome:nome, avulso:true, custo:(parseFloat(custo)||0),
+                      preco:0, un:'un', cat:(servico?'Serviços':'Material'), updatedAt:Date.now() });
+      novos.push(nome);
+    });
+    if(novos.length){
+      save();
+      window._atualizarListaProdutos(); window._sugerirMateriais();
+      toast(novos.length===1 ? ('"'+novos[0]+'" foi cadastrado nos produtos')
+                             : (novos.length+' produtos novos cadastrados'));
+    }
+    return novos;
+  }
+  window._cadastrarMateriaisNovos=cadastrarMateriaisNovos;
+
   /* PRODUTO MÃE: guarda a montagem deste item e cadastra o produto, para
      ele aparecer na lista dos próximos pedidos */
   function salvarProdutoMae(row){
@@ -10355,6 +10389,7 @@ else appLockInit();
     var mats=matsDaLinha(row.id);
     if(!mats.length){ toast('Coloque os materiais antes de salvar'); return; }
     if(!confirm('Salvar "'+nome+'" como produto?\n\nOs materiais de hoje ficam guardados e voltam sozinhos no próximo pedido com esse nome. A cor do balão você escolhe a cada pedido.')) return;
+    cadastrarMateriaisNovos();
     guardarMontagemDaLinha(row);
     var custo=custoTotalDaLinha(row, mats);
     var preco=parseFloat((row.querySelector('.pi-preco')||{}).value)||0;
@@ -10467,6 +10502,7 @@ else appLockInit();
         }
       }
     }catch(e){ console.warn('[enxuto] custo do pedido', e); }
+    try{ cadastrarMateriaisNovos(); }catch(e){ console.warn('[enxuto] cadastro de material', e); }
     try{ guardarMontagensDaTela(); }catch(e){ console.warn('[enxuto] montagem', e); }
     return ret;
   };
