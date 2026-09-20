@@ -7326,8 +7326,11 @@ function renderFornecedores(){
 #calc-preco .calc-topo .s{font-size:11px;opacity:.92;line-height:1.4;flex:1;min-width:220px}
 #calc-preco .calc-novo{background:#fff;color:var(--pink);border:none;border-radius:20px;padding:8px 16px;
   font-family:var(--font-main);font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.12)}
-#calc-preco .calc-card{background:#fff;border:1.5px solid var(--pink-l);border-left:5px solid var(--pink);
+#calc-preco .calc-card{position:relative;background:#fff;border:1.5px solid var(--pink-l);border-left:5px solid var(--pink);
   border-radius:16px;padding:12px 14px;margin-bottom:12px;box-shadow:0 2px 10px rgba(255,32,121,.06)}
+#calc-preco .calc-salvo{position:absolute;right:14px;bottom:10px;background:#EAFBF4;color:#0E9F6E;
+  border:1px solid #8FE3C4;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:800;
+  animation:fadeIn .2s}
 #calc-preco .calc-nome{flex:1;font-weight:800;font-size:13px;color:var(--brown);background:var(--pink-l);
   border:1.5px solid transparent;border-radius:10px;padding:9px 11px;font-family:var(--font-main)}
 #calc-preco .calc-nome:focus{border-color:var(--pink);background:#fff;outline:none}
@@ -9523,7 +9526,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c59';
+    var ver='v20/09-c60';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -11514,6 +11517,16 @@ else appLockInit();
     if(window._sugerirMateriais) window._sugerirMateriais();
     if(calcAberto[chave] && nova!==chave){ calcAberto[nova]=true; delete calcAberto[chave]; }
     desenharCalc();
+    avisarSalvo(nova);
+  }
+  /* nada de botão Salvar: a tela grava na hora e mostra "salvo" por um
+     instante, para ela saber que deu certo (Suzana, 20/09) */
+  function avisarSalvo(chave){
+    var card=document.querySelector('#calc-preco .calc-card[data-ch="'+chave+'"]'); if(!card) return;
+    var velho=card.querySelector('.calc-salvo'); if(velho) velho.remove();
+    var b=document.createElement('span'); b.className='calc-salvo'; b.textContent='salvo';
+    card.appendChild(b);
+    setTimeout(function(){ if(b.parentNode) b.remove(); }, 1800);
   }
   function produtoDaCalc(chave){
     return produtosDaCalc().filter(function(x){ return x.chave===chave; })[0];
