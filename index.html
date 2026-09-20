@@ -7310,6 +7310,23 @@ function renderFornecedores(){
 /* Ferramentas (Exportar/Backup/Sync) só no desktop — no celular ficam na barra de cima */
 #sidebar-footer{display:none!important;}
 @media (min-width:768px){#sidebar-footer{display:flex!important;}}
+
+/* ── PEDIDO GRANDE NO COMPUTADOR (Suzana, 20/09) ──────────────────────
+   No celular continua igual. Na tela do computador o pedido ocupa mais
+   espaço, porque tem muito item e muito material para ver de uma vez. */
+@media (min-width:900px){
+  #modal-pedido .modal{ max-width:900px; max-height:94dvh; }
+  #modal-pedido .modal-body{ padding:18px 26px; }
+  #modal-pedido .linha-painel{ padding:14px 16px; }
+  #modal-pedido .ln-mats-cab{ grid-template-columns:1fr 70px 120px; }
+}
+@media (min-width:1280px){
+  #modal-pedido .modal{ max-width:1120px; }
+  /* os dados da cliente em duas colunas, para o pedido caber na tela */
+  #modal-pedido .modal-body > .form-group,
+  #modal-pedido .modal-body > .form-row,
+  #modal-pedido #cliente-historico{ max-width:720px; }
+}
 </style>
 <script>
 /* Proteção: nunca sobrescrever a nuvem com um app totalmente vazio
@@ -9412,7 +9429,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c45';
+    var ver='v20/09-c46';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
