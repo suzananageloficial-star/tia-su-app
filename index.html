@@ -9485,7 +9485,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c57';
+    var ver='v20/09-c58';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -10203,7 +10203,7 @@ else appLockInit();
     if(matsDaLinha(row.id).length) return;
     var mats=window._montagemDe(nome); if(!mats) return;
     row.dataset.tipoItem='composto';
-    mats.forEach(function(m){ addMaterialAoItem(row, m.n, m.q, m.v); });
+    mats.forEach(function(m){ addMaterialAoItem(row, m.n, m.q, window._valorDoMaterial(m)); });
     renderPainel(row); calcularGastoReal(); recalcularTotal();
     toast('Materiais de "'+nome+'" vieram da última vez');
   }
@@ -10479,13 +10479,45 @@ else appLockInit();
      com o que ela escreveu. "BALÃO 9 POLEGADAS" abre azul, rosa, cromado.
      Já "FOIL 28 NÚMERO 7 PRATA" é um produto inteiro: não abre lista
      nenhuma, é ele mesmo (Suzana, 20/09).                              */
+  /* mesmo tamanho = mesmo número no nome. "BALÃO 9\" LISO" combina com
+     "BALÃO 9 POLEGADAS CROMADO" e com "BALÃO 9 LISO AZUL". */
+  function mesmoTamanho(generico, candidato){
+    var n=(String(generico||'').match(/\d+/)||[])[0];
+    if(!n) return false;
+    return new RegExp('(^|[^0-9])'+n+'([^0-9]|$)').test(String(candidato||''));
+  }
   function coresDoCadastro(sz){
     var base=chaveNome(sz); if(!base) return [];
+    var ehFita=(typeof _ehFita==='function') && _ehFita(sz);
     return window._todosOsMateriais().filter(function(x){
       var k=chaveNome(x.nome);
-      return k!==base && k.indexOf(base)===0;
+      if(k===base) return false;                       // o genérico não é cor
+      if(k.indexOf(base)===0) return true;             // "BALÃO 9 POLEGADAS" → "... LISO AZUL"
+      // 20/09: volta a valer o TAMANHO, para "BALÃO 9\" LISO" abrir os 9
+      var mesmoTipo = ehFita
+        ? ((typeof _ehFita==='function') && _ehFita(x.nome))
+        : ((typeof _ehBalao==='function') && _ehBalao(x.nome) && !((typeof _naoEBalao==='function') && _naoEBalao(x.nome)));
+      if(!mesmoTipo) return false;
+      return mesmoTamanho(sz, x.nome);
     });
   }
+  /* ── PREÇO DE REFERÊNCIA (Suzana, 20/09) ───────────────────────────
+     Material genérico ("BALÃO 9 LISO") não tem preço próprio. Para a
+     conta nunca ficar barata demais, vale o preço do CROMADO daquele
+     tamanho — e, se não houver cromado, o mais caro da lista.         */
+  window._precoTeto=function(nome){
+    var exato=produtoExato(nome);
+    if(exato && exato.custo>0) return exato.custo;
+    var lista=coresDoCadastro(nome).filter(function(x){ return x.custo>0; });
+    if(!lista.length) return 0;
+    var crom=lista.filter(function(x){ return /cromad|metaliz/i.test(x.nome); });
+    var alvo=(crom.length?crom:lista).reduce(function(m,x){ return (x.custo>m.custo)?x:m; });
+    return alvo.custo;
+  };
+  window._valorDoMaterial=function(x){
+    var v=parseFloat(x && x.v)||0;
+    return v>0 ? v : window._precoTeto(x && x.n);
+  };
   /* o produto exato que tem esse nome, se estiver cadastrado */
   function produtoExato(nome){
     var k=chaveNome(nome);
@@ -11120,7 +11152,7 @@ else appLockInit();
     return out.sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); });
   }
   function custoDaMontagem(mt){
-    return R2((mt.mats||[]).reduce(function(s,x){ return s+(parseFloat(x.q)||0)*(parseFloat(x.v)||0); },0));
+    return R2((mt.mats||[]).reduce(function(s,x){ return s+(parseFloat(x.q)||0)*window._valorDoMaterial(x); },0));
   }
   window._abrirLinhas=function(){
     window._seedItens(); window._seedLinhas(); criarModal();
@@ -11387,7 +11419,7 @@ else appLockInit();
     return out.sort(function(a,b){ return String(a.nome).localeCompare(String(b.nome),'pt-BR'); });
   }
   function custoDosMats(mats){
-    return R2((mats||[]).reduce(function(sm,x){ return sm+(parseFloat(x.q)||0)*(parseFloat(x.v)||0); },0));
+    return R2((mats||[]).reduce(function(sm,x){ return sm+(parseFloat(x.q)||0)*window._valorDoMaterial(x); },0));
   }
   function desenharCalc(){
     var box=document.getElementById('calc-preco'); if(!box) return;
@@ -11402,7 +11434,9 @@ else appLockInit();
             +'<div class="le-row"><input type="text" data-cal="nome" data-ch="'+esc(pr.chave)+'" value="'+esc(pr.nome)+'" style="flex:1;font-weight:700">'
             +'<button type="button" class="le-x" data-cal="del" data-ch="'+esc(pr.chave)+'" title="Excluir produto">×</button></div>'
             +'<div class="le-mini" style="display:block;margin-bottom:6px">Material: <b>'+fmt(custo)+'</b>'
-            +((pr.mats||[]).length ? (' · '+pr.mats.length+' itens') : ' · sem materiais ainda')+'</div>'
+            +((pr.mats||[]).length ? (' · '+pr.mats.length+' itens') : ' · sem materiais ainda')
+            +((pr.mats||[]).some(function(x){ return !(parseFloat(x.v)>0) && window._precoTeto(x.n)>0; })
+               ? ' · balão sem preço entra pelo <b>mais caro do tamanho</b>' : '')+'</div>'
             +'<div class="le-row" style="gap:6px;flex-wrap:wrap">'
             + [2,2.5,3].map(function(f){
                 return '<button type="button" class="ln-chip" data-cal="fator" data-ch="'+esc(pr.chave)+'" data-f="'+f+'">× '+String(f).replace('.',',')+' = '+fmt(R2(custo*f))+'</button>';
@@ -11414,9 +11448,10 @@ else appLockInit();
                 +(custo>0?(' · fator '+String(Math.round((pr.preco/custo)*100)/100).replace('.',',')):'')+'</div>') : '')
             +'<button type="button" class="le-add" data-cal="vermats" data-ch="'+esc(pr.chave)+'">'+(aberto?'esconder os materiais':'ver os materiais')+'</button>'
             +(aberto ? ((pr.mats||[]).map(function(x,xi){
+                var teto=window._precoTeto(x.n), semPreco=!(parseFloat(x.v)>0) && teto>0;
                 return '<div class="le-row"><input type="text" data-cal="mn" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+esc(x.n)+'" list="estoque-datalist" style="flex:1">'
                   +'<input type="number" step="0.1" min="0" data-cal="mq" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+(parseFloat(x.q)||0)+'" style="width:56px">'
-                  +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-cal="mv" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+num(x.v)+'" style="width:80px">'
+                  +'<span class="le-mini">R$</span><input type="number" step="0.01" min="0" data-cal="mv" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'" value="'+num(x.v)+'" placeholder="'+(semPreco?R2(teto):'0,00')+'" title="'+(semPreco?('usando o mais caro do tamanho: R$ '+R2(teto)):'Preço por unidade')+'" style="width:80px'+(semPreco?';border-color:var(--cyan)':'')+'">'
                   +'<button type="button" class="le-x" data-cal="delm" data-ch="'+esc(pr.chave)+'" data-xi="'+xi+'">×</button></div>';
               }).join('')
               +'<button type="button" class="le-add" data-cal="addm" data-ch="'+esc(pr.chave)+'">+ material</button>') : '')
