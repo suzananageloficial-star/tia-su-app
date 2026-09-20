@@ -1474,7 +1474,7 @@ html, body {
       <!-- MATERIAIS DO PEDIDO -->
       <div style="margin-top:4px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <label class="form-label" style="margin:0;display:flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" style="fill:none;stroke:#0BA5EC;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg>Materiais usados</label>
+          <label class="form-label" style="margin:0;display:flex;align-items:center;gap:6px"><svg width="15" height="15" viewBox="0 0 24 24" style="fill:none;stroke:#0BA5EC;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg>Outros materiais</label>
           <div style="display:flex;gap:6px">
             <button type="button" onclick="limparMateriaisPedido()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 9px;border:1px dashed var(--gray-d);color:var(--gray-d)">Limpar todos</button>
             <button type="button" onclick="adicionarMaterialPedido()" class="btn btn-ghost btn-sm" style="font-size:11px;padding:4px 10px;border:1px dashed var(--cyan);color:var(--cyan-d)">+ Adicionar</button>
@@ -1482,7 +1482,7 @@ html, body {
         </div>
         <datalist id="estoque-datalist"></datalist>
         <div id="p-materiais-lista" style="display:flex;flex-direction:column;gap:6px"></div>
-        <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">Cada linha: material · qtd · <b>R$ por unidade</b> (puxa da última despesa, dá pra ajustar) · status. <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#F79009"/></svg> Pendente = ainda não comprado | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#12B76A"/></svg> Coberto = já no estoque | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#0BA5EC"/></svg> Serviço (impressão, mão de obra, hélio, frete) = conta no custo. Marque <b>comprar</b> no que precisa ser comprado: é isso que monta a tela Compras.</div>
+        <div style="font-size:10px;color:var(--gray-d);margin-top:5px;font-style:italic">Aqui só entra o que <b>não é de nenhum item</b> do pedido (frete, hélio, mão de obra). O material de cada item fica dentro dele, ali em cima. Cada linha: material · qtd · <b>R$ da linha</b> · status. <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#F79009"/></svg> Pendente = ainda não comprado | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#12B76A"/></svg> Coberto = já no estoque | <svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#0BA5EC"/></svg> Serviço (impressão, mão de obra, hélio, frete) = conta no custo. Marque <b>comprar</b> no que precisa ser comprado: é isso que monta a tela Compras.</div>
       </div>
     </div>
     <div class="form-actions" style="flex-direction:column;gap:6px">
@@ -3556,7 +3556,7 @@ async function buscarCEP(){
 // Soma qtd × valor de todos os materiais = gasto real do pedido
 function calcularGastoReal(){
   let total = 0;
-  document.querySelectorAll('#p-materiais-lista .material-row').forEach(function(row){
+  document.querySelectorAll('#modal-pedido .material-row').forEach(function(row){
     total += window._parseMoeda(row.querySelector('.mat-valor')?.value);
   });
   total = Math.round(total * 100) / 100;
@@ -3698,7 +3698,7 @@ function adicionarMaterialPedido(nome='', qtd=1, status='pendente', matId='', va
 }
 
 function coletarMateriaisPedido() {
-  const rows = document.querySelectorAll('#p-materiais-lista .material-row');
+  const rows = document.querySelectorAll('#modal-pedido .material-row');
   const mats = [];
   rows.forEach(row => {
     const nome = row.querySelector('.mat-nome')?.value.trim() || '';
@@ -7069,14 +7069,14 @@ function puxarProdutoCatalogo(id){
   var _catMats=[];
   (p.materiais||[]).forEach(function(m){
     var nm=m.nome||'';
-    var _before=document.querySelectorAll('#p-materiais-lista .material-row').length;
+    var _before=document.querySelectorAll('#modal-pedido .material-row').length;
     // detecta pelo NOME (corrige itens marcados errado): serviço sai; fita/voal/vinil/confete viram cor
     if(_ehServico(nm)){ /* serviço: não entra */ }
     else if(_ehFita(nm)){ adicionarMaterialPedido('',m.qtd,'pendente','','fita',m.size||nm,''); }
     else if(m.tipo!=='balao' && _ehConsumo(nm)){ /* consumo: não entra */ }
     else if((m.tipo==='balao' || _ehBalao(nm)) && !_naoEBalao(nm)){ adicionarMaterialPedido('',m.qtd,'pendente','','balao',m.size||nm,''); }
     else { adicionarMaterialPedido(nm,m.qtd,'pendente','','normal','',''); }
-    var _rows=document.querySelectorAll('#p-materiais-lista .material-row');
+    var _rows=document.querySelectorAll('#modal-pedido .material-row');
     if(_rows.length>_before){ _catMats.push(_rows[_rows.length-1].id); }  // amarra o material ao produto puxado
   });
   if(_itemRow && _catMats.length){ _itemRow.dataset.catMats=JSON.stringify(_catMats); }
@@ -7128,7 +7128,7 @@ function _balaoSelecionado(rowId){
   const badge=row.querySelector('.mat-badge'); if(badge) badge.textContent=it?'🟢':'🎈';
 }
 function coletarMateriaisPedido(){
-  const rows=document.querySelectorAll('#p-materiais-lista .material-row'); const mats=[];
+  const rows=document.querySelectorAll('#modal-pedido .material-row'); const mats=[];
   rows.forEach(function(row){
     const tipo=row.dataset.tipo||'normal';
     const qtd=parseFloat((row.querySelector('.mat-qtd')||{}).value)||0;
@@ -7173,13 +7173,13 @@ function _estoqueExato(nome){
 function _itemRowNome(row){ const i=row.querySelector('input[type=text]'); return i?i.value.trim():''; }
 function _removerMirror(row){
   const matId=row.dataset.mirrorMat; if(!matId) return;
-  const mrow=document.querySelector('#p-materiais-lista .material-row[data-mat-id="'+matId+'"]');
+  const mrow=document.querySelector('#modal-pedido .material-row[data-mat-id="'+matId+'"]');
   if(mrow) mrow.remove();
   row.dataset.mirrorMat='';
 }
 function _sincronizarQtdMirror(row){
   const matId=row.dataset.mirrorMat; if(!matId) return;
-  const mrow=document.querySelector('#p-materiais-lista .material-row[data-mat-id="'+matId+'"]');
+  const mrow=document.querySelector('#modal-pedido .material-row[data-mat-id="'+matId+'"]');
   if(mrow){ const q=mrow.querySelector('.mat-qtd'); const iq=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1; if(q) q.value=iq; }
 }
 function _espelharMaterialDoItem(row){
@@ -7189,7 +7189,7 @@ function _espelharMaterialDoItem(row){
   if(!it){ if(matId) _removerMirror(row); return; }
   const qtd=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
   if(matId){
-    const mrow=document.querySelector('#p-materiais-lista .material-row[data-mat-id="'+matId+'"]');
+    const mrow=document.querySelector('#modal-pedido .material-row[data-mat-id="'+matId+'"]');
     if(mrow){
       mrow.dataset.itemId=it.id; mrow.dataset.status='coberto';
       const nm=mrow.querySelector('.mat-nome'); if(nm) nm.value=it.nome;
@@ -9412,7 +9412,7 @@ window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
     var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v19/09-c40';
+    var ver='v20/09-c41';
     var txt;
     if(!t){ txt=ver+' · sem sync ainda'; }
     else{
@@ -9568,6 +9568,9 @@ else appLockInit();
 .ln-sel{width:100%;border:1px solid #e7d3dd;border-radius:8px;padding:7px;font-size:12px;background:#fff;margin-top:2px}
 .ln-cor-box{display:flex;gap:6px;align-items:center;margin-top:4px}
 .ln-cor{flex:1;border:1px solid #e7d3dd;border-radius:8px;padding:7px;font-size:12px;background:#fff}
+.ln-mats-cab{display:grid;grid-template-columns:1fr 56px 96px;gap:6px;font-size:9px;color:#9a8b90;letter-spacing:.04em;padding:0 2px 2px}
+.ln-mats-cab span:nth-child(2){text-align:center}
+.ln-mats-cab span:nth-child(3){text-align:center}
 .ln-auto{font-size:11px;color:#7a6a70;background:#fff;border-radius:8px;padding:6px 8px;margin-top:4px;line-height:1.4}
 .ln-padrao{width:100%;margin-top:6px;border:1.5px dashed var(--pink);background:#fff;color:var(--pink);border-radius:9px;padding:7px;font-size:11px;font-weight:700;cursor:pointer}
 /* "comprar" ao lado do preço, para a linha não crescer (Suzana, 17/09) */
@@ -9965,6 +9968,13 @@ else appLockInit();
 
   /* ── itens do pedido ───────────────────────────────────────────── */
   function lista(){ return document.getElementById('p-itens-lista'); }
+  /* o último item da tela: NÃO dá para usar lastElementChild, porque o
+     painel de materiais fica logo depois da linha do item */
+  function ultimoItem(){
+    var l=lista(); if(!l) return null;
+    var rs=l.querySelectorAll('.item-pedido-row');
+    return rs[rs.length-1]||null;
+  }
   function painelDe(row){ var l=lista(); return l ? l.querySelector('.linha-painel[data-for="'+row.id+'"]') : null; }
   function selDe(row){ try{ return JSON.parse(row.dataset.opcoes||'{}')||{}; }catch(e){ return {}; } }
   function custoItensTela(){
@@ -9977,7 +9987,7 @@ else appLockInit();
   }
   function ligarRow(row){
     var q=row.querySelector('.pi-qtd');
-    if(q) q.addEventListener('input', function(){ sincronizarMateriais(row); atualizaCustoPainel(row); calcularGastoReal(); });
+    if(q) q.addEventListener('input', function(){ atualizaCustoPainel(row); calcularGastoReal(); });
     var d=row.querySelector('.material-del');
     if(d) d.addEventListener('click', function(){
       var p=painelDe(row); if(p) p.remove();
@@ -9998,284 +10008,113 @@ else appLockInit();
   }
   /* materiais que vieram desta linha do pedido */
   function matsDaLinha(rowId){
-    return [].slice.call(document.querySelectorAll('#p-materiais-lista .material-row'))
+    return [].slice.call(document.querySelectorAll('#modal-pedido .material-row'))
       .filter(function(m){ return m.dataset.deLinha===rowId; });
-  }
-  /* o que vai DENTRO vira linha de Materiais: é lá que o gasto multiplica
-     a quantidade e soma. Refaz tudo a cada mudança, para não duplicar. */
-  function sincronizarMateriais(row){
-    matsDaLinha(row.id).forEach(function(m){ m.remove(); });
-    // pedido reaberto: os materiais vieram do que estava salvo e ainda não
-    // têm marca de origem. Tira os que esta linha havia gerado, pelo nome.
-    if(row.dataset.matsAntigos){
-      var antigos=[]; try{ antigos=JSON.parse(row.dataset.matsAntigos)||[]; }catch(e){}
-      antigos.forEach(function(nome){
-        var alvo=[].slice.call(document.querySelectorAll('#p-materiais-lista .material-row')).filter(function(m){
-          if(m.dataset.deLinha) return false;
-          return nomeDoMaterial(m).toLowerCase()===String(nome).toLowerCase().trim();
-        })[0];
-        if(alvo) alvo.remove();
-      });
-      row.dataset.matsAntigos='';
-    }
-    var l=porId(row.dataset.linhaId); if(!l) return;
-    var sel=selDe(row);
-    var qLinha=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
-    var vezes=vezesDe(l, sel);
-    var lista=[];
-    (l.grupos||[]).forEach(function(g){
-      if(g.tipo!=='item' && g.tipo!=='lista') return;
-      if(!ativo(l, sel, g)) return;                // "Não" na pergunta: nada daquele campo entra
-      var escolhidos=itensSel(sel,g);
-      escolhidos.forEach(function(x){ lista.push({n:x.n, q:x.q}); });
-      // campo marcado como "sempre" entra na lista de materiais mesmo sem
-      // escolha: ela escolhe a cor lá embaixo ou apaga a linha
-      if(!escolhidos.length && g.sempre){
-        ((g.padraoItens && g.padraoItens.length) ? g.padraoItens : [g.nome]).forEach(function(n){ lista.push({n:n, q:1}); });
-      }
-    });
-    (window._insumosAutomaticos(l, sel)||[]).forEach(function(x){ lista.push({n:x.n, q:(parseFloat(x.q)||1)}); });
-    lista.forEach(function(x){
-      var reg=achaItem(x.n);
-      var qtd=R2(x.q*vezes*qLinha);
-      if(!(qtd>0)) return;
-      var noEstoque=(typeof estoque!=='undefined'?estoque:[]).filter(function(e){ return e && e.id===(reg&&reg.id); })[0];
-      adicionarMaterialPedido(reg?reg.nome:x.n, qtd, noEstoque?'coberto':'pendente', '', 'normal', '', noEstoque?noEstoque.id:'', reg?reg.custo:0);
-      var novo=document.querySelector('#p-materiais-lista .material-row:last-child');
-      if(novo) novo.dataset.deLinha=row.id;
-    });
-    agruparMateriais();
   }
   function atualizaCustoPainel(row){
     var p=painelDe(row); if(!p) return;
     var el=p.querySelector('.ln-custo'); if(!el) return;
-    var l=porId(row.dataset.linhaId); if(!l) return;
-    var cheio=window._custoCheioLinha(l, selDe(row));
-    var q=parseFloat((row.querySelector('.pi-qtd')||{}).value)||0;
-    el.textContent = cheio>0
-      ? ('Custo: '+fmt(cheio)+' por unidade'+(q>1?(' · '+fmt(R2(cheio*q))+' no total'):'')+' · já está em Materiais')
-      : 'Custo em R$ 0,00. Preencha os preços em Precificação, Linhas do pedido, aba Itens e preços.';
+    var mats=[].slice.call(p.querySelectorAll('.material-row'));
+    var custo=custoTotalDaLinha(row, mats);
+    el.textContent = custo>0
+      ? ('Material deste item: '+fmt(custo)+' · entra no gasto do pedido')
+      : 'Sem custo ainda. Preencha o R$ de cada material.';
   }
-  function selectItens(gNome, filtro, valor){
-    // o filtro aceita várias palavras separadas por | (ex.: caixa|sacol)
-    // termo com ^ na frente = o NOME começa com ele (xícara sem pegar "pires porta xícaras")
-    function semAcento(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
-    var termos=semAcento(filtro).split('|').map(function(s){ return s.trim(); }).filter(Boolean);
-    var itens=window._registroItens().filter(function(x){
-      if(!termos.length) return true;
-      var nome=semAcento(x.nome), alvo=nome+' '+semAcento(x.cat);
-      return termos.some(function(t){ return t.charAt(0)==='^' ? nome.indexOf(t.slice(1))===0 : alvo.indexOf(t)>=0; });
-    });
-    if(!itens.length) itens=window._registroItens();
-    return '<select class="ln-sel" data-g="'+esc(gNome)+'">'
-      + '<option value="">— escolher da lista —</option>'
-      + itens.map(function(x){
-          return '<option value="'+esc(x.nome)+'"'+(valor && valor.toLowerCase()===x.nome.toLowerCase()?' selected':'')+'>'
-            + esc(x.nome) + (x.custo>0 ? (' · '+fmt(x.custo)) : ' · sem preço') + '</option>';
-        }).join('')
-      + '</select>';
-  }
-  function linhaItemHtml(gNome, x, i){
-    var reg=achaItem(x.n);
-    return '<div class="ln-item">'
-      + '<span class="ln-item-n">'+esc(x.n)+'</span>'
-      + '<input type="number" class="ln-q" min="0" step="0.5" value="'+x.q+'" data-g="'+esc(gNome)+'" data-i="'+i+'">'
-      + '<span class="ln-item-v">'+(reg && reg.custo>0 ? (fmt(reg.custo)+'/un') : 'sem preço')+'</span>'
-      + '<button type="button" class="ln-x" data-g="'+esc(gNome)+'" data-i="'+i+'">×</button>'
-      + '</div>';
-  }
-  /* ── PASSO A PASSO (Suzana, 19/09) ─────────────────────────────────
-     O painel pergunta uma coisa de cada vez: a próxima pergunta só aparece
-     depois que a anterior foi respondida. Campo com "pergunta" começa com
-     Sim/Não, e a lista só abre no Sim. Ao terminar, o botão Recolher
-     fica em destaque e o item vira uma linha só.                       */
-  function respDe(sel, g){
-    var r=(sel && sel.__resp && sel.__resp[g.nome]) || '';
-    if(!r && ((sel && sel[g.nome]) || []).length) r='sim';   // já tinha escolha salva: vale como "sim"
-    return r;
-  }
-  /* campo que conta para materiais, custo e nome: visível e, se tem
-     pergunta, respondido com Sim */
-  function ativo(l, sel, g){ return visivel(l, sel, g) && (!g.pergunta || respDe(sel, g)==='sim'); }
-  function respondido(l, sel, g){
-    if(g.pergunta){
-      var r=respDe(sel, g);
-      if(!r) return false;
-      if(r==='nao') return true;
-      return g.tipo==='item' ? itensSel(sel, g).length>0 : true;
+  /* ── ITEM DO PEDIDO DO JEITO DA SUZANA (20/09) ─────────────────────
+     Os kits com perguntas saíram: ela digita o nome do item (ou pega da
+     lista do que já usou) e monta os materiais dele logo abaixo, na mão.
+     Tudo o que ela digita fica guardado: quando o mesmo nome voltar num
+     pedido novo, os materiais vêm junto e ela só ajusta.               */
+  var K_MONT='ts_montagens';
+  function montagens(){ try{ return JSON.parse(localStorage.getItem(K_MONT)||'{}')||{}; }catch(e){ return {}; } }
+  function chaveNome(n){ return String(n||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+  window._montagens=montagens;
+  window._guardarMontagem=function(nome, mats){
+    nome=String(nome||'').trim(); if(!nome) return;
+    var m=montagens(), k=chaveNome(nome);
+    var antes=(m[k] && m[k].mats) ? m[k].mats : [];
+    m[k]={nome:nome, mats:(mats && mats.length) ? mats : antes, em:Date.now()};
+    try{ localStorage.setItem(K_MONT, JSON.stringify(m)); }catch(e){}
+  };
+  window._montagemDe=function(nome){
+    var x=montagens()[chaveNome(nome)];
+    return (x && x.mats && x.mats.length) ? copia(x.mats) : null;
+  };
+  /* a lista que aparece no campo do item: o que ela já digitou + o que
+     está cadastrado (linhas antigas e avulsos), sem repetir */
+  window._nomesDeItem=function(){
+    var out=[], visto={}, m=montagens();
+    function add(n){
+      var k=chaveNome(n); if(!k || visto[k]) return;
+      visto[k]=1; out.push(String(n).trim());
     }
-    if(g.tipo==='item') return itensSel(sel, g).length>0;
-    if(g.tipo==='lista' || g.tipo==='cores' || g.tipo==='texto') return true;   // não travam o passo seguinte
-    return ((sel && sel[g.nome]) || []).length>0;
+    Object.keys(m).forEach(function(k){ add(m[k] && m[k].nome); });
+    linhas().forEach(function(l){ add(l.nome); });
+    avulsos().forEach(function(a){ add(a.nome); });
+    return out.sort(function(a,b){ return a.localeCompare(b,'pt'); });
+  };
+  window._atualizarListaProdutos=function(){
+    var dl=document.getElementById('ts-produtos-datalist');
+    if(!dl){ dl=document.createElement('datalist'); dl.id='ts-produtos-datalist'; document.body.appendChild(dl); }
+    dl.innerHTML=window._nomesDeItem().map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
+    return dl;
+  };
+  function nomeDoItem(row){ var i=row.querySelector('input[type=text]'); return i ? String(i.value||'').trim() : ''; }
+  /* materiais deste item: ficam dentro do painel dele */
+  function addMaterialAoItem(row, nome, qtd, custo){
+    adicionarMaterialPedido(nome||'', parseFloat(qtd)||1, 'pendente', '', 'normal', '', '', parseFloat(custo)||0);
+    var novo=document.querySelector('#p-materiais-lista .material-row:last-child');
+    if(!novo) return null;
+    novo.dataset.deLinha=row.id;
+    var box=painelDe(row) && painelDe(row).querySelector('.ln-mats');
+    if(box) box.appendChild(novo);
+    return novo;
   }
-  function blocoDoGrupo(g, sel){
-    if(!g.pergunta) return controleDoGrupo(g, sel, false);
-    var r=respDe(sel, g);
-    var q='<div class="lg"><div class="lg-t">'+esc(g.pergunta)+'</div><div class="chips">'
-      +'<button type="button" class="ln-chip ln-sn'+(r==='sim'?' on':'')+'" data-g="'+esc(g.nome)+'" data-resp="sim">Sim</button>'
-      +'<button type="button" class="ln-chip ln-sn'+(r==='nao'?' on':'')+'" data-g="'+esc(g.nome)+'" data-resp="nao">Não</button>'
-      +'</div></div>';
-    return r==='sim' ? q+controleDoGrupo(g, sel, true) : q;
+  /* nome já usado antes: traz a montagem da última vez (só se o item
+     ainda estiver vazio — o que ela montou na mão nunca é mexido) */
+  function puxarMontagem(row){
+    var nome=nomeDoItem(row); if(!nome) return;
+    if(matsDaLinha(row.id).length) return;
+    var mats=window._montagemDe(nome); if(!mats) return;
+    mats.forEach(function(m){ addMaterialAoItem(row, m.n, m.q, m.v); });
+    renderPainel(row); calcularGastoReal(); recalcularTotal();
+    toast('Materiais de "'+nome+'" vieram da última vez');
   }
+  window._puxarMontagem=function(rowId){ var r=document.getElementById(rowId); if(r) puxarMontagem(r); };
   function renderPainel(row){
-    var p=painelDe(row); var l=porId(row.dataset.linhaId); if(!p || !l) return;
-    var sel=selDe(row);
-    var html='', completo=true;
-    (l.grupos||[]).forEach(function(g){
-      if(!completo) return;                        // passo seguinte só depois de responder este
-      if(!visivel(l, sel, g)) return;              // campo que depende de outra escolha
-      html+=blocoDoGrupo(g, sel);
-      if(!respondido(l, sel, g)) completo=false;
-    });
+    var p=painelDe(row); if(!p) return;
+    var mats=matsDaLinha(row.id);
+    mats.forEach(function(m){ if(m.parentNode) m.parentNode.removeChild(m); });  // guarda para recolocar
+    var completo=!!(nomeDoItem(row) && mats.length);
     row.dataset.completo = completo ? '1' : '';
-    html+=extrasDoPainel(row, l, sel, completo);
-    fecharPainel(row, p, html, completo);
+    fecharPainel(row, p, mats, completo);
   }
-  function controleDoGrupo(g, sel, dentroDaPergunta){
-      var titulo = dentroDaPergunta ? '' : '<div class="lg-t">'+esc(g.rotulo||g.nome)+(g.varios&&!g.tipo?' · pode marcar vários':'')+'</div>';
-      if(g.tipo==='texto'){
-        var v=((sel[g.nome]||[])[0])||'';
-        return '<div class="lg">'+titulo
-          +'<input type="text" class="ln-txt" data-g="'+esc(g.nome)+'" value="'+esc(v)+'" placeholder="'+esc(g.dica||'Escreva aqui')+'">'
-          +'</div>';
-      }
-      if(g.tipo==='item' || g.tipo==='lista'){
-        var esc_=itensSel(sel,g);
-        var sug=(g.opcoes||[]).filter(function(o){ return !esc_.some(function(x){ return x.n.toLowerCase()===o.nome.toLowerCase(); }); });
-        return '<div class="lg">'+titulo
-          + (esc_.length ? esc_.map(function(x,i){ return linhaItemHtml(g.nome,x,i); }).join('') : '')
-          + (sug.length ? ('<div class="chips">'+sug.map(function(o){
-                return '<button type="button" class="ln-chip" data-g="'+esc(g.nome)+'" data-add="'+esc(o.nome)+'">+ '+esc(o.nome)+'</button>'; }).join('')+'</div>') : '')
-          + ((g.tipo==='lista' || !esc_.length) ? selectItens(g.nome, g.filtro, '') : '')
-          + '</div>';
-      }
-      if(g.tipo==='cores'){
-        var cores=(sel[g.nome]||[]);
-        return '<div class="lg">'+titulo
-          + (cores.length ? ('<div class="chips">'+cores.map(function(c){
-              return '<button type="button" class="ln-chip on" data-g="'+esc(g.nome)+'" data-cor="'+esc(c)+'">'+esc(c)+' ×</button>'; }).join('')+'</div>') : '')
-          + '<div class="ln-cor-box"><input type="text" class="ln-cor" list="ts-cores-datalist" placeholder="Digite a cor e tecle Enter" data-g="'+esc(g.nome)+'">'
-          + '<button type="button" class="ln-chip" data-g="'+esc(g.nome)+'" data-addcor="1">Adicionar</button></div>'
-          + '</div>';
-      }
-      if(!(g.opcoes||[]).length) return '';
-      var marc=sel[g.nome]||[];
-      if(g.comoLista){                       // ela prefere lista a botão redondo
-        return '<div class="lg">'+titulo
-          +'<select class="ln-opc" data-g="'+esc(g.nome)+'"><option value="">— escolher —</option>'
-          + g.opcoes.map(function(o){
-              return '<option value="'+esc(o.nome)+'"'+(marc.indexOf(o.nome)>=0?' selected':'')+'>'+esc(o.nome)+(parseFloat(o.custo)>0?(' · '+fmt(o.custo)):'')+'</option>';
-            }).join('')
-          +'</select></div>';
-      }
-      return '<div class="lg">'+titulo+'<div class="chips">'
-        + g.opcoes.map(function(o){
-            return '<button type="button" class="ln-chip'+(marc.indexOf(o.nome)>=0?' on':'')+'" data-g="'+esc(g.nome)+'" data-o="'+esc(o.nome)+'">'+esc(o.nome)+'</button>';
-          }).join('')
-        + '</div></div>';
-  }
-  function extrasDoPainel(row, l, sel, completo){
-    var html='';
-    // cor do vinil: só aparece em balão com personalização
-    if(window._precisaVinil(l, sel)){
-      var vins=window._opcoesVinil(), vAtual=sel['__vinil']||'';
-      html+='<div class="lg"><div class="lg-t">Cor do vinil</div>'
-        +'<select class="ln-vinil"><option value="">— escolher a cor do vinil —</option>'
-        + vins.map(function(x){ return '<option value="'+esc(x.nome)+'"'+(vAtual===x.nome?' selected':'')+'>'+esc(x.nome)+(x.custo>0?(' · '+fmt(x.custo)):'')+'</option>'; }).join('')
-        +'</select></div>';
-    }
-    // papel do cartão: só aparece quando há cartão escolhido
-    var insumos=window._insumosAutomaticos(l, sel);
-    if(insumos.some(function(x){ return window._PAPEIS_CARTAO.indexOf(x.n)>=0; })){
-      var atual=sel['__papel']||window._PAPEIS_CARTAO[0];
-      html+='<div class="lg"><div class="lg-t">Papel do cartão</div><div class="chips">'
-        + window._PAPEIS_CARTAO.map(function(n){
-            return '<button type="button" class="ln-chip'+(atual===n?' on':'')+'" data-papel="'+esc(n)+'">'+esc(n)+'</button>'; }).join('')
-        + '</div></div>';
-    }
-    if(insumos.length){
-      html+='<div class="ln-auto">Entram sozinhos: '+insumos.map(function(x){ return esc(x.n); }).join(' · ')+'</div>';
-    }
-    // guardar esta montagem como a que já vem marcada da próxima vez
-    if(completo) html+='<button type="button" class="ln-padrao" data-padrao="1">Salvar esta montagem como padrão do '+esc(l.nome)+'</button>';
-    return html;
-  }
-  function fecharPainel(row, p, html, completo){
-    if(!html) html='<div class="le-ajuda" style="margin:0">Esta linha ainda não tem campos. Configure em Precificação, Linhas do pedido.</div>';
-    /* RECOLHER (Suzana, 18/09): com vários itens o pedido ficava gigante.
-       Recolhido, o bloco mostra só o resumo; os materiais dele recolhem
-       junto na lista. Nada é apagado: só deixa de aparecer. */
-    var nMats=matsDaLinha(row.id).length;
-    var resumo='<div class="ln-resumo" data-abrir="1"><span>▸ '+(nMats ? (nMats+' materiais dentro') : 'nada escolhido ainda')
-      +' · custo '+fmt(custoTotalDaLinha(row))+'</span><b>Abrir</b></div>';
-    p.innerHTML=resumo+html+'<div class="ln-custo"></div>'
+  /* RECOLHER (Suzana, 18/09): com vários itens o pedido ficava gigante.
+     Recolhido, o bloco mostra só o resumo. Nada é apagado: só deixa de
+     aparecer. As linhas de material voltam para dentro do painel. */
+  function fecharPainel(row, p, mats, completo){
+    var resumo='<div class="ln-resumo" data-abrir="1"><span>▸ '+(mats.length ? (mats.length+' materiais dentro') : 'sem materiais ainda')
+      +' · custo '+fmt(custoTotalDaLinha(row, mats))+'</span><b>Abrir</b></div>';
+    p.innerHTML=resumo
+      +'<div class="lg"><div class="lg-t">Materiais deste item</div>'
+      +(mats.length ? '<div class="ln-mats-cab"><span>MATERIAL</span><span>QTD</span><span>R$ DA LINHA</span></div>' : '')
+      +'<div class="ln-mats"></div>'
+      +(mats.length ? '' : '<div class="ln-auto">Escreva o material ou escolha da lista. Da próxima vez que este item aparecer, eles já vêm juntos.</div>')
+      +'<button type="button" class="ln-chip ln-addmat" data-addmat="1">+ Adicionar material</button></div>'
+      +'<div class="ln-custo"></div>'
       +'<button type="button" class="ln-recolher'+(completo?' pronto':'')+'" data-recolher="1">'
       +(completo ? 'Pronto, recolher este item' : 'Recolher este item')+'</button>';
+    var box=p.querySelector('.ln-mats');
+    mats.forEach(function(m){ box.appendChild(m); });
     p.classList.toggle('recolhido', row.dataset.recolhido==='1');
-    var dl=document.getElementById('ts-cores-datalist');
-    if(dl) dl.innerHTML=coresSalvas().map(function(c){ return '<option value="'+esc(c)+'">'; }).join('');
     atualizaCustoPainel(row);
-  }
-  /* toda mudança no painel passa por aqui: grava, renomeia, refaz materiais */
-  function mudou(row, sel){
-    var l=porId(row.dataset.linhaId); if(!l) return;
-    row.dataset.opcoes=JSON.stringify(sel);
-    row.dataset.custoUn=String(window._custoLinha(l, sel));
-    var ni=row.querySelector('input[type=text]'); if(ni) ni.value=window._nomeLinha(l, sel);
-    sincronizarMateriais(row);
-    renderPainel(row); recalcularTotal(); calcularGastoReal();
-  }
-  function alternarOpcao(row, gNome, oNome){
-    var l=porId(row.dataset.linhaId); if(!l) return;
-    var g=(l.grupos||[]).find(function(x){ return x.nome===gNome; }); if(!g) return;
-    var sel=selDe(row); var marc=(sel[gNome]||[]).slice();
-    var i=marc.indexOf(oNome);
-    if(i>=0) marc.splice(i,1); else if(g.varios) marc.push(oNome); else marc=[oNome];
-    if(marc.length) sel[gNome]=marc; else delete sel[gNome];
-    mudou(row, sel);
-  }
-  function addItem(row, gNome, nome, qtd){
-    if(!nome) return;
-    var l=porId(row.dataset.linhaId); if(!l) return;
-    var g=(l.grupos||[]).find(function(x){ return x.nome===gNome; }); if(!g) return;
-    var sel=selDe(row); var atuais=itensSel(sel,g);
-    if(g.tipo==='item') atuais=[];                       // campo de um item só: troca
-    if(!atuais.some(function(x){ return x.n.toLowerCase()===String(nome).toLowerCase(); })) atuais.push({n:nome, q:(parseFloat(qtd)||1)});
-    sel[gNome]=atuais; mudou(row, sel);
-  }
-  function tiraItem(row, gNome, i){
-    var sel=selDe(row); var l=porId(row.dataset.linhaId);
-    var g=l&&(l.grupos||[]).find(function(x){ return x.nome===gNome; }); if(!g) return;
-    var atuais=itensSel(sel,g); atuais.splice(i,1);
-    if(atuais.length) sel[gNome]=atuais; else delete sel[gNome];
-    mudou(row, sel);
-  }
-  function qtdItem(row, gNome, i, v){
-    var sel=selDe(row); var l=porId(row.dataset.linhaId);
-    var g=l&&(l.grupos||[]).find(function(x){ return x.nome===gNome; }); if(!g) return;
-    var atuais=itensSel(sel,g); if(!atuais[i]) return;
-    atuais[i].q=parseFloat(v)||0;
-    sel[gNome]=atuais;
-    row.dataset.opcoes=JSON.stringify(sel);
-    sincronizarMateriais(row); atualizaCustoPainel(row); calcularGastoReal();
-  }
-  function addCor(row, gNome, cor){
-    cor=String(cor||'').trim(); if(!cor) return;
-    var sel=selDe(row); var atuais=(sel[gNome]||[]).slice();
-    if(!atuais.some(function(c){ return c.toLowerCase()===cor.toLowerCase(); })) atuais.push(cor);
-    sel[gNome]=atuais; guardarCor(cor); mudou(row, sel);
-  }
-  function tiraCor(row, gNome, cor){
-    var sel=selDe(row); var atuais=(sel[gNome]||[]).filter(function(c){ return c!==cor; });
-    if(atuais.length) sel[gNome]=atuais; else delete sel[gNome];
-    mudou(row, sel);
   }
   function preencherProduto(nome){ var el=document.getElementById('p-produto'); if(el && !el.value.trim()) el.value=nome; }
 
-  /* custo desta linha: materiais dela (já multiplicados) + base × qtd */
-  function custoTotalDaLinha(row){
+  /* custo deste item: o que os materiais dele somam */
+  function custoTotalDaLinha(row, mats){
     var s=0;
-    matsDaLinha(row.id).forEach(function(m){ s+=window._parseMoeda((m.querySelector('.mat-valor')||{}).value); });
+    (mats || matsDaLinha(row.id)).forEach(function(m){ s+=window._parseMoeda((m.querySelector('.mat-valor')||{}).value); });
     var q=parseFloat((row.querySelector('.pi-qtd')||{}).value)||1;
     s+=(parseFloat(row.dataset.custoUn)||0)*q;
     return R2(s);
@@ -10287,7 +10126,7 @@ else appLockInit();
   }
   /* o que está recolhido some também da lista de materiais (só visual) */
   function aplicarRecolhidoMateriais(){
-    var lista=document.getElementById('p-materiais-lista'); if(!lista) return;
+    var lista=document.getElementById('modal-pedido'); if(!lista) return;
     [].slice.call(lista.querySelectorAll('.material-row')).forEach(function(m){
       var dono=m.dataset.deLinha && document.getElementById(m.dataset.deLinha);
       m.classList.toggle('oculto', !!(dono && dono.dataset.recolhido==='1'));
@@ -10301,123 +10140,101 @@ else appLockInit();
   }
   window._recolherLinha=function(rowId, sim){ var r=document.getElementById(rowId); if(r) recolher(r, sim!==false); };
 
-  /* PADRÃO DO KIT (pedido da Suzana em 17/09): guarda a montagem atual na
-     linha, e todo kit novo já nasce com ela marcada. Não mexe em pedido
-     salvo, e a cor do balão fica de fora: cor é de cada pedido.        */
-  function salvarPadrao(row){
-    var l=porId(row.dataset.linhaId); if(!l) return;
-    var sel=selDe(row), padrao={};
-    (l.grupos||[]).forEach(function(g){
-      if(g.tipo==='cores' || g.tipo==='texto') return;     // cor e texto da arte são de cada pedido
-      var v=sel[g.nome]; if(v && v.length) padrao[g.nome]=copia(v);
-    });
-    if(sel['__papel']) padrao['__papel']=sel['__papel'];
-    // respostas Sim/Não também viram padrão (menos a de personalização)
-    if(sel.__resp){
-      padrao.__resp={};
-      Object.keys(sel.__resp).forEach(function(k){ if(k!=='Personalização') padrao.__resp[k]=sel.__resp[k]; });
+  /* a montagem de cada item agora é guardada pelo NOME do item, em
+     _guardarMontagem, na hora de salvar o pedido */
+
+  /* prepara um item: painel de materiais embaixo + lista de nomes no campo */
+  function montarItem(row, salvo){
+    var ni=row.querySelector('input[type=text]');
+    if(ni){
+      window._atualizarListaProdutos();
+      ni.setAttribute('list','ts-produtos-datalist');
+      ni.setAttribute('placeholder','O que vai no pedido (ex.: Bouquet de balões)');
+      ni.addEventListener('change', function(){ puxarMontagem(row); });
+      ni.addEventListener('blur', function(){ puxarMontagem(row); });
     }
-    var quantos=0; for(var k in padrao) quantos++;
-    if(!quantos){ toast('Marque o que vai no kit antes de salvar o padrão'); return; }
-    if(!confirm('Salvar esta montagem como padrão do "'+l.nome+'"?\n\nTodo '+l.nome+' novo já vem com ela marcada. Os pedidos já salvos não mudam.')) return;
-    l.padrao=padrao; save();
-    toast('Padrão do '+l.nome+' salvo');
+    row.dataset.montado='1';
+    ligarRow(row);
+    if(painelDe(row)) return;
+    var painel=document.createElement('div'); painel.className='linha-painel'; painel.dataset.for=row.id;
+    painel.addEventListener('click', function(ev){
+      var b=ev.target.closest('.ln-resumo, .ln-recolher, .ln-addmat, .material-del');
+      if(!b) return;
+      if(b.classList.contains('material-del')){     // o ✕ do material já apaga a linha
+        setTimeout(function(){ renderPainel(row); calcularGastoReal(); }, 0); return;
+      }
+      ev.preventDefault();
+      if(b.dataset.addmat!=null){
+        var novo=addMaterialAoItem(row, '', 1, 0);
+        renderPainel(row);
+        var campo=painel.querySelector('.material-row:last-child .mat-nome');
+        if(campo) campo.focus();
+        calcularGastoReal(); return;
+      }
+      if(b.dataset.recolher!=null){ recolher(row, true); return; }
+      if(b.dataset.abrir!=null){ recolher(row, false); return; }
+    });
+    painel.addEventListener('input', function(ev){
+      if(!ev.target.closest('.material-row')) return;
+      atualizaCustoPainel(row); calcularGastoReal();
+    });
+    painel.addEventListener('change', function(ev){
+      if(!ev.target.closest('.material-row')) return;
+      guardarNomeMaterial(ev.target);
+      atualizaCustoPainel(row); calcularGastoReal();
+    });
+    row.after(painel);
+    if(salvo) row.dataset.recolhido='1';            // pedido reaberto já vem recolhido
+    if(salvo && salvo.mats) row.dataset.matsAntigos=JSON.stringify(salvo.mats);
     renderPainel(row);
   }
-  window._padraoDaLinha=function(l){ return (l && l.padrao) ? copia(l.padrao) : {}; };
-
+  window._montarItem=montarItem;
+  /* nome de material digitado na mão entra na lista de sugestões */
+  function guardarNomeMaterial(alvo){
+    if(!alvo.classList || !alvo.classList.contains('mat-nome')) return;
+    var nome=String(alvo.value||'').trim(); if(!nome) return;
+    var nomes=[]; try{ nomes=JSON.parse(localStorage.getItem('ts_matnomes')||'[]')||[]; }catch(e){}
+    if(nomes.some(function(n){ return chaveNome(n)===chaveNome(nome); })) return;
+    nomes.push(nome);
+    try{ localStorage.setItem('ts_matnomes', JSON.stringify(nomes.slice(-300))); }catch(e){}
+    window._sugerirMateriais();
+  }
+  /* a lista do campo de material: estoque, avulsos e o que ela já digitou */
+  window._sugerirMateriais=function(){
+    var dl=document.getElementById('estoque-datalist'); if(!dl) return;
+    var nomes=[], visto={};
+    function add(n){ var k=chaveNome(n); if(!k || visto[k]) return; visto[k]=1; nomes.push(String(n).trim()); }
+    (window._registroItens()||[]).forEach(function(x){ add(x.nome); });
+    try{ (JSON.parse(localStorage.getItem('ts_matnomes')||'[]')||[]).forEach(add); }catch(e){}
+    dl.innerHTML=nomes.sort(function(a,b){ return a.localeCompare(b,'pt'); })
+      .map(function(n){ return '<option value="'+esc(n)+'">'; }).join('');
+  };
+  /* item novo pela lista de produtos antigos (linha ou avulso cadastrado) */
   window._addLinhaPedido=function(linhaId, salvo){
     var li=lista(); if(!li) return;
     var l=porId(linhaId);
-    // item novo entrando: os que já estavam preenchidos recolhem
     if(!salvo){
       [].slice.call(li.querySelectorAll('.item-pedido-row')).forEach(function(r){
-        if(r.dataset.linhaId && r.dataset.recolhido!=='1'){ r.dataset.recolhido='1'; renderPainel(r); }
+        if(painelDe(r) && r.dataset.recolhido!=='1'){ r.dataset.recolhido='1'; renderPainel(r); }
       });
     }
-    // kit novo já nasce com a montagem padrão que ela salvou
-    var sel=(salvo && salvo.opcoes) || window._padraoDaLinha(l);
-    // e com a escolha inicial dos campos que têm uma (Tamanho: Individual)
-    if(!salvo && l) (l.grupos||[]).forEach(function(g){ if(g.inicial && !(sel[g.nome]||[]).length) sel[g.nome]=[g.inicial]; });
-    var nomeIni = salvo ? salvo.nome : (l ? window._nomeLinha(l, sel) : '');
+    var nomeIni = salvo ? salvo.nome : (l ? l.nome : '');
     adicionarItemPedido(nomeIni, salvo ? salvo.qtd : 1, salvo ? salvo.preco : '', salvo ? salvo.un : 'un');
-    var row=li.lastElementChild; if(!row) return;
+    var row=ultimoItem(); if(!row) return;
     row.dataset.linhaId=linhaId;
-    row.dataset.opcoes=JSON.stringify(sel);
-    row.dataset.custoUn=String((salvo && salvo.custoUn!=null) ? R2(salvo.custoUn) : (l ? window._custoLinha(l, sel) : 0));
-    ligarRow(row);
-    if(l){
-      var painel=document.createElement('div'); painel.className='linha-painel'; painel.dataset.for=row.id;
-      painel.addEventListener('click', function(ev){
-        var b=ev.target.closest('.ln-chip, .ln-x, .ln-padrao, .ln-resumo, .ln-recolher'); if(!b) return;
-        ev.preventDefault();
-        if(b.dataset.recolher!=null){ recolher(row, true); return; }
-        if(b.dataset.abrir!=null){ recolher(row, false); return; }
-        if(b.dataset.padrao!=null){ salvarPadrao(row); return; }
-        if(b.dataset.resp!=null){                           // pergunta Sim/Não do passo a passo
-          var sr=selDe(row); sr.__resp=sr.__resp||{};
-          sr.__resp[b.dataset.g]=b.dataset.resp;
-          if(b.dataset.resp==='nao') delete sr[b.dataset.g];   // "não": some o que tinha sido escolhido ali
-          mudou(row, sr); return;
-        }
-        if(b.dataset.papel!=null){ var s=selDe(row); s['__papel']=b.dataset.papel; mudou(row, s); return; }
-        if(b.dataset.add!=null){ addItem(row, b.dataset.g, b.dataset.add, 1); return; }
-        if(b.dataset.cor!=null){ tiraCor(row, b.dataset.g, b.dataset.cor); return; }
-        if(b.dataset.addcor!=null){
-          var inp=painel.querySelector('.ln-cor[data-g="'+b.dataset.g+'"]');
-          if(inp){ addCor(row, b.dataset.g, inp.value); }
-          return;
-        }
-        if(b.classList.contains('ln-x')){ tiraItem(row, b.dataset.g, parseInt(b.dataset.i,10)); return; }
-        if(b.dataset.o!=null){ alternarOpcao(row, b.dataset.g, b.dataset.o); return; }
-      });
-      painel.addEventListener('change', function(ev){
-        var s=ev.target;
-        if(s.classList && s.classList.contains('ln-sel')){ addItem(row, s.dataset.g, s.value, 1); return; }
-        if(s.classList && s.classList.contains('ln-vinil')){    // cor do vinil
-          var sv=selDe(row);
-          if(s.value) sv['__vinil']=s.value; else delete sv['__vinil'];
-          mudou(row, sv); return;
-        }
-        if(s.classList && s.classList.contains('ln-opc')){      // grupo de botões mostrado como lista
-          var sel2=selDe(row);
-          if(s.value) sel2[s.dataset.g]=[s.value]; else delete sel2[s.dataset.g];
-          mudou(row, sel2);
-        }
-      });
-      painel.addEventListener('input', function(ev){
-        var q=ev.target;
-        if(q.classList && q.classList.contains('ln-q')){ qtdItem(row, q.dataset.g, parseInt(q.dataset.i,10), q.value); return; }
-        if(q.classList && q.classList.contains('ln-txt')){   // campo de escrever
-          var s=selDe(row); var v=String(q.value||'').trim();
-          if(v) s[q.dataset.g]=[v]; else delete s[q.dataset.g];
-          row.dataset.opcoes=JSON.stringify(s);
-          var l2=porId(row.dataset.linhaId);
-          var ni=row.querySelector('input[type=text]'); if(ni && l2) ni.value=window._nomeLinha(l2, s);
-          recalcularTotal();
-        }
-      });
-      painel.addEventListener('keydown', function(ev){
-        if(ev.key!=='Enter') return;
-        var c=ev.target;
-        if(c.classList && c.classList.contains('ln-cor')){ ev.preventDefault(); addCor(row, c.dataset.g, c.value); }
-      });
-      row.after(painel);
-      if(salvo) row.dataset.recolhido='1';            // pedido reaberto já vem recolhido
-      if(salvo && salvo.mats) row.dataset.matsAntigos=JSON.stringify(salvo.mats);
-      renderPainel(row);
-      if(!salvo){ preencherProduto(l.nome); sincronizarMateriais(row); }
-    }
+    if(salvo && salvo.custoUn!=null) row.dataset.custoUn=String(R2(salvo.custoUn));
+    montarItem(row, salvo);
+    if(!salvo){ preencherProduto(nomeIni); puxarMontagem(row); }
     calcularGastoReal();
   };
   window._addAvulsoPedido=function(av, salvo){
     var li=lista(); if(!li) return;
     adicionarItemPedido(salvo ? salvo.nome : av.nome, salvo ? salvo.qtd : 1, salvo ? salvo.preco : (parseFloat(av.preco)>0 ? av.preco : ''), salvo ? salvo.un : (av.un||'un'));
-    var row=li.lastElementChild; if(!row) return;
+    var row=ultimoItem(); if(!row) return;
     row.dataset.avulsoId=av.id||'';
     row.dataset.custoUn=String((salvo && salvo.custoUn!=null) ? R2(salvo.custoUn) : R2(av.custo));
-    ligarRow(row);
-    if(!salvo) preencherProduto(av.nome);
+    montarItem(row, salvo);
+    if(!salvo){ preencherProduto(av.nome); puxarMontagem(row); }
     calcularGastoReal();
   };
 
@@ -10430,13 +10247,10 @@ else appLockInit();
       var preco=parseFloat((row.querySelector('.pi-preco')||{}).value)||0;
       if(!(nome || preco)) return;
       var it={nome:nome, qtd:qtd, un:un, preco:preco};
-      if(row.dataset.linhaId){
-        it.linhaId=row.dataset.linhaId; it.opcoes=selDe(row);
-        // guarda o que esta linha mandou para Materiais, para na próxima
-        // abertura o app saber quais linhas refazer em vez de duplicar
-        it.mats=matsDaLinha(row.id).map(nomeDoMaterial).filter(Boolean);
-        if(!it.mats.length && row.dataset.matsAntigos){ try{ it.mats=JSON.parse(row.dataset.matsAntigos)||[]; }catch(e){} }
-      }
+      // quais materiais são deste item, para o pedido reabrir agrupado
+      it.mats=matsDaLinha(row.id).map(nomeDoMaterial).filter(Boolean);
+      if(!it.mats.length && row.dataset.matsAntigos){ try{ it.mats=JSON.parse(row.dataset.matsAntigos)||[]; }catch(e){} }
+      if(row.dataset.linhaId) it.linhaId=row.dataset.linhaId;
       if(row.dataset.avulsoId) it.avulsoId=row.dataset.avulsoId;
       if(row.dataset.custoUn!=null && row.dataset.custoUn!=='') it.custoUn=R2(row.dataset.custoUn);
       itens.push(it);
@@ -10450,11 +10264,12 @@ else appLockInit();
       if(it.linhaId && porId(it.linhaId)){ window._addLinhaPedido(it.linhaId, it); return; }
       if(it.avulsoId){ window._addAvulsoPedido(porId(it.avulsoId)||{id:it.avulsoId, nome:it.nome, custo:it.custoUn}, it); return; }
       adicionarItemPedido(it.nome, it.qtd, it.preco, it.un);
-      if(it.custoUn!=null){
-        var row=li.lastElementChild;
-        row.dataset.custoUn=String(R2(it.custoUn));
-        if(it.linhaId){ row.dataset.linhaId=it.linhaId; row.dataset.opcoes=JSON.stringify(it.opcoes||{}); }
-        ligarRow(row);
+      var row=ultimoItem();
+      if(row){
+        if(it.custoUn!=null) row.dataset.custoUn=String(R2(it.custoUn));
+        if(it.mats && it.mats.length) row.dataset.matsAntigos=JSON.stringify(it.mats);
+        row.dataset.recolhido='1';
+        renderPainel(row);
       }
     });
     recalcularTotal();
@@ -10463,7 +10278,7 @@ else appLockInit();
   /* gasto do pedido = materiais (como antes) + custo das linhas e avulsos */
   window.calcularGastoReal=function(){
     var mat=0;
-    document.querySelectorAll('#p-materiais-lista .material-row').forEach(function(row){
+    document.querySelectorAll('#modal-pedido .material-row').forEach(function(row){
       mat+=window._parseMoeda((row.querySelector('.mat-valor')||{}).value);
     });
     var total=R2(mat+custoItensTela());
@@ -10490,20 +10305,34 @@ else appLockInit();
         }
       }
     }catch(e){ console.warn('[enxuto] custo do pedido', e); }
+    try{ guardarMontagensDaTela(); }catch(e){ console.warn('[enxuto] montagem', e); }
     return ret;
   };
+  /* o que ela montou fica guardado pelo NOME do item: no próximo pedido
+     com o mesmo nome, os materiais voltam sozinhos */
+  function guardarMontagensDaTela(){
+    document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(row){
+      var nome=nomeDoItem(row); if(!nome) return;
+      var mats=matsDaLinha(row.id).map(function(m){
+        var q=parseFloat((m.querySelector('.mat-qtd')||{}).value)||1;
+        var tot=window._parseMoeda((m.querySelector('.mat-valor')||{}).value);
+        var un=parseFloat(m.dataset.matUnit);
+        return { n:nomeDoMaterial(m), q:q, v:(!isNaN(un) ? un : (q>0 ? R2(tot/q) : tot)) };
+      }).filter(function(x){ return x.n; });
+      window._guardarMontagem(nome, mats);
+    });
+    window._atualizarListaProdutos();
+  }
 
   /* seletor do pedido: botões das linhas + avulsos e produtos antigos */
+  /* 20/09: acabaram os botões de kit. O que vai no pedido é digitado no
+     próprio item, com a lista do que ela já usou. O seletor de avulso
+     antigo fica escondido, para não ter dois caminhos. */
   function renderBotoesLinhas(){
     var grp=document.getElementById('puxar-catalogo-group'); if(!grp) return;
-    var box=document.getElementById('p-linhas-botoes');
-    if(!box){ box=document.createElement('div'); box.id='p-linhas-botoes'; grp.insertBefore(box, grp.firstChild); }
-    var ativas=linhas().filter(function(l){ return l.ativo!==false; });
-    box.innerHTML = ativas.length
-      ? '<label class="form-label">1. O que vai no pedido</label><div class="ln-dica">Toque no kit. Depois escolha, um a um, o que vai dentro: a peça, o pires, a embalagem e os decorativos. Tudo o que você escolher aparece em <b>Materiais usados</b>. Terminou um item? Toque em <b>Recolher</b>.</div><div class="ln-botoes">'
-        + ativas.map(function(l){ return '<button type="button" class="ln-bt" onclick="_addLinhaPedido(\''+l.id+'\')">'+esc(l.nome)+'</button>'; }).join('')
-        + '</div>'
-      : '';
+    grp.style.display='none';
+    var box=document.getElementById('p-linhas-botoes'); if(box) box.remove();
+    window._atualizarListaProdutos(); window._sugerirMateriais();
   }
   window.popularCatalogoSelect=function(){
     var sel=document.getElementById('p-catalogo-sel'); if(!sel) return;
@@ -10529,9 +10358,38 @@ else appLockInit();
     var dl=document.getElementById('f-est-datalist'); if(!dl) return;
     dl.innerHTML=avulsos().map(function(a){ return '<option value="'+esc(a.nome)+'">'; }).join('');
   };
+  /* o item do estoque não vira material sozinho: quem manda agora é a
+     lista de materiais de dentro do item */
+  window._espelharMaterialDoItem=function(){};
+  /* material de balão ou fita vira seletor de cor: a linha é refeita, e a
+     nova precisa continuar dentro do item que a trouxe */
+  var convOrig=window._maybeConvertColor;
+  window._maybeConvertColor=function(rowId){
+    var velha=document.getElementById(rowId);
+    var dono=velha ? velha.dataset.deLinha : '';
+    var antes=document.querySelectorAll('#modal-pedido .material-row').length;
+    var ret=convOrig.apply(this, arguments);
+    var depois=document.querySelectorAll('#modal-pedido .material-row').length;
+    if(dono && depois>=antes){
+      var nova=document.querySelector('#p-materiais-lista .material-row:last-child');
+      if(nova && !nova.dataset.deLinha){
+        nova.dataset.deLinha=dono;
+        var r=document.getElementById(dono);
+        if(r){ renderPainel(r); calcularGastoReal(); }
+      }
+    }
+    return ret;
+  };
+  var addItemOrig=window.adicionarItemPedido;
+  window.adicionarItemPedido=function(){
+    var ret=addItemOrig.apply(this, arguments);
+    var row=ultimoItem();
+    if(row && !row.dataset.montado){ row.dataset.montado='1'; montarItem(row, null); }
+    return ret;
+  };
   var openOrig=window.openModal;
   window.openModal=function(id, isNew){
-    if(id==='modal-pedido') window._seedLinhas();
+    if(id==='modal-pedido'){ window._seedLinhas(); window._atualizarListaProdutos(); window._sugerirMateriais(); }
     var ret=openOrig.apply(this, arguments);
     if(id==='modal-fin' && isNew){ var c=document.getElementById('f-add-estoque'); if(c) c.checked=false; }
     return ret;
@@ -10764,44 +10622,21 @@ else appLockInit();
       if(badge) row.insertBefore(lb, badge); else row.appendChild(lb);   // fica ao lado do preço
     }
   };
-  /* Materiais agrupados pelo item do pedido que os trouxe (Suzana, 17/09) */
+  /* cada material volta para dentro do item que o trouxe; o bloco de
+     baixo fica só com os materiais soltos, que não são de nenhum item */
   function agruparMateriais(){
     var lista=document.getElementById('p-materiais-lista'); if(!lista) return;
     [].slice.call(lista.querySelectorAll('.mat-grupo')).forEach(function(h){ h.remove(); });
-    var grupos=[];
     document.querySelectorAll('#p-itens-lista .item-pedido-row').forEach(function(ir){
-      var mats=matsDaLinha(ir.id);
-      if(mats.length) grupos.push({ id:ir.id, titulo:((ir.querySelector('input[type=text]')||{}).value||'Item do pedido'), mats:mats });
+      if(painelDe(ir)) renderPainel(ir);
     });
-    if(!grupos.length) return;
-    var soltos=[].slice.call(lista.querySelectorAll('.material-row')).filter(function(m){ return !m.dataset.deLinha; });
-    grupos.forEach(function(gp){
-      var h=document.createElement('div'); h.className='mat-grupo'; h.textContent=gp.titulo;
-      h.dataset.for=gp.id; h.title='Tocar para recolher ou abrir';
-      lista.appendChild(h);
-      gp.mats.forEach(function(m){ lista.appendChild(m); });
-    });
-    if(soltos.length){
-      var h2=document.createElement('div'); h2.className='mat-grupo'; h2.textContent='Outros materiais';
-      lista.appendChild(h2);
-      soltos.forEach(function(m){ lista.appendChild(m); });
-    }
     aplicarRecolhidoMateriais();
-    // tocar no cabeçalho do grupo recolhe ou abre o item inteiro
-    if(!lista.dataset.ouveGrupo){
-      lista.dataset.ouveGrupo='1';
-      lista.addEventListener('click', function(ev){
-        var h=ev.target.closest('.mat-grupo[data-for]'); if(!h) return;
-        var dono=document.getElementById(h.dataset.for);
-        if(dono) recolher(dono, dono.dataset.recolhido!=='1');
-      });
-    }
   }
   var coletarMatOrig=window.coletarMateriaisPedido;
   window.coletarMateriaisPedido=function(){
     var mats=coletarMatOrig.apply(this, arguments);
     var marca={};
-    document.querySelectorAll('#p-materiais-lista .material-row').forEach(function(r){
+    document.querySelectorAll('#modal-pedido .material-row').forEach(function(r){
       var c=r.querySelector('.mat-comprar input');
       if(r.dataset.matId) marca[r.dataset.matId]=!!(c && c.checked);
     });
@@ -10813,7 +10648,7 @@ else appLockInit();
     renderMatOrig.apply(this, arguments);
     (materiais||[]).forEach(function(m){
       if(!m || !m.comprar) return;
-      var r=document.querySelector('#p-materiais-lista .material-row[data-mat-id="'+m.id+'"]');
+      var r=document.querySelector('#modal-pedido .material-row[data-mat-id="'+m.id+'"]');
       var c=r && r.querySelector('.mat-comprar input'); if(c) c.checked=true;
     });
     // pedido reaberto: liga cada material ao item que o trouxe, para agrupar
@@ -10821,7 +10656,7 @@ else appLockInit();
       if(!ir.dataset.matsAntigos) return;
       var nomes=[]; try{ nomes=JSON.parse(ir.dataset.matsAntigos)||[]; }catch(e){}
       nomes.forEach(function(n){
-        var alvo=[].slice.call(document.querySelectorAll('#p-materiais-lista .material-row')).filter(function(m){
+        var alvo=[].slice.call(document.querySelectorAll('#modal-pedido .material-row')).filter(function(m){
           return !m.dataset.deLinha && nomeDoMaterial(m).toLowerCase()===String(n).toLowerCase().trim();
         })[0];
         if(alvo) alvo.dataset.deLinha=ir.id;
