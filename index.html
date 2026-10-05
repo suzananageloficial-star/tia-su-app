@@ -1536,11 +1536,11 @@ html, body {
       </div>
       <div class="form-group" id="f-estoque-block" style="display:none;background:var(--cyan-l);border-radius:12px;padding:10px 12px">
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--cyan-d);cursor:pointer;margin-bottom:8px">
-          <input type="checkbox" id="f-add-estoque" onchange="_toggleEstoqueFin()" style="width:18px;height:18px;accent-color:#0097A7">
-          <svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg> Cadastrar como itens avulsos para vender
+          <input type="checkbox" id="f-add-estoque" checked onchange="_toggleEstoqueFin()" style="width:18px;height:18px;accent-color:#0097A7">
+          <svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg> Cadastrar os materiais desta compra
         </label>
         <div id="f-estoque-campos">
-          <div style="font-size:11px;color:var(--cyan-d);margin-bottom:6px">Um item por linha. Cada um vira item avulso no pedido, com o custo por unidade. Nome igual a um avulso que já existe atualiza o custo dele.</div>
+          <div style="font-size:11px;color:var(--cyan-d);margin-bottom:6px">Um material por linha, com <b>quantidade</b> e <b>quanto você pagou</b>. O app calcula o preço por unidade e usa esse valor no custo dos seus pedidos. Material que já existe tem o preço atualizado. <b>Vender solto é decisão de depois</b> — aqui é só o cadastro.</div>
           <div id="f-est-linhas"></div>
           <datalist id="f-est-datalist"></datalist>
           <button type="button" onclick="_addEstLinhaFin()" class="btn btn-ghost btn-sm" style="width:100%;margin-top:2px;border:1.5px dashed var(--cyan);color:var(--cyan-d);font-size:12px;font-weight:700">+ adicionar item</button>
@@ -1861,6 +1861,9 @@ html, body {
   <input id="app-lock-input" type="password" inputmode="numeric" autocomplete="off" placeholder="senha" style="width:240px;max-width:80vw;box-sizing:border-box;text-align:center;font-size:20px;letter-spacing:4px;padding:13px;border:1.5px solid #EC2A7F;border-radius:12px;outline:none;background:#fff;font-family:var(--font-main)" onkeydown="if(event.key==='Enter')appLockTryUnlock()">
   <div id="app-lock-err" style="height:16px;margin-top:8px;font-size:12px;color:#C2185B;font-weight:700;font-family:var(--font-main);text-shadow:0 1px 3px rgba(255,255,255,.6)"></div>
   <button onclick="appLockTryUnlock()" style="margin-top:6px;width:240px;max-width:80vw;background:#EC2A7F;color:#fff;border:none;border-radius:12px;padding:13px;font-weight:700;font-size:15px;cursor:pointer;box-shadow:0 6px 16px rgba(236,42,127,.35);font-family:var(--font-main)">Entrar</button>
+  <!-- 23/09/2026: não havia saída nenhuma para quem esquecesse a senha.
+       Manda o e-mail de troca para a conta do app e avisa na própria tela. -->
+  <button id="app-lock-esqueci" onclick="appLockEsqueci()" style="margin-top:12px;background:none;border:none;color:#C2185B;font-size:13px;font-weight:700;text-decoration:underline;cursor:pointer;font-family:var(--font-main);text-shadow:0 1px 3px rgba(255,255,255,.6)">Esqueci a senha</button>
 </div>
 
 <!-- <svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> Configurar senha de abertura -->
@@ -1937,6 +1940,12 @@ window._aplicarQuandoLivre = function(fn){
   if(typeof fn !== 'function') return;
   if(!window._telaOcupada()){ try{ fn(); }catch(e){} return; }
   window._pendenteQuandoLivre = fn;
+  /* 23/09: esperar é certo, esperar CALADO não. Se demora, a linha de status
+     avisa que tem novidade da nuvem parada esperando a tela ficar livre. */
+  if(window._syncEstado && !window._syncEstado.esperandoTela){
+    window._syncEstado.esperandoTela = Date.now();
+    if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
+  }
 };
 
 window._drenarQuandoLivre = function(){
@@ -1944,7 +1953,9 @@ window._drenarQuandoLivre = function(){
   if(window._telaOcupada()) return;
   var fn = window._pendenteQuandoLivre;
   window._pendenteQuandoLivre = null;   // limpa ANTES, senão ela se re-agenda
+  if(window._syncEstado) window._syncEstado.esperandoTela = 0;
   try{ fn(); }catch(e){}
+  if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
 };
 
 /* Rede de segurança: nem todo formulário fecha passando pelo closeModal
@@ -2140,6 +2151,8 @@ function closeModal(id) {
 function resetModal(id) {
   const form = document.getElementById(id).querySelectorAll('input,select,textarea');
   form.forEach(f => { if(f.type==='hidden'||f.id.includes('id')) f.value=''; else if(f.type==='date') f.value=today(); else if(f.tagName==='SELECT') f.selectedIndex=0; else f.value=''; });
+  /* (quem decide se a caixa "Cadastrar os materiais desta compra" nasce marcada
+     é o wrapper do openModal, lá no fim do arquivo — ele roda depois daqui.) */
   if(id==='modal-pedido') {
     document.getElementById('modal-pedido-title').innerHTML='<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M12 3c3 0 5 2.5 5 6 0 3.6-3 6-5 6s-5-2.4-5-6c0-3.5 2-6 5-6Z"/><path d="M12 15v3"/><path d="M12 21c-1.6 0-1.6-1.6 0-3"/></svg> Novo Pedido';
     document.getElementById('btn-excluir-pedido').style.display = 'none';
@@ -2358,7 +2371,7 @@ function renderPedidos() {
           <div class="li-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
             <div class="li-value" onclick="editarPedido('${p.id}')">${fmt(p.valor)}</div>
             ${restante>0.01?`<div style="font-size:10px;color:var(--orange);font-weight:600">Falta ${fmt(restante)}</div>`:`<div style="font-size:10px;color:var(--green);font-weight:600"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg> Quitado</div>`}
-            ${p.custo?`<span style="font-size:10px;color:${((p.valor||0)-(p.custo||0))>=0?'var(--green)':'var(--red)'};font-weight:700"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M9.5 3h5l-1 3h-3Z"/><path d="M8.5 6c-3 2.5-4.5 6-4.5 9a5 5 0 0 0 5 6h6a5 5 0 0 0 5-6c0-3-1.5-6.5-4.5-9"/><path d="M12 11v6M10 13.5h3a1.5 1.5 0 0 1 0 3h-3"/></svg> ${fmt((p.valor||0)-(p.custo||0))}</span>`:''}
+            ${p.custo?`<span style="font-size:10px;color:${(window._lucroPedido(p))>=0?'var(--green)':'var(--red)'};font-weight:700"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M9.5 3h5l-1 3h-3Z"/><path d="M8.5 6c-3 2.5-4.5 6-4.5 9a5 5 0 0 0 5 6h6a5 5 0 0 0 5-6c0-3-1.5-6.5-4.5-9"/><path d="M12 11v6M10 13.5h3a1.5 1.5 0 0 1 0 3h-3"/></svg> ${fmt((p.valor||0)-(p.custo||0))}</span>`:''}
             <div style="display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end;margin-top:2px">
               <button onclick="event.stopPropagation();gerarImagemRecibo('${p.id}')" style="font-size:10px;background:var(--pink-l);color:var(--pink);border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m4 18 5-4 4 3 3-2 4 3"/></svg> Recibo</button>
               <button onclick="event.stopPropagation();enviarLembreteWhatsApp('${p.id}')" style="font-size:10px;background:#dcfce7;color:#15803d;border:none;border-radius:12px;padding:3px 8px;cursor:pointer;font-weight:700"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5Z"/></svg> Lembrete</button>
@@ -2457,14 +2470,67 @@ function recalcularTotalManual() {
   if (valorHid) valorHid.value = man;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   TAXA DE ENTREGA E UBER NÃO SÃO LUCRO (05/10/2026)
+
+   A Suzana cobrou R$ 16,10 de Uber num pedido de R$ 71,00 e o app mostrou
+   lucro de R$ 61,83 — contando a corrida como ganho. Não é: esse dinheiro
+   entra e sai no mesmo dia, ela só repassa ao motorista.
+
+   REGRA: item de repasse (taxa, frete, Uber, motoboy, entrega) continua no
+   TOTAL do pedido — a cliente paga mesmo —, mas sai do lucro. O lucro passa
+   a ser: total − repasses − material.
+
+   Vale para a tela do pedido, a lista, a Análise, o relatório e o Excel:
+   todos usam `_lucroPedido`, para não existirem duas contas diferentes.  */
+/* ⚠️ 05/10/2026, decidido pela Suzana: **SÓ UBER**.
+   A primeira versão tirava do lucro qualquer taxa (entrega, frete, cartão).
+   Errado: "quando for entrega eu cobro mas não repasso para o marido" — a taxa
+   de entrega que ela mesma faz é dinheiro que FICA, logo é lucro.
+   Uber é o único caso em que o dinheiro entra e sai no mesmo dia.
+   ⚠️ A palavra que o app procura é "uber". Escrevendo "motoboy" no item, ele
+   vai contar como lucro — se um dia ela usar motoboy, é só avisar. */
+window._ehRepasse = function(nome){
+  return /\buber\b/i.test(nome||'');
+};
+window._repasseDoPedido = function(p){
+  var t = ((p && p.itens) || []).reduce(function(s, it){
+    if (!it || !window._ehRepasse(it.nome)) return s;
+    return s + (parseFloat(it.qtd)||1) * (parseFloat(it.preco)||0);
+  }, 0);
+  return Math.round(t*100)/100;
+};
+window._lucroPedido = function(p){
+  var v = parseFloat(p && p.valor)||0, c = parseFloat(p && p.custo)||0;
+  return Math.round((v - window._repasseDoPedido(p) - c)*100)/100;
+};
+
 function calcularLucro() {
   const valor = parseFloat(document.getElementById('p-valor')?.value) || parseFloat(document.getElementById('p-valor-manual')?.value) || 0;
   const custo = parseFloat(document.getElementById('p-custo')?.value) || 0;
-  const lucro = valor - custo;
+  // o que está na tela agora (o pedido ainda não foi salvo)
+  let repasse = 0;
+  try {
+    if (typeof coletarItensPedido === 'function') {
+      repasse = window._repasseDoPedido({ itens: coletarItensPedido() });
+    }
+  } catch(e) {}
+  const lucro = valor - repasse - custo;
   const el = document.getElementById('p-lucro-display');
   if (el) {
     el.textContent = 'R$ ' + lucro.toFixed(2).replace('.',',');
     el.style.color = lucro >= 0 ? 'var(--green)' : '#EF4444';
+    // avisa, senão ela acha que o app errou a conta
+    let nota = document.getElementById('p-lucro-nota');
+    if (!nota) {
+      nota = document.createElement('div');
+      nota.id = 'p-lucro-nota';
+      nota.style.cssText = 'font-size:10px;color:var(--gray-d);margin-top:2px;line-height:1.3';
+      el.parentElement && el.parentElement.appendChild(nota);
+    }
+    nota.textContent = repasse > 0
+      ? 'não conta R$ ' + repasse.toFixed(2).replace('.',',') + ' de Uber — vira despesa no Financeiro'
+      : '';
   }
 }
 
@@ -2937,8 +3003,14 @@ function salvarFin() {
       const vItem = parseFloat(l.valor) || 0;
       if (qtd > 0 && nomeItem) {
         const unit = Math.round((vItem / qtd) * 100) / 100;
-        // Sem controle de estoque desde 17/09/2026: a compra marcada vira ITEM
-        // AVULSO para vender, com o custo por unidade. Nome igual atualiza o custo.
+        /* Sem controle de estoque desde 17/09/2026: a compra marcada CADASTRA O
+           MATERIAL com o preço por unidade, que é o que o pedido puxa depois.
+           ⚠️ 28/09/2026 — era chamado de "item avulso para vender" e a Suzana
+           corrigiu: a cola de um kit nunca vai ser vendida sozinha, mas precisa
+           do preço por unidade igual. Vender solto é decisão de depois; aqui é
+           o cadastro do material. Por dentro continua com a marca `avulso`
+           (é o que faz ele aparecer no seletor do pedido) — mudou o nome que
+           ela lê, não o mecanismo. */
         const nmAv = nomeItem.toLowerCase();
         const ix = catalogo.findIndex(p => p && p.avulso && (p.nome||'').toLowerCase().trim() === nmAv);
         let itemId;
@@ -2953,7 +3025,7 @@ function salvarFin() {
         nAdd++;
       }
     });
-    if (nAdd) { obj.avulsosCadastrados = entradas; msgEstoque = ' · ' + nAdd + ' item(ns) avulso(s) cadastrado(s)'; }
+    if (nAdd) { obj.avulsosCadastrados = entradas; msgEstoque = ' · ' + nAdd + ' material(is) cadastrado(s)'; }
   }
 
   save();
@@ -4889,7 +4961,8 @@ function gerarPDF(tipo) {
     });
     const fat = pp.reduce((s,p)=>s+(p.valor||0),0);
     const cst = pp.reduce((s,p)=>s+(p.custo||0),0);
-    const luc = fat-cst;
+    const rep = pp.reduce((s,p)=>s+window._repasseDoPedido(p),0);   // taxa/entrega não é lucro
+    const luc = fat-cst-rep;
     const mg  = fat>0 ? Math.round(luc/fat*100) : 0;
     const ent = pp.filter(p=>p.status==='Entregue').length;
     const rec = pp.reduce((s,p)=>s+(p.sinal||0),0);
@@ -4906,7 +4979,7 @@ function gerarPDF(tipo) {
       '<div class="sec"><div class="sec-t">Pedidos do Periodo ('+pp.length+')</div>' +
       '<table><tr><th>Cliente</th><th>Produto</th><th>Entrega</th><th>Valor</th><th>Custo</th><th>Lucro</th><th>Status</th></tr>' +
       (pp.length ? pp.map(p=>{
-        const l=(p.valor||0)-(p.custo||0);
+        const l=window._lucroPedido(p);
         return '<tr><td>'+escape2(p.cliente||'—')+'</td><td>'+escape2(p.produto||'—')+'</td><td>'+DT(p.dataEntrega)+'</td><td>'+R(p.valor)+'</td><td>'+(p.custo?R(p.custo):'—')+'</td><td style="color:'+(l>=0?'#22C55E':'#EF4444')+'">'+(p.custo?R(l):'—')+'</td><td>'+escape2(p.status||'')+'</td></tr>';
       }).join('')+'<tr class="tot"><td colspan="3">TOTAL</td><td>'+R(fat)+'</td><td>'+R(cst)+'</td><td>'+R(luc)+'</td><td>'+ent+' entregues</td></tr>'
       : '<tr><td colspan="7" style="text-align:center;padding:20px;color:#aaa">Nenhum pedido neste periodo</td></tr>') +
@@ -5077,7 +5150,7 @@ function exportarPedidosExcel() {
     const cust = p.custo||0;
     return [
       i+1, p.cliente||'', p.whats||'', p.produto||'', DT(p.dataEntrega),
-      p.status||'', val, pago, rest, cust, val-cust, p.pgto||'', p.obs||''
+      p.status||'', val, pago, rest, cust, window._lucroPedido(p), p.pgto||'', p.obs||''
     ];
   });
   // Totals row
@@ -5085,7 +5158,8 @@ function exportarPedidosExcel() {
   const totPago = sorted.reduce((s,p)=>s+(p.sinal||0),0);
   const totRest = sorted.reduce((s,p)=>s+Math.max(0,(p.valor||0)-(p.sinal||0)),0);
   const totCust = sorted.reduce((s,p)=>s+(p.custo||0),0);
-  resumoRows.push(['','','','','','TOTAL',totVal,totPago,totRest,totCust,totVal-totCust,'','']);
+  const totRep  = sorted.reduce((s,p)=>s+window._repasseDoPedido(p),0);   // taxa/entrega não é lucro
+  resumoRows.push(['','','','','','TOTAL',totVal,totPago,totRest,totCust,totVal-totCust-totRep,'','']);
 
   const ws1 = XLSX.utils.aoa_to_sheet([...resumoHeader, ...resumoRows]);
   ws1['!cols'] = [
@@ -5157,7 +5231,8 @@ function gerarPDFPedidosCompleto() {
 
   const totFat  = sorted.reduce((s,p) => s+(p.valor||0), 0);
   const totCust = sorted.reduce((s,p) => s+(p.custo||0), 0);
-  const totLuc  = totFat - totCust;
+  const totRep  = sorted.reduce((s,p) => s+window._repasseDoPedido(p), 0);   // taxa/entrega não é lucro
+  const totLuc  = totFat - totCust - totRep;
   const entregues = sorted.filter(p => p.status==='Entregue').length;
   const hoje = new Date().toLocaleDateString('pt-BR');
 
@@ -5166,7 +5241,7 @@ function gerarPDFPedidosCompleto() {
   sorted.forEach((p, i) => {
     const cor  = STATUS_COR[p.status] || '#888';
     const mats = p.materiais || [];
-    const lucro = (p.valor||0) - (p.custo||0);
+    const lucro = window._lucroPedido(p);
     const nMats = mats.length;
 
     // Pedido header row (spans materiais)
@@ -9522,23 +9597,108 @@ function _mudarFiltroMes(val){
 
 <!-- ════════ ÚLTIMA ATUALIZAÇÃO (carimbo de data/hora) — Claude jun/2026 ════════ -->
 <script>
+/* ═══════════════════════════════════════════════════════════════════════
+   ESTADO HONESTO DA SINCRONIZAÇÃO (23/09/2026)
+
+   O QUE ACONTECEU
+   Um pedido lançado no celular não apareceu no computador. Os DOIS aparelhos
+   mostravam "✓" com data e hora — e mesmo assim não tinham conversado.
+   O motivo: o save() carimbava "✓ agora" na hora de salvar no aparelho, antes
+   de saber se o Firebase tinha aceitado a gravação. Se a gravação falhasse,
+   a falha ia só para o console (console.warn), que ninguém abre. O app
+   continuava dizendo que estava tudo sincronizado.
+
+   A REGRA AGORA
+   O ✓ só aparece quando o Firebase CONFIRMA a gravação. Enquanto não
+   confirma, a linha diz que tem coisa esperando; se demora, vira aviso
+   tocável que tenta de novo e mostra o motivo. Erro de leitura da nuvem
+   (regras vencidas, sem internet) também aparece na tela, não só no console.
+   ═══════════════════════════════════════════════════════════════════════ */
+window._syncEstado = { pendenteDesde:0, erro:'', esperandoTela:0 };
+try{
+  window._syncEstado.pendenteDesde = parseFloat(localStorage.getItem('ts_pendenteDesde')||'0')||0;
+  window._syncEstado.erro = localStorage.getItem('ts_syncErro')||'';
+}catch(e){}
+
+function _gravaEstadoSync(){
+  try{
+    localStorage.setItem('ts_pendenteDesde', String(window._syncEstado.pendenteDesde||0));
+    localStorage.setItem('ts_syncErro', window._syncEstado.erro||'');
+  }catch(e){}
+}
+
+/* alteração local feita: a partir daqui existe coisa que a nuvem não tem */
+window._marcarPendente = function(){
+  if(!window._syncEstado.pendenteDesde) window._syncEstado.pendenteDesde = Date.now();
+  _gravaEstadoSync();
+  if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
+};
+/* o Firebase confirmou: agora sim o ✓ é verdade */
+window._marcarEnviado = function(){
+  window._syncEstado.pendenteDesde = 0;
+  window._syncEstado.erro = '';
+  try{ localStorage.setItem('ts_ultimaSync', String(Date.now())); }catch(e){}
+  _gravaEstadoSync();
+  if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
+};
+/* falhou: guarda o motivo e continua pendente (não apaga nada) */
+window._marcarFalha = function(cod){
+  window._syncEstado.erro = String(cod||'erro');
+  if(!window._syncEstado.pendenteDesde) window._syncEstado.pendenteDesde = Date.now();
+  _gravaEstadoSync();
+  if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
+};
+/* nome antigo: o save() chama este. Salvar = ficou pendente, nunca "sincronizado". */
+window._marcarSync = window._marcarPendente;
+
+window._tentarSyncAgora = function(){
+  window._syncEstado.erro = '';
+  if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
+  if(typeof window._fbPush==='function') window._fbPush();
+  if(typeof window._drenarQuandoLivre==='function') window._drenarQuandoLivre();
+};
+
+window._textoSync = function(agora){
+  var ver='v05/10-c64';
+  var e=window._syncEstado||{}, t=0;
+  try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
+  agora = agora || Date.now();
+  if(e.erro) return { txt:ver+' · ⚠️ não enviou ('+e.erro+') — toque', alerta:true };
+  if(e.esperandoTela && (agora-e.esperandoTela) > 12000)
+    return { txt:ver+' · ⚠️ novidade da nuvem esperando — feche o formulário', alerta:true };
+  if(e.pendenteDesde){
+    if((agora-e.pendenteDesde) > 25000) return { txt:ver+' · ⚠️ falta enviar — toque', alerta:true };
+    return { txt:ver+' · enviando…', alerta:false };
+  }
+  if(!t) return { txt:ver+' · sem sync ainda', alerta:false };
+  var d=new Date(t);
+  var dd=('0'+d.getDate()).slice(-2), mm=('0'+(d.getMonth()+1)).slice(-2);
+  var hh=('0'+d.getHours()).slice(-2), mi=('0'+d.getMinutes()).slice(-2);
+  return { txt:ver+' · ✓ em dia '+dd+'/'+mm+' '+hh+':'+mi, alerta:false };
+};
+
 window._renderUltimaSync = function(){
   try{
     var els=document.querySelectorAll('.ultima-sync'); if(!els.length) return;
-    var t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0');
-    var ver='v20/09-c60';
-    var txt;
-    if(!t){ txt=ver+' · sem sync ainda'; }
-    else{
-      var d=new Date(t);
-      var dd=('0'+d.getDate()).slice(-2), mm=('0'+(d.getMonth()+1)).slice(-2);
-      var hh=('0'+d.getHours()).slice(-2), mi=('0'+d.getMinutes()).slice(-2);
-      txt=ver+' · ✓ '+dd+'/'+mm+' '+hh+':'+mi;
-    }
-    els.forEach(function(el){ el.textContent=txt; });
+    var s=window._textoSync();
+    els.forEach(function(el){
+      el.textContent=s.txt;
+      el.style.fontWeight = s.alerta ? '700' : '';
+      el.style.opacity    = s.alerta ? '1'   : '';
+      el.style.color      = s.alerta ? '#C2185B' : '';   // aviso tem que saltar aos olhos
+      el.style.cursor     = s.alerta ? 'pointer' : '';
+      el.onclick = s.alerta ? function(){ window._tentarSyncAgora(); } : null;
+    });
   }catch(e){}
 };
-window._marcarSync = function(){ try{ localStorage.setItem('ts_ultimaSync', String(Date.now())); window._renderUltimaSync(); }catch(e){} };
+/* redesenha sozinha: "enviando…" vira aviso se passar do tempo, e tenta de novo */
+setInterval(function(){
+  try{
+    var e=window._syncEstado||{};
+    if(e.pendenteDesde && (Date.now()-e.pendenteDesde) > 20000 && typeof window._fbPush==='function') window._fbPush();
+    if(typeof window._renderUltimaSync==='function') window._renderUltimaSync();
+  }catch(x){}
+}, 10000);
 window.addEventListener('load', function(){ setTimeout(window._renderUltimaSync, 300); });
 </script>
 
@@ -9571,6 +9731,21 @@ function appLockInit(){
     if(precisa) setTimeout(function(){ var i=document.getElementById('app-lock-input'); if(i) i.focus(); },200);
   }
 }
+/* Esqueci a senha — manda o e-mail de troca para a conta do app.
+   Não mostra nem guarda senha nenhuma: quem troca é a Suzana, no e-mail. */
+async function appLockEsqueci(){
+  var err=document.getElementById('app-lock-err');
+  if(!(typeof window._fbEsqueciSenha==='function' && window._fbOn)){
+    if(err) err.textContent='Precisa de internet para pedir a troca.';
+    return;
+  }
+  if(err) err.textContent='Enviando...';
+  var r=await window._fbEsqueciSenha();
+  if(err) err.textContent = r && r.ok
+    ? 'Enviei um e-mail para a conta do app (tiasu.baloesepersonalizados@gmail.com). Abra o Gmail, troque a senha e volte aqui.'
+    : 'Não consegui enviar ('+((r&&r.err)||'erro')+').';
+}
+
 async function appLockTryUnlock(){
   var inp=document.getElementById('app-lock-input'); var err=document.getElementById('app-lock-err');
   var val=(inp&&inp.value||'').trim();
@@ -10688,6 +10863,21 @@ else appLockInit();
   }
   window._chaveProduto=chaveNome;
   window._quantoTem=function(nome){ var r=produtoOuEstoque(nome); return r ? r.qtd : 0; };
+
+  /* ⚠️ 28/09/2026 — A BOLINHA LARANJA QUE NÃO APAGAVA.
+     A Suzana comprou a sacola, lançou no Financeiro, salvou a quantidade — e no
+     pedido o material continuava com a bolinha laranja de "precisa comprar".
+     Motivo: `checarEstoqueNome` (lá em cima, de antes da virada de 17/09) olhava
+     SÓ a lista antiga `estoque`. Material comprado hoje é cadastrado no CATÁLOGO,
+     então nunca era encontrado e o veredito era sempre "pendente".
+     Agora usa o mesmo lugar que a pergunta "Quer ajustar o estoque?" grava. */
+  window.checarEstoqueNome=function(nome, qtd){
+    if(!nome || !String(nome).trim()) return 'pendente';
+    var r=produtoOuEstoque(nome);
+    if(!r) return 'pendente';                       // nunca comprado: comprar mesmo
+    var precisa=parseFloat(qtd)||1;
+    return (r.qtd>0 && r.qtd>=precisa) ? 'coberto' : 'pendente';
+  };
   window._guardarQuantidade=function(nome, qtd){
     var r=produtoOuEstoque(nome); if(!r) return false;
     r.obj.qtd=Math.max(0, R2(qtd)); r.obj.updatedAt=Date.now();
@@ -10731,13 +10921,27 @@ else appLockInit();
     closeModal('modal-estoque-compra');
     toast(n ? ('Estoque ajustado em '+n+' material(is)') : 'Nada para ajustar');
   };
-  /* a compra lançada no Financeiro chama a pergunta */
+  /* A compra lançada no Financeiro chama a pergunta.
+
+     ⚠️ 25/09/2026 — BUG CORRIGIDO. Antes isto procurava na lista inteira o
+     PRIMEIRO lançamento com materiais ainda não perguntados. Só que lançamento
+     novo entra no FIM da lista (financeiro.push) e os antigos — feitos no outro
+     aparelho, ou antes desta tela existir — nunca tiveram a marca `_perguntei`.
+     Resultado: ao lançar a compra de uma xícara, a pergunta mostrava o FOIL 28"
+     e o balão 260 de uma compra velha, e a xícara não aparecia.
+
+     Agora anota quais lançamentos existiam ANTES de salvar e pergunta só pelo
+     que nasceu nesta gravação — o que a Suzana acabou de digitar, sempre. */
   var salvarFinOrig=window.salvarFin;
   window.salvarFin=function(){
+    var antes={};
+    try{ (typeof financeiro!=='undefined'?financeiro:[]).forEach(function(f){ if(f&&f.id) antes[f.id]=1; }); }catch(e){}
     var ret=salvarFinOrig.apply(this, arguments);
     try{
       var nova=(typeof financeiro!=='undefined'?financeiro:[]).filter(function(f){
-        return f && f.avulsosCadastrados && f.avulsosCadastrados.length && !f._perguntei; })[0];
+        return f && f.id && !antes[f.id]            // nasceu agora, nesta gravação
+            && f.avulsosCadastrados && f.avulsosCadastrados.length
+            && !f._perguntei; })[0];
       if(nova){ nova._perguntei=1; setTimeout(function(){ window._perguntarEstoqueCompra(nova.avulsosCadastrados); }, 350); }
     }catch(e){ console.warn('[enxuto] estoque da compra', e); }
     return ret;
@@ -10899,8 +11103,51 @@ else appLockInit();
     }catch(e){ console.warn('[enxuto] custo do pedido', e); }
     try{ cadastrarMateriaisNovos(); }catch(e){ console.warn('[enxuto] cadastro de material', e); }
     try{ guardarMontagensDaTela(); }catch(e){ console.warn('[enxuto] montagem', e); }
+    try{ _despesaDoUber(idAntes ? pedidos.find(function(x){ return x.id===idAntes; })
+                                : pedidos.find(function(x){ return !antes[x.id]; })); }
+    catch(e){ console.warn('[enxuto] despesa do uber', e); }
     return ret;
   };
+
+  /* ═══════════════════════════════════════════════════════════════════
+     A DESPESA DO UBER NASCE SOZINHA (05/10/2026)
+
+     Pedido com item de Uber: além de sair do lucro, o valor vira despesa
+     no Financeiro (Despesa Variável · Frete/Entrega), sem ela digitar.
+
+     Um lançamento por pedido, marcado com `doPedido`: salvar o mesmo
+     pedido de novo ATUALIZA em vez de duplicar, e tirar o item de Uber
+     apaga o lançamento. Só mexe no que o próprio app criou — lançamento
+     digitado à mão nunca é tocado.                                      */
+  function _despesaDoUber(p){
+    if(!p || !p.id || typeof financeiro==='undefined') return;
+    var valor = window._repasseDoPedido(p);
+    var marca = 'uber:' + p.id;
+    var ja = financeiro.filter(function(f){ return f && f.doPedido===marca; })[0];
+
+    if(valor <= 0){                                   // tirou o Uber do pedido
+      if(ja){
+        financeiro = financeiro.filter(function(f){ return f!==ja; });
+        try{ DB.set('fin', financeiro); }catch(e){}
+        save(); toast('Despesa do Uber removida');
+      }
+      return;
+    }
+    if(ja){
+      if(R2(ja.valor)!==R2(valor)){ ja.valor=R2(valor); ja.updatedAt=Date.now(); save(); }
+      return;
+    }
+    financeiro.unshift({
+      id: uid(), tipo:'Despesa Variável', cat:'Frete/Entrega',
+      valor: R2(valor),
+      desc: 'Uber — ' + (p.produto || 'pedido') + ' | ' + (p.cliente || ''),
+      data: (p.dataEntrega || today()), pgto: 'PIX',
+      doPedido: marca, updatedAt: Date.now(),
+    });
+    save();
+    toast('Uber de ' + fmt(valor) + ' lançado no Financeiro');
+  }
+  window._despesaDoUber = _despesaDoUber;
   /* o que ela montou fica guardado pelo NOME do item: no próximo pedido
      com o mesmo nome, os materiais voltam sozinhos */
   function guardarMontagensDaTela(){
@@ -11023,7 +11270,13 @@ else appLockInit();
   window.openModal=function(id, isNew){
     if(id==='modal-pedido'){ window._seedLinhas(); window._atualizarListaProdutos(); window._sugerirMateriais(); }
     var ret=openOrig.apply(this, arguments);
-    if(id==='modal-fin' && isNew){ var c=document.getElementById('f-add-estoque'); if(c) c.checked=false; }
+    /* 28/09/2026: passou de desmarcado para MARCADO. Quando esta caixa queria
+       dizer "vender avulso", começar desligada fazia sentido. Só que ela é o
+       cadastro do MATERIAL com o preço por unidade — e todo material comprado
+       precisa disso para o pedido puxar o custo depois. Continua podendo
+       desmarcar; deixou de ser o padrão. Este é o ÚNICO lugar que decide isso:
+       este wrapper roda depois do resetModal e vence. */
+    if(id==='modal-fin' && isNew){ var c=document.getElementById('f-add-estoque'); if(c) c.checked=true; }
     return ret;
   };
 
@@ -11732,6 +11985,16 @@ else appLockInit();
   };
   window._fbLogout=function(){ try{ if(window._fbOn) firebase.auth().signOut(); }catch(e){} };
 
+  /* e-mail de troca de senha para a conta do app (usado pelo "Esqueci a senha") */
+  window._fbEsqueciSenha=function(){
+    return new Promise(function(res){
+      if(!window._fbOn){ res({ok:false,err:'sem internet'}); return; }
+      firebase.auth().sendPasswordResetEmail(EMAIL)
+        .then(function(){ res({ok:true}); })
+        .catch(function(e){ res({ok:false,err:(e&&e.code)||'erro'}); });
+    });
+  };
+
   function _dadosLocais(){
     return { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo,
       clientes:clientes, fornecedores:(typeof fornecedores!=='undefined'?fornecedores:[]),
@@ -11743,13 +12006,15 @@ else appLockInit();
   }
   window._fbPush=function(){
     try{
-      if(!window._fbOn || !fdoc || !firebase.auth().currentUser) return;
+      /* Sem login ou sem SDK não adianta tentar — mas isso NÃO é "enviado":
+         fica pendente e a linha avisa, senão volta a mentira antiga. */
+      if(!window._fbOn || !fdoc){ if(window._marcarFalha) window._marcarFalha('sem conexão'); return; }
+      if(!firebase.auth().currentUser){ if(window._marcarFalha) window._marcarFalha('sem login'); return; }
       var ts=Date.now();
-      localStorage.setItem('ts_ultimaSync', String(ts));
       fdoc.set({ payload: JSON.stringify(_dadosLocais()), updatedAt: ts })
-        .then(function(){ if(typeof window._renderUltimaSync==='function') window._renderUltimaSync(); })
-        .catch(function(e){ console.warn('[FB] push', e); });
-    }catch(e){ console.warn('[FB] push ex', e); }
+        .then(function(){ if(window._marcarEnviado) window._marcarEnviado(); })   // ✓ só aqui
+        .catch(function(e){ console.warn('[FB] push', e); if(window._marcarFalha) window._marcarFalha((e&&e.code)||'falhou'); });
+    }catch(e){ console.warn('[FB] push ex', e); if(window._marcarFalha) window._marcarFalha('falhou'); }
   };
   window._fbPushDebounced=function(){ clearTimeout(_pushTimer); _pushTimer=setTimeout(window._fbPush,1200); };
 
@@ -11844,7 +12109,12 @@ else appLockInit();
               // aqui, o próprio _aplicarRemoto envia a união em seguida.
               _aplicarRemoto(snap.data());
             }catch(e){ console.warn('[FB] snapshot', e); }
-          }, function(err){ console.warn('[FB] snapshot', err); });
+          }, function(err){
+            /* Erro de LEITURA (regras vencidas, sem internet, projeto trocado):
+               antes morria no console e o app seguia dizendo que estava em dia. */
+            console.warn('[FB] snapshot', err);
+            if(window._marcarFalha) window._marcarFalha('ler: '+((err&&err.code)||'falhou'));
+          });
         }
       }
     });
