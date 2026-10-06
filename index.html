@@ -3002,7 +3002,13 @@ function salvarFin() {
       const un  = l.un || 'un';
       const vItem = parseFloat(l.valor) || 0;
       if (qtd > 0 && nomeItem) {
-        const unit = Math.round((vItem / qtd) * 100) / 100;
+        /* 06/10/2026: "rende" = quanto vem em cada rolo/pacote. O material passa
+           a guardar o custo POR UNIDADE DE USO (o metro da fita), e o estoque
+           entra na mesma unidade: 2 rolos de 10 m = 20 m. */
+        const rende = parseFloat(l.rende) > 0 ? parseFloat(l.rende) : 1;
+        const unit = window._custoDeUso(l);
+        const qtdUso = Math.round(qtd * rende * 100) / 100;
+        const unUso = rende > 1 ? (/rolo/i.test(un) ? 'm' : 'un') : un;
         /* Sem controle de estoque desde 17/09/2026: a compra marcada CADASTRA O
            MATERIAL com o preço por unidade, que é o que o pedido puxa depois.
            ⚠️ 28/09/2026 — era chamado de "item avulso para vender" e a Suzana
@@ -3016,12 +3022,16 @@ function salvarFin() {
         let itemId;
         if (ix >= 0) {
           if (unit > 0) { catalogo[ix].custo = unit; catalogo[ix].matCusto = unit; }
+          if (rende > 1) { catalogo[ix].un = unUso; catalogo[ix].rende = rende; }
+          catalogo[ix].updatedAt = Date.now();
           itemId = catalogo[ix].id;
         } else {
           itemId = uid();
-          catalogo.push({ id: itemId, avulso: true, nome: nomeItem, cat: 'Avulso', un: un, custo: unit, matCusto: unit, preco: 0, mg: 0 });
+          catalogo.push({ id: itemId, avulso: true, nome: nomeItem, cat: 'Avulso', un: unUso,
+                          custo: unit, matCusto: unit, preco: 0, mg: 0,
+                          rende: (rende > 1 ? rende : undefined) });
         }
-        entradas.push({ itemId: itemId, nome: nomeItem, qtd: qtd });
+        entradas.push({ itemId: itemId, nome: nomeItem, qtd: qtdUso, un: unUso });
         nAdd++;
       }
     });
@@ -3527,6 +3537,12 @@ function atualizarStatusMaterial(rowId) {
 
 // ── CUSTO REAL: puxa o preço unitário do material do estoque (que veio da última despesa) ──
 function precoMaterial(nome){
+  /* ⚠️ 06/10/2026 — ordem invertida de propósito. Isto lia SÓ a lista antiga
+     `estoque`, onde a fita está pelo preço do ROLO. O preço bom (o do metro)
+     fica no cadastro do material, atualizado a cada compra. Então o cadastro
+     manda, e o estoque antigo só vale quando não há cadastro. */
+  var doCadastro = (typeof window._precoTeto === 'function') ? window._precoTeto(nome) : 0;
+  if (doCadastro > 0) return doCadastro;
   const e = (typeof _matchEstoque === 'function') ? _matchEstoque(nome) : null;
   return (e && parseFloat(e.preco) > 0) ? parseFloat(e.preco) : 0;
 }
@@ -7808,7 +7824,18 @@ function confirmarCompraItem_OLD_DESATIVADA(){
 </style>
 <script>
 /* DICA DE UNIDADE NO PEDIDO E NA FICHA (Claude jun/2026) */
-function _unidadeDoNome(nome){ var it=_estoqueAchaPorNome(nome); return it?(it.un||'un'):''; }
+function _unidadeDoNome(nome){
+  /* mesma troca de ordem: a fita cadastrada hoje é 'm', e é isso que ela
+     precisa ver na linha do pedido para digitar 0,5 sem medo. */
+  try{
+    if(typeof window._chaveProduto==='function' && typeof catalogo!=='undefined'){
+      var k=window._chaveProduto(nome);
+      var p=catalogo.filter(function(x){ return x && x.avulso && window._chaveProduto(x.nome)===k; })[0];
+      if(p && p.un) return p.un;
+    }
+  }catch(e){}
+  var it=_estoqueAchaPorNome(nome); return it?(it.un||'un'):'';
+}
 function _updMatUn(rowId){
   var row=document.getElementById(rowId); if(!row) return;
   var span=row.querySelector('.mat-un'); if(!span) return;
@@ -8869,7 +8896,7 @@ function _toggleEstoqueFin(){
     _popularDatalistEstoqueFin();
     if(!_estLinhas.length){
       var v=parseFloat((document.getElementById('f-valor')||{}).value)||0;
-      _estLinhas=[{nome:(document.getElementById('f-desc').value||'').trim(), qtd:'', un:'un', valor:(v||'')}];
+      _estLinhas=[{nome:(document.getElementById('f-desc').value||'').trim(), qtd:'', un:'un', valor:(v||''), rende:''}];
     }
     var campos=document.getElementById('f-estoque-campos');
     var chk=document.getElementById('f-add-estoque');
@@ -8881,11 +8908,28 @@ function _popularDatalistEstoqueFin(){
   var dl=document.getElementById('f-est-datalist'); if(!dl) return;
   dl.innerHTML=(estoque||[]).map(function(e){return '<option value="'+String(e.nome||'').replace(/"/g,'&quot;')+'">';}).join('');
 }
+/* Quanto custa UMA unidade de uso: um metro de fita, uma folha, uma peça.
+   valor ÷ (quantidade comprada × quanto vem em cada). Sem "rende", é 1. */
+window._custoDeUso = function(l){
+  var q = parseFloat(l && l.qtd)||0;
+  var r = parseFloat(l && l.rende)||1;  if(r<=0) r=1;
+  if(q<=0) return 0;
+  return Math.round(((parseFloat(l && l.valor)||0)/(q*r))*100)/100;
+};
+/* "Custo por metro" diz muito mais que "custo unit" quando o rolo tem 10 m */
+window._rotuloCustoUso = function(l){
+  var r = parseFloat(l && l.rende)||1;
+  if(r<=1) return 'Custo unit';
+  var u = (l && l.un)||'';
+  if(/rolo/i.test(u)) return 'Custo por metro';
+  if(/folha|pacote|caixa|cento/i.test(u)) return 'Custo por unidade';
+  return 'Custo por unidade de uso';
+};
 function _renderEstLinhasFin(){
   var box=document.getElementById('f-est-linhas'); if(!box) return;
   var UNS=['un','kg','g','m','pacote','rolo','caixa','folha','par'];
   box.innerHTML=_estLinhas.map(function(l,i){
-    var unit=(parseFloat(l.qtd)>0)?(parseFloat(l.valor||0)/parseFloat(l.qtd)):0;
+    var unit=window._custoDeUso(l);
     var uns=UNS.map(function(u){return '<option'+(l.un===u?' selected':'')+'>'+u+'</option>';}).join('');
     var rm=(_estLinhas.length>1)?('<button type="button" onclick="_removeEstLinhaFin('+i+')" style="background:none;border:none;color:var(--red);font-size:20px;line-height:1;cursor:pointer;padding:0 4px">\u00d7</button>'):'';
     return '<div style="background:#fff;border-radius:10px;padding:8px 10px;margin-bottom:8px">'
@@ -8898,7 +8942,17 @@ function _renderEstLinhasFin(){
         +'<select class="form-select" style="font-size:13px" onchange="_updEstLinhaFin('+i+",'un',this.value)\">"+uns+'</select>'
         +'<input class="form-input" style="font-size:13px" type="number" step="0.01" min="0" placeholder="R$ item" value="'+((l.valor!==''&&l.valor!=null)?l.valor:'')+'" oninput="_updEstLinhaFin('+i+",'valor',this.value)\">"
       +'</div>'
-      +'<div style="font-size:11px;color:var(--cyan-d);font-weight:700;text-align:right;margin-top:4px">Custo unit: <span id="f-est-unit-'+i+'">'+fmt(unit)+'</span></div>'
+        /* ⚠️ 06/10/2026 — ROLO x METRO. A fita entrava no kit pelo preço do ROLO
+           (R$ 7,80 por "1 fita"). A Suzana: "ele tem que calcular o valor do
+           metro — se o rolo de 10 m custa 10,00 é 1,00 o metro; a qtde é em
+           metro no consumo". Aqui ela diz quanto vem em cada rolo/pacote e o
+           app guarda o custo POR METRO (ou por unidade de uso). */
+      +'<div style="display:flex;gap:6px;align-items:center;margin-top:6px">'
+        +'<span style="font-size:11px;color:var(--cyan-d);white-space:nowrap">vem com</span>'
+        +'<input class="form-input" style="font-size:13px;max-width:90px" type="number" step="0.01" min="0" placeholder="1" value="'+((l.rende!==''&&l.rende!=null)?l.rende:'')+'" oninput="_updEstLinhaFin('+i+",'rende',this.value)\">"
+        +'<span style="font-size:11px;color:var(--cyan-d)">em cada '+(l.un||'un')+' — metros, folhas, unidades. Vazio = 1</span>'
+      +'</div>'
+      +'<div style="font-size:11px;color:var(--cyan-d);font-weight:700;text-align:right;margin-top:4px">'+window._rotuloCustoUso(l)+': <span id="f-est-unit-'+i+'">'+fmt(unit)+'</span></div>'
     +'</div>';
   }).join('');
   _atualizaSomaEstFin();
@@ -8906,20 +8960,20 @@ function _renderEstLinhasFin(){
 function _updEstLinhaFin(i, campo, val){
   if(!_estLinhas[i]) return;
   _estLinhas[i][campo]=val;
-  if(campo==='qtd'||campo==='valor'){
+  if(campo==='qtd'||campo==='valor'||campo==='rende'){
     var l=_estLinhas[i];
-    var unit=(parseFloat(l.qtd)>0)?(parseFloat(l.valor||0)/parseFloat(l.qtd)):0;
-    var sp=document.getElementById('f-est-unit-'+i); if(sp) sp.textContent=fmt(unit);
+    var sp=document.getElementById('f-est-unit-'+i); if(sp) sp.textContent=fmt(window._custoDeUso(l));
     _atualizaSomaEstFin();
   }
+  if(campo==='un'||campo==='rende'){ _renderEstLinhasFin(); }   // o rótulo acompanha
 }
 function _addEstLinhaFin(nome, qtd, un, valor){
-  _estLinhas.push({nome:nome||'', qtd:(qtd!=null?qtd:''), un:un||'un', valor:(valor!=null?valor:'')});
+  _estLinhas.push({nome:nome||'', qtd:(qtd!=null?qtd:''), un:un||'un', valor:(valor!=null?valor:''), rende:''});
   _renderEstLinhasFin();
 }
 function _removeEstLinhaFin(i){
   _estLinhas.splice(i,1);
-  if(!_estLinhas.length) _estLinhas=[{nome:'',qtd:'',un:'un',valor:''}];
+  if(!_estLinhas.length) _estLinhas=[{nome:'',qtd:'',un:'un',valor:'',rende:''}];
   _renderEstLinhasFin();
 }
 function _atualizaSomaEstFin(){
@@ -9659,7 +9713,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v05/10-c64';
+  var ver='v06/10-c65';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
