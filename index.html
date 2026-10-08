@@ -6754,10 +6754,14 @@ function exportarExcel() {
     const wb = XLSX.utils.book_new();
 
     // ── Pedidos ──
-    const pedRows = [['ID','Cliente','WhatsApp','Produto','Valor','Sinal','Data Entrega','Status','Pagamento','Obs','Custo','Criado Em']];
+    /* "Como me achou" (p.origem) — 08/10/2026. O campo existe no pedido desde
+       setembro e já ia para a planilha do Google pelo Apps Script, mas faltava
+       aqui: a planilha exportada pelo app saía sem ele. Vazio = ela não
+       perguntou no atendimento. */
+    const pedRows = [['ID','Cliente','WhatsApp','Produto','Valor','Sinal','Data Entrega','Status','Pagamento','Como me achou','Obs','Custo','Criado Em']];
     pedidos.forEach(p => pedRows.push([
       p.id, p.cliente, p.whats, p.produto, p.valor||0, p.sinal||0,
-      p.dataEntrega||'', p.status||'', p.pgto||'', p.obs||'', p.custo||0, p.criadoEm||''
+      p.dataEntrega||'', p.status||'', p.pgto||'', p.origem||'', p.obs||'', p.custo||0, p.criadoEm||''
     ]));
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(pedRows), '<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h4"/></svg> Pedidos');
 
@@ -9725,7 +9729,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v08/10-c67';
+  var ver='v08/10-c68';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();

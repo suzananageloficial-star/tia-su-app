@@ -5,7 +5,7 @@
 // Atualiza sozinho assim que um sw.js novo é detectado.
 
 // >>> Ao subir uma atualização do app, troque a data abaixo para forçar a renovação. <<<
-const CACHE = 'tiasu-v08-10-c67';
+const CACHE = 'tiasu-v08-10-c68';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting(); // ativa a nova versão na hora, sem esperar fechar o app
