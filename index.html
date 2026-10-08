@@ -3022,12 +3022,19 @@ function salvarFin() {
         let itemId;
         if (ix >= 0) {
           if (unit > 0) { catalogo[ix].custo = unit; catalogo[ix].matCusto = unit; }
+          if (catalogo[ix].material == null) catalogo[ix].material = true;
           if (rende > 1) { catalogo[ix].un = unUso; catalogo[ix].rende = rende; }
           catalogo[ix].updatedAt = Date.now();
           itemId = catalogo[ix].id;
         } else {
           itemId = uid();
-          catalogo.push({ id: itemId, avulso: true, nome: nomeItem, cat: 'Avulso', un: unUso,
+          /* material: true — 08/10/2026. "Os materiais que lanço no financeiro
+             não devem ir para o catálogo; catálogo é só kits ou arranjos de
+             balões validados" (Suzana). A marca tira este item da vitrine
+             (Precificação e catálogo gerado) sem tirar do pedido nem da
+             aba Materiais. */
+          catalogo.push({ id: itemId, avulso: true, material: true, nome: nomeItem,
+                          cat: 'Avulso', un: unUso,
                           custo: unit, matCusto: unit, preco: 0, mg: 0,
                           rende: (rende > 1 ? rende : undefined) });
         }
@@ -6802,9 +6809,10 @@ function exportarExcel() {
 
     // ── Catálogo ──
     if (catalogo && catalogo.length > 0) {
-      const catRows = [['ID','Nome','Categoria','Preço','Custo','Notas']];
+      const catRows = [['ID','Tipo','Nome','Categoria','Preço','Custo','Notas']];
       catalogo.filter(p => p && !p.linha).forEach(p => catRows.push([
-        p.id, p.nome||'', p.cat||'', p.preco||0, p.custo||0, p.obs||''
+        p.id, (window._ehMaterial(p) ? 'Material' : 'Produto'),
+        p.nome||'', p.cat||'', p.preco||0, p.custo||0, p.obs||''
       ]));
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catRows), '<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M12 12 4 7v10ZM12 12l8-5v10Z"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg> Catálogo');
     }
@@ -8291,7 +8299,7 @@ var _editandoProdutoId = null;
 
 function renderCatalogo(){
   var el=document.getElementById('catalogo-list'); if(!el) return;
-  if(!catalogo.length){ el.innerHTML=empty('<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M3 12V4a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></svg>','Catálogo vazio','Calcule um preço acima e salve'); return; }
+  if(!window._produtosDoCatalogo().length){ el.innerHTML=empty('<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M3 12V4a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></svg>','Catálogo vazio','Calcule um preço acima e salve'); return; }
   el.innerHTML=catalogo.slice().sort(function(a,b){return (a.nome||'').localeCompare(b.nome||'','pt-BR');}).map(function(p){
     return '<div class="list-item" style="cursor:pointer" onclick="editarProdutoCatalogo(\''+p.id+'\')">'+
       '<div class="li-icon" style="background:var(--yellow-l)"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M3 12V4a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></svg></div>'+
@@ -8352,7 +8360,8 @@ function _popularFiltroCat(){
   var sel=document.getElementById('cat-filtro'); if(!sel) return;
   var atual=sel.value||'__todas__';
   // As linhas do pedido moram no catálogo, mas não são produto: ficam fora da Precificação.
-  var base=catalogo.filter(function(p){ return p && !p.linha; });
+  // E desde 08/10 o material comprado também fica (window._ehMaterial).
+  var base=window._produtosDoCatalogo();
   var cats=[]; base.forEach(function(p){ var c=(p.cat||'Sem categoria'); if(cats.indexOf(c)<0) cats.push(c); });
   cats.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
   var opts='<option value="__todas__">Todas as categorias ('+base.length+')</option>';
@@ -8367,7 +8376,7 @@ function _popularFiltroCat(){
 function _catVisiveis(){
   var sel=document.getElementById('cat-filtro');
   var f=sel?sel.value:'__todas__';
-  var base=catalogo.filter(function(p){ return p && !p.linha; });
+  var base=window._produtosDoCatalogo();
   return (!f||f==='__todas__') ? base : base.filter(function(p){ return (p.cat||'Sem categoria')===f; });
 }
 function _marcarTodosCat(){
@@ -8380,7 +8389,7 @@ function _marcarTodosCat(){
 function renderCatalogo(){
   var el=document.getElementById('catalogo-list'); if(!el) return;
   _popularFiltroCat();
-  if(!catalogo.length){ el.innerHTML=empty('<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M3 12V4a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></svg>','Catálogo vazio','Calcule um preço acima e salve'); return; }
+  if(!window._produtosDoCatalogo().length){ el.innerHTML=empty('<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M3 12V4a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></svg>','Catálogo vazio','Calcule um preço acima e salve'); return; }
   var lista=_catVisiveis();
   if(!lista.length){ el.innerHTML=empty('<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M3 12V4a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></svg>','Nenhum produto nessa categoria','Troque o filtro acima'); return; }
   el.innerHTML=lista.map(function(p){
@@ -8393,15 +8402,18 @@ function renderCatalogo(){
         `<div class="li-title">${_escHtml(p.nome||'')}</div>`+
         `<div class="li-sub">${_escHtml(p.cat||'')} · ${foto?'<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M4 7h3l2-2h6l2 2h3v12H4Z"/><circle cx="12" cy="13" r="3.5"/></svg> ':''}${p.descricao?'<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M4 4h11l5 5v11H4Z"/><path d="M14 4v5h5"/><path d="M8 13h8M8 16h5"/></svg> ':''}margem ${p.mg||0}% · <svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="m4 20 1-4L16 5l3 3L8 19l-4 1Z"/></svg> editar</div>`+
       `</div>`+
-      `<div class="li-right">`+
+      `<div class="li-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">`+
         `<div class="li-value" style="color:var(--pink)">${fmt(p.preco||0)}</div>`+
+      `<div style="display:flex;align-items:center;gap:2px">`+
+        `<button onclick="event.stopPropagation();_marcarComoMaterial('${p.id}')" title="tirar do catálogo: isto é material, não produto" style="font-size:10px;color:var(--cyan-d);background:var(--cyan-l);border:none;border-radius:10px;padding:3px 8px;cursor:pointer">é material</button>`+
         `<button onclick="event.stopPropagation();_excluirProduto('${p.id}')" style="font-size:11px;color:var(--gray-d);background:none;border:none;cursor:pointer;padding:4px">✕</button>`+
+      `</div>`+
       `</div>`+
     `</div>`;
   }).join('');
 }
 function _gerarCatalogo(){
-  if(!catalogo.length){ toast('Catálogo vazio — cadastre produtos antes.'); return; }
+  if(!window._produtosDoCatalogo().length){ toast('Catálogo vazio — cadastre produtos antes.'); return; }
   var ids=[]; document.querySelectorAll('#catalogo-list .cat-sel:checked').forEach(function(c){ ids.push(c.dataset.id); });
   var visiveis=_catVisiveis();
   var prods = ids.length ? catalogo.filter(function(p){ return ids.indexOf(p.id)>=0; }) : visiveis.slice();
@@ -8430,7 +8442,7 @@ function _ensureJsPDF(){
 }
 function _fmtImgPDF(d){ d=String(d||''); if(d.indexOf('data:image/png')===0) return 'PNG'; if(d.indexOf('data:image/webp')===0) return 'WEBP'; return 'JPEG'; }
 async function _gerarCatalogoPDF(){
-  if(!catalogo.length){ toast('Catálogo vazio — cadastre produtos antes.'); return; }
+  if(!window._produtosDoCatalogo().length){ toast('Catálogo vazio — cadastre produtos antes.'); return; }
   var ids=[]; document.querySelectorAll('#catalogo-list .cat-sel:checked').forEach(function(c){ ids.push(c.dataset.id); });
   var visiveis=(typeof _catVisiveis==='function')?_catVisiveis():catalogo.slice();
   var prods = ids.length ? catalogo.filter(function(p){ return ids.indexOf(p.id)>=0; }) : visiveis.slice();
@@ -9713,7 +9725,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v08/10-c66';
+  var ver='v08/10-c67';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -11010,10 +11022,10 @@ else appLockInit();
     var preco=precoDoItem(row);
     var ja=catalogo.filter(function(p){ return p && p.avulso && chaveNome(p.nome)===chaveNome(nome); })[0];
     if(ja){
-      ja.custo=custo; if(preco>0) ja.preco=preco; ja.updatedAt=Date.now();
+      ja.custo=custo; if(preco>0) ja.preco=preco; ja.material=false; ja.updatedAt=Date.now();
       toast('Preço de "'+nome+'" guardado: '+fmt(preco||ja.preco||0));
     }else{
-      catalogo.push({id:'av_'+uid(), nome:nome, avulso:true, custo:custo, preco:preco, un:'un', cat:'Produtos', updatedAt:Date.now()});
+      catalogo.push({id:'av_'+uid(), nome:nome, avulso:true, material:false, custo:custo, preco:preco, un:'un', cat:'Produtos', updatedAt:Date.now()});
     }
     save();
     window._atualizarListaProdutos(); window._sugerirMateriais();
@@ -11716,6 +11728,59 @@ else appLockInit();
   window._abrirProdutos=function(){ window._abrirLinhas(); aba='m'; desenhar(); };
   window._abrirPrecos=function(){ window._abrirLinhas(); aba='p'; desenhar(); };
   /* ═══════════════════════════════════════════════════════════════════════
+     MATERIAL NÃO É PRODUTO — 08/10/2026
+
+     Palavras dela: "os materiais que lanço no financeiro não devem ir para o
+     catálogo; catálogo é só kits ou arranjos de balões validados".
+
+     Os dois moram no mesmo array `catalogo` (é o que faz o material aparecer
+     no seletor do pedido e puxar preço), então a separação é por marca:
+
+       material: true   → despensa. Aparece na aba Materiais e no pedido,
+                          NÃO aparece na Precificação nem no catálogo gerado.
+       material: false  → vitrine. Kit ou arranjo validado.
+       sem marca        → o que já estava cadastrado antes de hoje: vale o
+                          palpite abaixo (a compra sempre gravou cat 'Avulso';
+                          o botão "salvar como produto" grava cat 'Produtos').
+
+     Nada é reescrito nos dados por conta própria: o palpite é calculado na
+     hora. A marca só é gravada quando uma compra nova cadastra o material,
+     quando ela salva um item como produto, ou quando ela corrige à mão pelos
+     dois botões que estão logo abaixo.                                     */
+  window._ehMaterial = function(p){
+    if (!p || !p.avulso) return false;          // produto da Precificação: vitrine
+    if (p.material === true)  return true;
+    if (p.material === false) return false;
+    return (p.cat || '') === 'Avulso';          // palpite para o que é antigo
+  };
+  window._produtosDoCatalogo = function(){
+    return (typeof catalogo !== 'undefined' ? catalogo : [])
+      .filter(function(p){ return p && !p.linha && !window._ehMaterial(p); });
+  };
+
+  /* da vitrine para a despensa (botão na lista da Precificação) */
+  window._marcarComoMaterial = function(id){
+    var p = catalogo.filter(function(x){ return x && x.id === id; })[0]; if (!p) return;
+    if (!confirm('Tirar "' + (p.nome||'') + '" do catálogo?\n\nEle vira material: continua na aba Materiais e no pedido, mas some da Precificação e do catálogo que você manda para cliente.')) return;
+    p.avulso = true; p.material = true; p.updatedAt = Date.now();
+    save();
+    if (typeof renderCatalogo === 'function') renderCatalogo();
+    toast('"' + (p.nome||'') + '" agora é material');
+  };
+
+  /* da despensa para a vitrine (botão no editor da aba Materiais) */
+  window._mandarParaCatalogo = function(id){
+    var p = catalogo.filter(function(x){ return x && x.id === id; })[0]; if (!p) return;
+    p.material = false;
+    if ((p.cat || '') === 'Avulso') p.cat = 'Produtos';
+    p.updatedAt = Date.now();
+    save();
+    if (document.getElementById('modal-material')) closeModal('modal-material');
+    window.renderEstoque();
+    toast('"' + (p.nome||'') + '" foi para o catálogo — ajuste o preço na Precificação');
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════════
      ABA MATERIAIS — UMA LISTA SÓ (08/10/2026)
 
      O problema: a tela listava apenas a lista antiga `estoque`. Os materiais
@@ -11746,8 +11811,12 @@ else appLockInit();
         origem: m.origem,
         estoqueId: m.estoqueId || '',
         prodId: (doCat && doCat.id) || '',
+        /* produto de vitrine (kit, arranjo validado) não é material: fica de
+           fora desta tela. No pedido ele continua aparecendo normalmente. */
+        ehProduto: !!(doCat && doCat.material === false),
       };
-    }).sort(function(a, b){ return (a.nome || '').localeCompare(b.nome || '', 'pt-BR'); });
+    }).filter(function(m){ return !m.ehProduto; })
+      .sort(function(a, b){ return (a.nome || '').localeCompare(b.nome || '', 'pt-BR'); });
   }
 
   window.renderEstoque = function(){
@@ -11840,6 +11909,11 @@ else appLockInit();
         '<div class="form-group"><label class="form-label">Valor por unidade (R$)</label>' +
           '<input class="form-input" id="mt-custo" type="number" step="0.01" min="0" value="' + (parseFloat(m.custo) || 0) + '">' +
           '<div style="font-size:10px;color:var(--gray-d);margin-top:4px">É este valor que entra no custo dos pedidos. Fita comprada em rolo: ponha o preço do metro.</div></div>' +
+      '</div>' +
+      '<div style="border-top:1px solid #ECEEF3;margin-top:4px;padding-top:10px">' +
+        '<button type="button" onclick="_mandarParaCatalogo(\'' + id + '\')" style="width:100%;font-size:11px;color:var(--pink);background:none;border:1px dashed #f0cede;border-radius:10px;padding:7px;cursor:pointer">' +
+          'Na verdade isto é um produto — mandar para o catálogo</button>' +
+        '<div style="font-size:10px;color:var(--gray-d);margin-top:5px;text-align:center">Material fica só aqui e no pedido. Catálogo é kit e arranjo validado.</div>' +
       '</div>' +
       '<div class="form-actions">' +
         '<button class="btn btn-outline" onclick="closeModal(\'modal-material\')">Cancelar</button>' +
