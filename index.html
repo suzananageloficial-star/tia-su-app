@@ -939,7 +939,7 @@ html, body {
     <!-- ESTOQUE -->
     <div id="screen-estoque" class="screen">
       <div class="page-header">
-        <div class="page-title"><svg viewBox="0 0 24 24" style="color:#0BA5EC"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>Estoque</div>
+        <div class="page-title"><svg viewBox="0 0 24 24" style="color:#0BA5EC"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>Materiais</div>
         <div class="page-sub" id="estoque-sub">Controle de materiais</div>
         <button onclick="reconciliarPedidos()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--cyan);color:var(--cyan-d);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></svg>Reconciliar pedidos</button>
         <button onclick="sincronizarBaixasEntregues()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--pink);color:var(--pink);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg>Baixar pedidos entregues</button>
@@ -948,7 +948,7 @@ html, body {
         <button onclick="abrirAtivos()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--purple);color:var(--purple);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>Equipamentos & Ativos</button>
       </div>
       <div id="estoque-alertas"></div>
-      <div class="section-title">Itens em estoque</div>
+      <div class="section-title">Todos os materiais</div>
       <div style="margin-bottom:8px"><input type="search" id="estoque-busca" placeholder="🔎 Buscar item pelo nome" oninput="_setBuscaEstoque(this.value)" class="form-input" style="font-size:13px"></div>
       <div style="margin-bottom:8px"><select class="form-select" id="estoque-filtro-cat" onchange="renderEstoque()" style="font-size:13px"><option value="">Todas as categorias</option></select></div>
       <div style="font-size:10px;color:var(--gray-d);font-weight:600;margin:2px 0 4px"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M3 12V4a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></svg> Digite para filtrar (procura também dentro do nome do item)</div>
@@ -9713,7 +9713,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v06/10-c65';
+  var ver='v08/10-c66';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -10482,10 +10482,9 @@ else appLockInit();
     var p=painelDe(row); if(!p) return;
     var mats=matsDaLinha(row.id);
     mats.forEach(function(m){ if(m.parentNode) m.parentNode.removeChild(m); });  // guarda para recolocar
-    if(mats.length) row.dataset.tipoItem='composto';
-    var completo = row.dataset.tipoItem==='avulso'
-      ? !!nomeDoItem(row)
-      : !!(nomeDoItem(row) && mats.length);
+    /* 08/10: deduzido, não perguntado — tem material, é composto; não tem, avulso */
+    row.dataset.tipoItem = mats.length ? 'composto' : 'avulso';
+    var completo = !!nomeDoItem(row);
     row.dataset.completo = completo ? '1' : '';
     fecharPainel(row, p, mats, completo);
   }
@@ -10494,25 +10493,21 @@ else appLockInit();
      aparecer. As linhas de material voltam para dentro do painel. */
   function fecharPainel(row, p, mats, completo){
     var tipo=row.dataset.tipoItem||'';
-    var resumoTexto = (tipo==='avulso' && !mats.length)
-      ? 'item avulso · só a linha do pedido'
-      : ((mats.length ? (mats.length+' materiais dentro') : 'sem materiais ainda')
-          + ' · custo '+fmt(custoTotalDaLinha(row, mats)));
+    var resumoTexto = mats.length
+      ? (mats.length+(mats.length===1?' material dentro':' materiais dentro')+' · custo '+fmt(custoTotalDaLinha(row, mats)))
+      : 'sem materiais — toque para adicionar';
     var resumo='<div class="ln-resumo" data-abrir="1"><span>▸ '+resumoTexto+'</span><b>Abrir</b></div>';
+    /* ⚠️ 08/10/2026 — A PERGUNTA "AVULSO OU COMPOSTO" SAIU.
+       Ela foi pedida em 20/09, mas na prática virou um passo a mais antes de
+       cada item e, pior, escondia a lista: a Suzana escrevia o item e não
+       achava onde pôr os materiais. Palavras dela: "a lista de materiais não
+       está abrindo, eu preferia no formato que era antes — ao criar um item
+       aparece adicionar materiais, daí clico e coloco; senão não precisa".
+       Agora todo item já mostra a lista e o botão. Sem material = avulso, e
+       pronto: ninguém precisa declarar isso. O `tipoItem` continua existindo
+       por baixo (outras partes leem), só deixou de ser perguntado. */
     var miolo;
-    if(!tipo && !mats.length){
-      // item novo: ela escolhe se é avulso ou composto (Suzana, 20/09)
-      miolo='<div class="lg"><div class="lg-t">Este item é…</div><div class="chips">'
-        +'<button type="button" class="ln-chip" data-tipoitem="avulso">Avulso · só o preço</button>'
-        +'<button type="button" class="ln-chip" data-tipoitem="composto">Composto · tem materiais</button>'
-        +'</div><div class="ln-auto">Avulso é o que você vende pronto (taxa de entrega, um foil sozinho). Composto abre a lista de materiais e soma o custo.</div></div>';
-    }else if(tipo==='avulso' && !mats.length){
-      // avulso é só a linha do pedido: o painel some, fica um link miúdo
-      p.className='linha-painel avulso';
-      p.innerHTML='<button type="button" class="ln-avulso-link" data-tipoitem="composto">tem materiais? listar</button>';
-      p.classList.toggle('recolhido', row.dataset.recolhido==='1');
-      return;
-    }else{
+    {
       miolo='<div class="lg"><div class="lg-t">Materiais deste item</div>'
         +(mats.length ? '<div class="ln-mats-cab"><span>MATERIAL</span><span>QTD</span><span>R$ DA LINHA</span><span>COMPRAR</span><span></span><span></span></div>' : '')
         +'<div class="ln-mats"></div>'
@@ -11720,6 +11715,155 @@ else appLockInit();
   /* menu: Estoque virou Produtos e abre o cadastro de itens e preços */
   window._abrirProdutos=function(){ window._abrirLinhas(); aba='m'; desenhar(); };
   window._abrirPrecos=function(){ window._abrirLinhas(); aba='p'; desenhar(); };
+  /* ═══════════════════════════════════════════════════════════════════════
+     ABA MATERIAIS — UMA LISTA SÓ (08/10/2026)
+
+     O problema: a tela listava apenas a lista antiga `estoque`. Os materiais
+     que ela cadastra hoje, lançando a compra no Financeiro, vivem no CATÁLOGO
+     e não apareciam aqui — ela via uma lista velha e incompleta.
+     Palavras dela: "na aba materiais a lista de antes era melhor, em formato
+     lista mesmo com filtro, que aparece o item, qtde em estoque mesmo que eu
+     não esteja controlando, e valor unitário".
+
+     Agora a lista é a união dos dois lugares (`_todosOsMateriais`), em lista
+     com filtro, mostrando quantidade e valor por unidade. Material do estoque
+     antigo abre o editor de sempre; material vindo da compra abre o editor
+     simples que está logo abaixo.                                          */
+  function _matsDaTela(){
+    return window._todosOsMateriais().map(function(m){
+      var doCat = (m.origem === 'produto')
+        ? avulsos().filter(function(a){ return chaveNome(a.nome) === chaveNome(m.nome); })[0]
+        : null;
+      var doEst = (m.origem === 'estoque')
+        ? (typeof estoque !== 'undefined' ? estoque.filter(function(e){ return e.id === m.estoqueId; })[0] : null)
+        : null;
+      return {
+        nome:  m.nome,
+        un:    m.un || 'un',
+        custo: parseFloat(m.custo) || 0,
+        qtd:   doEst ? (parseFloat(doEst.qtd) || 0) : (parseFloat(doCat && doCat.qtd) || 0),
+        cat:   doEst ? (doEst.cat || '') : ((doCat && doCat.cat) || ''),
+        origem: m.origem,
+        estoqueId: m.estoqueId || '',
+        prodId: (doCat && doCat.id) || '',
+      };
+    }).sort(function(a, b){ return (a.nome || '').localeCompare(b.nome || '', 'pt-BR'); });
+  }
+
+  window.renderEstoque = function(){
+    var lista = _matsDaTela();
+    var sub = document.getElementById('estoque-sub');
+    if (sub) sub.textContent = lista.length + (lista.length === 1 ? ' material cadastrado'
+                                                                   : ' materiais cadastrados');
+    var al = document.getElementById('estoque-alertas'); if (al) al.innerHTML = '';
+
+    var cats = [], vistas = {};
+    lista.forEach(function(m){ var c = (m.cat || '').trim(); if (c && !vistas[c]) { vistas[c] = 1; cats.push(c); } });
+    cats.sort(function(a, b){ return a.localeCompare(b, 'pt-BR'); });
+    var sel = document.getElementById('estoque-filtro-cat'), fCat = '';
+    if (sel) {
+      fCat = sel.value;
+      sel.innerHTML = '<option value="">Todas as categorias</option>' +
+        cats.map(function(c){ return '<option' + (c === fCat ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('');
+      if (fCat && cats.indexOf(fCat) < 0) { fCat = ''; sel.value = ''; }
+    }
+
+    function norm(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); }
+    function val(id){ var el = document.getElementById(id); return el ? norm(el.value) : ''; }
+    /* os quatro campos (tipo, tamanho, cor, material) procuram dentro do NOME:
+       material cadastrado pela compra não tem esses campos separados */
+    var termos = [val('estoque-ftxt-tipo'), val('estoque-ftxt-tam'),
+                  val('estoque-ftxt-cor'),  val('estoque-ftxt-mat')].filter(Boolean);
+    var busca = norm(typeof _buscaEstoque !== 'undefined' ? _buscaEstoque : '');
+
+    var vis = lista.filter(function(m){
+      if (fCat && (m.cat || '').trim() !== fCat) return false;
+      var n = norm(m.nome);
+      if (busca && n.indexOf(busca) < 0) return false;
+      for (var i = 0; i < termos.length; i++) { if (n.indexOf(termos[i]) < 0) return false; }
+      return true;
+    });
+
+    var limpar = document.getElementById('estoque-limpar-filtros');
+    if (limpar) limpar.style.display = (fCat || termos.length || busca) ? 'inline-block' : 'none';
+
+    var box = document.getElementById('estoque-list'); if (!box) return;
+    var filtrando = !!(fCat || termos.length || busca);
+    if (!vis.length) {
+      box.innerHTML = (typeof empty === 'function')
+        ? empty('', filtrando ? 'Nenhum material com esse filtro' : 'Nenhum material ainda',
+                    filtrando ? 'Troque o filtro acima'
+                              : 'Eles entram sozinhos quando você lança a compra no Financeiro')
+        : '';
+      return;
+    }
+    box.innerHTML = vis.map(function(m){
+      var abrir = m.origem === 'estoque'
+        ? ('editarEstoque(&quot;' + m.estoqueId + '&quot;)')
+        : ('_editarMaterial(&quot;' + m.prodId + '&quot;)');
+      return '<div class="list-item">' +
+        '<div class="li-info" onclick="' + abrir + '" style="cursor:pointer">' +
+          '<div class="li-title">' + esc(m.nome) + '</div>' +
+          '<div class="li-sub">' + (m.cat ? esc(m.cat) + ' · ' : '') +
+             'R$ ' + window._moedaBR(m.custo) + ' por ' + esc(m.un) + '</div>' +
+        '</div>' +
+        '<div class="li-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">' +
+          '<div class="li-value" style="color:var(--cyan-d)">' + (m.qtd || 0) + ' ' + esc(m.un) + '</div>' +
+          '<button onclick="' + abrir + '" style="font-size:10px;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:10px;padding:3px 8px;cursor:pointer">Editar</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  };
+
+  /* editor do material cadastrado pela compra (o do estoque antigo tem o seu) */
+  window._editarMaterial = function(id){
+    var m = catalogo.filter(function(p){ return p && p.id === id; })[0];
+    if (!m) { toast('Material não encontrado'); return; }
+    var mod = document.getElementById('modal-material');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-material';
+      document.body.appendChild(mod);
+    }
+    mod.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Material</div>' +
+      '<div class="modal-body">' +
+        '<div class="form-group"><label class="form-label">Nome</label>' +
+          '<input class="form-input" id="mt-nome" value="' + esc(m.nome || '') + '"></div>' +
+        '<div class="form-row">' +
+          '<div class="form-group"><label class="form-label">Quanto tem</label>' +
+            '<input class="form-input" id="mt-qtd" type="number" step="0.01" min="0" value="' + (parseFloat(m.qtd) || 0) + '"></div>' +
+          '<div class="form-group"><label class="form-label">Unidade</label>' +
+            '<input class="form-input" id="mt-un" value="' + esc(m.un || 'un') + '" placeholder="un, m, folha"></div>' +
+        '</div>' +
+        '<div class="form-group"><label class="form-label">Valor por unidade (R$)</label>' +
+          '<input class="form-input" id="mt-custo" type="number" step="0.01" min="0" value="' + (parseFloat(m.custo) || 0) + '">' +
+          '<div style="font-size:10px;color:var(--gray-d);margin-top:4px">É este valor que entra no custo dos pedidos. Fita comprada em rolo: ponha o preço do metro.</div></div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-material\')">Cancelar</button>' +
+        '<button class="btn btn-pink" style="flex:1" onclick="_salvarMaterial(\'' + id + '\')">Salvar</button>' +
+      '</div></div>';
+    openModal('modal-material');
+  };
+
+  window._salvarMaterial = function(id){
+    var m = catalogo.filter(function(p){ return p && p.id === id; })[0]; if (!m) return;
+    var nome = (document.getElementById('mt-nome').value || '').trim();
+    if (!nome) { toast('Escreva o nome do material'); return; }
+    m.nome      = nome;
+    m.un        = (document.getElementById('mt-un').value || 'un').trim() || 'un';
+    m.qtd       = R2(parseFloat(document.getElementById('mt-qtd').value) || 0);
+    m.custo     = R2(parseFloat(document.getElementById('mt-custo').value) || 0);
+    m.matCusto  = m.custo;
+    m.updatedAt = Date.now();
+    save();
+    closeModal('modal-material');
+    window.renderEstoque();
+    toast('Material salvo');
+  };
+
   function ajustarMenu(){
     var b=document.getElementById('nav-estoque');
     if(!b) return;
