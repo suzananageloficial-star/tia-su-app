@@ -834,6 +834,49 @@ html, body {
 </style>
 <!-- Bibliotecas guardadas junto com o app (pasta lib), nao mais baixadas de servidor de terceiro.
      Assim graficos, Excel e PDF continuam funcionando mesmo se a internet ou a CDN cair. -->
+<!-- ═══════════════════════════════════════════════════════════════════════
+     CONFIGURAÇÃO DESTE APP — é só isto que muda de uma cópia para outra.
+     (criado em 11/10/2026, quando a Suzana decidiu vender cópias do sistema)
+
+     Para nascer um app novo para uma compradora, troque SÓ este bloco e
+     publique. O resto do programa é igual para todo mundo.
+     O passo a passo completo está em
+     "[C] Guia - Nascer uma copia do app.md", na mesma pasta.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<script>
+window.APP_CONFIG = {
+  /* ── Identidade ───────────────────────────────────────────────── */
+  negocio:  'Tia Sú',                       // como o negócio se chama
+  slogan:   'Balões & Personalizados',      // aparece no recibo e na comanda
+  cidade:   'Porto Alegre/RS',
+  cnpj:     '62.375.825/0001-48',           // vazio ('') se não tiver
+  whats:    '5551920000199',                // só números, com o 55 na frente
+
+  /* ── Quem é a dona (precisa bater com as regras do Firebase) ──── */
+  email:    'tiasu.baloesepersonalizados@gmail.com',
+
+  /* ── O banco de dados desta cópia ──────────────────────────────
+     Cada compradora tem o PRÓPRIO projeto no Firebase — é isso que
+     mantém os dados de uma separados dos da outra. Copie daqui:
+     Firebase → Configurações do projeto → Seus apps → Configuração. */
+  firebase: {
+    apiKey:            "AIzaSyAA-AfwpP4hljctN7FVfX_dC3_oG2J6Fjk",
+    authDomain:        "tia-su-app.firebaseapp.com",
+    projectId:         "tia-su-app",
+    storageBucket:     "tia-su-app.firebasestorage.app",
+    messagingSenderId: "1077661946608",
+    appId:             "1:1077661946608:web:cda968c2e8049e253ea835"
+  }
+
+  /* O endereço e o token do backup na planilha NÃO ficam aqui de
+     propósito: eles são colados dentro do app, em Configurar sync, no
+     aparelho da dona. Assim não viajam dentro do programa publicado. */
+};
+/* atalhos curtos, para o resto do app não precisar saber desta estrutura */
+window._marca   = function(){ return (window.APP_CONFIG||{}).negocio || 'Meu negócio'; };
+window._slogan  = function(){ return (window.APP_CONFIG||{}).slogan  || ''; };
+window._donaDoApp = function(){ return (window.APP_CONFIG||{}).email || ''; };
+</script>
 <script src="lib/chart.umd.min.js"></script>
 <script src="lib/xlsx.full.min.js"></script>
 </head>
@@ -1973,7 +2016,14 @@ let fornecedores = DB.get('fornecedores');
 let ativos       = DB.get('ativos');
 
 // ── SYNC CONFIG ───────────────────────────────────────────────
-let SYNC_URL    = localStorage.getItem('ts_sync_url') || 'https://script.google.com/macros/s/AKfycbxO7mWGUXxWJzU50WCdKckSpdasbYHjfy-pHT0qYz9CorboG4IMatzypSf4VdV_XY8T/exec';
+/* ⚠️ 11/10/2026 — NASCE VAZIO, DE PROPÓSITO.
+   Antes vinha um endereço escrito aqui, de uma implantação antiga que hoje
+   responde 404. Resultado: app instalado num aparelho novo (ou uma cópia
+   entregue a outra pessoa) começava SEM backup e ninguém percebia — pior do
+   que não ter, porque parecia configurado.
+   Agora o endereço é só o que estiver guardado no aparelho. Sem ele, o app
+   funciona normal e avisa que falta ligar o backup. */
+let SYNC_URL    = localStorage.getItem('ts_sync_url') || '';
 let SYNC_TOKEN  = localStorage.getItem('ts_sync_token') || '';
 function _su(qs){ var b=SYNC_URL||''; var s=(b.indexOf('?')>=0)?'&':'?'; var q='token='+encodeURIComponent(SYNC_TOKEN||''); if(qs) q+='&'+qs; return b+s+q; }
 let syncTimer   = null;
@@ -4358,7 +4408,16 @@ function openSyncConfig() {
   const box = document.getElementById('sync-status-box');
   box.style.display = 'none';
   const txt = document.getElementById('ultimo-sync-txt');
-  txt.textContent = lastSync ? 'Última sincronização: ' + lastSync : 'Nunca sincronizado';
+  if(!SYNC_URL){
+    txt.innerHTML = '<b style="color:var(--orange)">Backup na planilha ainda não configurado.</b><br>'
+                  + 'Cole acima o endereço e o token que o Apps Script gerou. '
+                  + 'Sem isso o app funciona, mas não há cópia na planilha.';
+  } else if(!SYNC_TOKEN){
+    txt.innerHTML = '<b style="color:var(--orange)">Falta o token.</b><br>'
+                  + 'O endereço está salvo, mas sem o token a planilha recusa o envio.';
+  } else {
+    txt.textContent = lastSync ? 'Última sincronização: ' + lastSync : 'Endereço salvo — ainda não sincronizou.';
+  }
   try{ if(typeof window._mostrarVersaoNoSync==='function') window._mostrarVersaoNoSync(); }catch(e){}
   openModal('modal-sync', false);
 }
@@ -9821,7 +9880,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c76';
+  var ver='v11/10-c77';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -9832,7 +9891,15 @@ window._textoSync = function(agora){
     if((agora-e.pendenteDesde) > 25000) return { txt:ver+' · ⚠️ falta enviar — toque', alerta:true };
     return { txt:ver+' · enviando…', alerta:false };
   }
-  if(!t) return { txt:ver+' · sem sync ainda', alerta:false };
+  /* 11/10: "sem sync ainda" escondia o caso pior — backup nunca ligado.
+     Num aparelho novo (ou numa cópia entregue a outra pessoa) isso precisa
+     aparecer, senão ela trabalha meses achando que tem cópia de segurança. */
+  if(!t){
+    var semBackup = (typeof SYNC_URL==='undefined') || !SYNC_URL;
+    return semBackup
+      ? { txt:ver+' · ⚠️ backup não configurado — toque', alerta:true }
+      : { txt:ver+' · sem sync ainda', alerta:false };
+  }
   var d=new Date(t);
   var dd=('0'+d.getDate()).slice(-2), mm=('0'+(d.getMonth()+1)).slice(-2);
   var hh=('0'+d.getHours()).slice(-2), mi=('0'+d.getMinutes()).slice(-2);
@@ -12569,12 +12636,17 @@ else appLockInit();
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script>
 (function(){
-  var cfg={apiKey:"AIzaSyAA-AfwpP4hljctN7FVfX_dC3_oG2J6Fjk",authDomain:"tia-su-app.firebaseapp.com",projectId:"tia-su-app",storageBucket:"tia-su-app.firebasestorage.app",messagingSenderId:"1077661946608",appId:"1:1077661946608:web:cda968c2e8049e253ea835"};
-  var EMAIL="tiasu.baloesepersonalizados@gmail.com";
+  /* 11/10/2026 — vem do bloco APP_CONFIG, lá no topo do arquivo. É o único
+     lugar que muda de uma cópia para outra; se alguém esquecer de trocar, o
+     app avisa na tela em vez de gravar no banco da outra pessoa. */
+  var cfg = (window.APP_CONFIG||{}).firebase || {};
+  var EMAIL = (window.APP_CONFIG||{}).email || '';
   var fdoc=null, _pushTimer=null;
   var _lastApplied=parseFloat(localStorage.getItem('ts_ultimaSync')||'0')||0;
   window._fbOn=false;
   try{
+    if(!cfg.apiKey || !cfg.projectId) throw new Error('falta preencher o APP_CONFIG (Firebase) no topo do arquivo');
+    if(!EMAIL) throw new Error('falta preencher o e-mail da dona no APP_CONFIG');
     if(typeof firebase==='undefined') throw new Error('SDK Firebase nao carregou');
     firebase.initializeApp(cfg);
     try{ firebase.auth().setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
