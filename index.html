@@ -9729,7 +9729,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c69';
+  var ver='v11/10-c70';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -11845,9 +11845,21 @@ else appLockInit();
       .sort(function(a, b){ return (a.nome || '').localeCompare(b.nome || '', 'pt-BR'); });
   }
 
+  /* 11/10 — "E OS VALORES DOS MATERIAIS?" (Suzana). O preço É puxado no pedido:
+     o que falta é cadastro. Material sem preço entra como zero e o custo do
+     pedido sai menor do que é. Em vez de ela caçar um a um, a tela passa a
+     dizer quantos estão sem preço e a filtrar só esses. */
+  window._filtroSemPreco = false;
+  window._toggleFiltroSemPreco = function(){
+    window._filtroSemPreco = !window._filtroSemPreco;
+    if (window._filtroSemPreco && typeof _filtroBaixo !== 'undefined') _filtroBaixo = false;
+    window.renderEstoque();
+  };
+
   window.renderEstoque = function(){
     var lista = _matsDaTela();
     var baixo = function(m){ return m.min > 0 && m.qtd <= m.min; };
+    var semPreco = function(m){ return !(m.custo > 0); };
 
     var sub = document.getElementById('estoque-sub');
     if (sub) sub.textContent = lista.length + (lista.length === 1 ? ' material cadastrado'
@@ -11856,14 +11868,23 @@ else appLockInit();
     /* alerta de estoque baixo — igual ao de sempre, clicável para filtrar */
     var baixos = lista.filter(baixo);
     if (!baixos.length && typeof _filtroBaixo !== 'undefined') _filtroBaixo = false;
+    var semValor = lista.filter(semPreco);
+    if (!semValor.length) window._filtroSemPreco = false;
+    var tarjaPreco = semValor.length
+      ? '<div class="estoque-alert" onclick="_toggleFiltroSemPreco()" style="cursor:pointer;background:var(--orange-l);color:var(--orange);border-color:var(--orange)">' +
+        semValor.length + (semValor.length > 1 ? ' materiais' : ' material') + ' sem preço' +
+        (window._filtroSemPreco ? ' ✓ — toque p/ ver TODOS' : ' — toque p/ ver SÓ estes') +
+        '. Sem o valor, o custo do pedido sai menor do que é.</div>'
+      : '';
+
     var al = document.getElementById('estoque-alertas');
-    if (al) al.innerHTML = baixos.length
+    if (al) al.innerHTML = tarjaPreco + (baixos.length
       ? '<div class="estoque-alert" onclick="_toggleFiltroBaixo()" style="cursor:pointer">' +
         '<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17.5" r="0.6" fill="currentColor" stroke="none"/></svg> ' +
-        baixos.length + ' material' + (baixos.length > 1 ? 'is' : '') + ' abaixo do mínimo' +
+        baixos.length + (baixos.length > 1 ? ' materiais' : ' material') + ' abaixo do mínimo' +
         ((typeof _filtroBaixo !== 'undefined' && _filtroBaixo) ? ' ✓ — toque p/ ver TODOS' : ' — toque p/ ver SÓ estes') +
         ': ' + esc(baixos.map(function(m){ return m.nome; }).join(', ')) + '</div>'
-      : '';
+      : '');
 
     /* filtro de categoria, montado com as categorias que existem de verdade */
     var cats = [], vistas = {};
@@ -11885,10 +11906,12 @@ else appLockInit();
                   val('estoque-ftxt-cor'),  val('estoque-ftxt-mat')].filter(Boolean);
     var busca = norm(typeof _buscaEstoque !== 'undefined' ? _buscaEstoque : '');
     var soBaixo = (typeof _filtroBaixo !== 'undefined' && _filtroBaixo);
+    var soSemPreco = !!window._filtroSemPreco;
 
     var vis = lista.filter(function(m){
       if (fCat && (m.cat || '').trim() !== fCat) return false;
       if (soBaixo && !baixo(m)) return false;
+      if (soSemPreco && !semPreco(m)) return false;
       var alvo = norm(m.nome + ' ' + m.attrs);
       if (busca && norm(m.nome).indexOf(busca) < 0) return false;
       for (var i = 0; i < termos.length; i++) { if (alvo.indexOf(termos[i]) < 0) return false; }
@@ -11899,7 +11922,7 @@ else appLockInit();
     if (limpar) limpar.style.display = (fCat || termos.length || busca) ? 'inline-block' : 'none';
 
     var box = document.getElementById('estoque-list'); if (!box) return;
-    var filtrando = !!(fCat || termos.length || busca || soBaixo);
+    var filtrando = !!(fCat || termos.length || busca || soBaixo || soSemPreco);
     var ICONE_CAIXA = '<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>';
     if (!vis.length) {
       box.innerHTML = (typeof empty === 'function')
