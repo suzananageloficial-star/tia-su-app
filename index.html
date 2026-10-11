@@ -9729,7 +9729,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v08/10-c68';
+  var ver='v11/10-c69';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -11785,38 +11785,60 @@ else appLockInit();
   };
 
   /* ═══════════════════════════════════════════════════════════════════════
-     ABA MATERIAIS — UMA LISTA SÓ (08/10/2026)
+     ABA MATERIAIS — a lista de sempre, agora completa (08→11/10/2026)
 
-     O problema: a tela listava apenas a lista antiga `estoque`. Os materiais
-     que ela cadastra hoje, lançando a compra no Financeiro, vivem no CATÁLOGO
-     e não apareciam aqui — ela via uma lista velha e incompleta.
-     Palavras dela: "na aba materiais a lista de antes era melhor, em formato
-     lista mesmo com filtro, que aparece o item, qtde em estoque mesmo que eu
-     não esteja controlando, e valor unitário".
+     O problema original: a tela listava apenas a lista antiga `estoque`. Os
+     materiais que ela cadastra hoje, lançando a compra no Financeiro, vivem
+     no CATÁLOGO e não apareciam aqui.
 
-     Agora a lista é a união dos dois lugares (`_todosOsMateriais`), em lista
-     com filtro, mostrando quantidade e valor por unidade. Material do estoque
-     antigo abre o editor de sempre; material vindo da compra abre o editor
-     simples que está logo abaixo.                                          */
+     ⚠️ A primeira tentativa (08/10) juntou os dois mas trocou o visual por
+     um mais simples — e, pior, trouxe junto os nomes que ela só DIGITOU uma
+     vez num pedido (os "você já usou", sem cadastro nenhum), que entram com
+     0 em estoque e R$ 0,00. A tela ficou cheia de linha sem valor. Palavras
+     dela em 11/10: "a lista de materiais não está ok, é uma linha por
+     material, descrição, quantidade em estoque e valor unitário como sempre
+     foi".
+
+     Agora: o layout é o ORIGINAL do app (ícone, etiquetas de característica,
+     categoria e mínimo, quantidade, valor por unidade, Editar e Excluir, o
+     alerta de estoque baixo), e a lista é a união de quem tem CADASTRO —
+     o estoque antigo e o material cadastrado pela compra. Nome solto de
+     pedido não entra: sem cadastro, não é material desta tela.          */
   function _matsDaTela(){
-    return window._todosOsMateriais().map(function(m){
-      var doCat = (m.origem === 'produto')
-        ? avulsos().filter(function(a){ return chaveNome(a.nome) === chaveNome(m.nome); })[0]
-        : null;
-      var doEst = (m.origem === 'estoque')
-        ? (typeof estoque !== 'undefined' ? estoque.filter(function(e){ return e.id === m.estoqueId; })[0] : null)
-        : null;
+    var fonte = window._todosOsMateriais().filter(function(m){
+      return m.origem === 'estoque' || m.origem === 'produto';   // fora os "você já usou"
+    });
+    return fonte.map(function(m){
+      /* ⚠️ 11/10 — procura pelo NOME nos DOIS lugares, não só na origem que
+         o `_todosOsMateriais` escolheu. O mesmo material costuma existir no
+         estoque antigo E no cadastro da compra; olhando só um lado, a tela
+         mostrava quantidade 0 para coisa que ela tem na prateleira.
+         Quantidade = o que está no estoque (soma, se estiver duplicado).
+         Valor = o do cadastro, que a compra atualiza; o estoque é reserva. */
+      var k = chaveNome(m.nome);
+      var doCat = avulsos().filter(function(a){ return chaveNome(a.nome) === k; })[0] || null;
+      var nosEst = (typeof estoque !== 'undefined')
+        ? estoque.filter(function(e){ return e && chaveNome(e.nome) === k; }) : [];
+      var doEst = nosEst.slice().sort(function(a, b){
+        return (parseFloat(b.qtd) || 0) - (parseFloat(a.qtd) || 0);
+      })[0] || null;
+      var qtdEst = nosEst.reduce(function(s, e){ return s + (parseFloat(e.qtd) || 0); }, 0);
+      var base = doEst || doCat || {};
       return {
-        nome:  m.nome,
-        un:    m.un || 'un',
-        custo: parseFloat(m.custo) || 0,
-        qtd:   doEst ? (parseFloat(doEst.qtd) || 0) : (parseFloat(doCat && doCat.qtd) || 0),
-        cat:   doEst ? (doEst.cat || '') : ((doCat && doCat.cat) || ''),
-        origem: m.origem,
-        estoqueId: m.estoqueId || '',
-        prodId: (doCat && doCat.id) || '',
-        /* produto de vitrine (kit, arranjo validado) não é material: fica de
-           fora desta tela. No pedido ele continua aparecendo normalmente. */
+        id:     doEst ? doEst.id : ((doCat && doCat.id) || ''),
+        doEstoque: !!doEst,
+        nome:   m.nome,
+        un:     m.un || (doEst && doEst.un) || 'un',
+        custo:  (parseFloat(m.custo) || 0) || (parseFloat(doCat && doCat.custo) || 0)
+                                           || (parseFloat(doEst && doEst.preco) || 0),
+        qtd:    doEst ? qtdEst : (parseFloat(doCat && doCat.qtd) || 0),
+        min:    parseFloat(base.min) || 0,
+        cat:    base.cat || '',
+        consumo: !!base.consumo,
+        attrs:  [base.tipo, base.tam, base.cor, base.mat]
+                  .map(function(x){ return String(x || '').trim(); })
+                  .filter(Boolean).join(' · '),
+        /* produto de vitrine (kit, arranjo validado) não é material */
         ehProduto: !!(doCat && doCat.material === false),
       };
     }).filter(function(m){ return !m.ehProduto; })
@@ -11825,11 +11847,25 @@ else appLockInit();
 
   window.renderEstoque = function(){
     var lista = _matsDaTela();
+    var baixo = function(m){ return m.min > 0 && m.qtd <= m.min; };
+
     var sub = document.getElementById('estoque-sub');
     if (sub) sub.textContent = lista.length + (lista.length === 1 ? ' material cadastrado'
-                                                                   : ' materiais cadastrados');
-    var al = document.getElementById('estoque-alertas'); if (al) al.innerHTML = '';
+                                                                 : ' materiais cadastrados');
 
+    /* alerta de estoque baixo — igual ao de sempre, clicável para filtrar */
+    var baixos = lista.filter(baixo);
+    if (!baixos.length && typeof _filtroBaixo !== 'undefined') _filtroBaixo = false;
+    var al = document.getElementById('estoque-alertas');
+    if (al) al.innerHTML = baixos.length
+      ? '<div class="estoque-alert" onclick="_toggleFiltroBaixo()" style="cursor:pointer">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17.5" r="0.6" fill="currentColor" stroke="none"/></svg> ' +
+        baixos.length + ' material' + (baixos.length > 1 ? 'is' : '') + ' abaixo do mínimo' +
+        ((typeof _filtroBaixo !== 'undefined' && _filtroBaixo) ? ' ✓ — toque p/ ver TODOS' : ' — toque p/ ver SÓ estes') +
+        ': ' + esc(baixos.map(function(m){ return m.nome; }).join(', ')) + '</div>'
+      : '';
+
+    /* filtro de categoria, montado com as categorias que existem de verdade */
     var cats = [], vistas = {};
     lista.forEach(function(m){ var c = (m.cat || '').trim(); if (c && !vistas[c]) { vistas[c] = 1; cats.push(c); } });
     cats.sort(function(a, b){ return a.localeCompare(b, 'pt-BR'); });
@@ -11843,17 +11879,19 @@ else appLockInit();
 
     function norm(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); }
     function val(id){ var el = document.getElementById(id); return el ? norm(el.value) : ''; }
-    /* os quatro campos (tipo, tamanho, cor, material) procuram dentro do NOME:
-       material cadastrado pela compra não tem esses campos separados */
+    /* os quatro campos procuram no campo E dentro do nome: material cadastrado
+       pela compra não tem tipo/tamanho/cor separados, só o nome */
     var termos = [val('estoque-ftxt-tipo'), val('estoque-ftxt-tam'),
                   val('estoque-ftxt-cor'),  val('estoque-ftxt-mat')].filter(Boolean);
     var busca = norm(typeof _buscaEstoque !== 'undefined' ? _buscaEstoque : '');
+    var soBaixo = (typeof _filtroBaixo !== 'undefined' && _filtroBaixo);
 
     var vis = lista.filter(function(m){
       if (fCat && (m.cat || '').trim() !== fCat) return false;
-      var n = norm(m.nome);
-      if (busca && n.indexOf(busca) < 0) return false;
-      for (var i = 0; i < termos.length; i++) { if (n.indexOf(termos[i]) < 0) return false; }
+      if (soBaixo && !baixo(m)) return false;
+      var alvo = norm(m.nome + ' ' + m.attrs);
+      if (busca && norm(m.nome).indexOf(busca) < 0) return false;
+      for (var i = 0; i < termos.length; i++) { if (alvo.indexOf(termos[i]) < 0) return false; }
       return true;
     });
 
@@ -11861,28 +11899,49 @@ else appLockInit();
     if (limpar) limpar.style.display = (fCat || termos.length || busca) ? 'inline-block' : 'none';
 
     var box = document.getElementById('estoque-list'); if (!box) return;
-    var filtrando = !!(fCat || termos.length || busca);
+    var filtrando = !!(fCat || termos.length || busca || soBaixo);
+    var ICONE_CAIXA = '<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>';
     if (!vis.length) {
       box.innerHTML = (typeof empty === 'function')
-        ? empty('', filtrando ? 'Nenhum material com esse filtro' : 'Nenhum material ainda',
-                    filtrando ? 'Troque o filtro acima'
-                              : 'Eles entram sozinhos quando você lança a compra no Financeiro')
+        ? empty(ICONE_CAIXA,
+            filtrando ? 'Nenhum material com esse filtro' : 'Nenhum material cadastrado',
+            filtrando ? 'Troque o filtro acima'
+                      : 'Eles entram sozinhos quando você lança a compra no Financeiro')
         : '';
       return;
     }
+
     box.innerHTML = vis.map(function(m){
-      var abrir = m.origem === 'estoque'
-        ? ('editarEstoque(&quot;' + m.estoqueId + '&quot;)')
-        : ('_editarMaterial(&quot;' + m.prodId + '&quot;)');
+      var alerta = baixo(m);
+      var abrir  = m.doEstoque ? ('editarEstoque(&quot;' + m.id + '&quot;)')
+                               : ('_editarMaterial(&quot;' + m.id + '&quot;)');
+      var apagar = m.doEstoque ? ('excluirEstoque(&quot;' + m.id + '&quot;)')
+                               : ('_excluirMaterial(&quot;' + m.id + '&quot;)');
       return '<div class="list-item">' +
-        '<div class="li-info" onclick="' + abrir + '" style="cursor:pointer">' +
-          '<div class="li-title">' + esc(m.nome) + '</div>' +
-          '<div class="li-sub">' + (m.cat ? esc(m.cat) + ' · ' : '') +
-             'R$ ' + window._moedaBR(m.custo) + ' por ' + esc(m.un) + '</div>' +
+        '<div class="li-icon" style="background:' + (alerta ? 'var(--red-l)' : 'var(--cyan-l)') + '" onclick="' + abrir + '">' +
+          (alerta
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="0.85em" height="0.85em" viewBox="0 0 24 24" style="vertical-align:-0.05em;flex-shrink:0"><circle cx="12" cy="12" r="8" fill="#F04438"/></svg>'
+            : ICONE_CAIXA) +
         '</div>' +
-        '<div class="li-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">' +
-          '<div class="li-value" style="color:var(--cyan-d)">' + (m.qtd || 0) + ' ' + esc(m.un) + '</div>' +
-          '<button onclick="' + abrir + '" style="font-size:10px;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:10px;padding:3px 8px;cursor:pointer">Editar</button>' +
+        '<div class="li-info" style="cursor:pointer" onclick="' + abrir + '">' +
+          '<div class="li-title">' + esc(m.nome) +
+            (m.attrs ? ' <span style="font-size:10px;font-weight:600;color:var(--cyan-d);background:var(--cyan-l);border-radius:8px;padding:1px 6px;margin-left:4px">' + esc(m.attrs) + '</span>' : '') +
+          '</div>' +
+          '<div class="li-sub">' + esc(m.cat || 'Sem categoria') +
+            (m.consumo ? ' · inventário' : '') +
+            ' · mín: ' + (m.min || 0) + ' ' + esc(m.un) + '</div>' +
+        '</div>' +
+        '<div class="li-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">' +
+          '<div class="li-value" style="color:' + (alerta ? 'var(--red)' : 'var(--cyan-d)') + '">' + (m.qtd || 0) + ' ' + esc(m.un) + '</div>' +
+          (m.custo > 0
+            ? '<div style="font-size:10px;color:var(--gray-d)">' + fmt(m.custo) + '/' + esc(m.un) + '</div>'
+            /* sem preço não é R$ 0,00: é cadastro faltando, e sem ele o custo
+               do pedido sai errado. Avisa em vez de fingir que vale zero. */
+            : '<div style="font-size:10px;color:var(--orange);font-weight:700">sem preço</div>') +
+          '<div style="display:flex;gap:5px;margin-top:2px">' +
+            '<button onclick="event.stopPropagation();' + abrir + '" style="font-size:10px;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:10px;padding:3px 8px;cursor:pointer;font-weight:700">Editar</button>' +
+            '<button onclick="event.stopPropagation();' + apagar + '" style="font-size:10px;background:var(--red-l);color:var(--red);border:none;border-radius:10px;padding:3px 8px;cursor:pointer;font-weight:700">Excluir</button>' +
+          '</div>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -11940,6 +11999,20 @@ else appLockInit();
     closeModal('modal-material');
     window.renderEstoque();
     toast('Material salvo');
+  };
+
+  /* apagar o cadastro de um material vindo da compra */
+  window._excluirMaterial = function(id){
+    var i = catalogo.findIndex(function(p){ return p && p.id === id; });
+    if (i < 0) return;
+    var nome = catalogo[i].nome || 'este material';
+    if (!confirm('Excluir "' + nome + '" dos materiais?\n\nOs pedidos antigos não mudam. Se você comprar de novo, ele volta sozinho pelo Financeiro.')) return;
+    /* a lápide (para não voltar pela nuvem) é criada sozinha no save: ele
+       compara o estado anterior com o atual e marca o que sumiu. */
+    catalogo.splice(i, 1);
+    save();
+    window.renderEstoque();
+    toast('"' + nome + '" excluído');
   };
 
   function ajustarMenu(){
