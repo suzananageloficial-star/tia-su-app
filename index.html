@@ -5743,6 +5743,20 @@ async function gerarImagemRecibo(id, cb) {
   const LX = M+20, RX = W-M-20, CX = W/2;
   const end = (typeof _enderecoLinha==='function') ? _enderecoLinha(p) : '';
   const itens = (p.itens && p.itens.length) ? p.itens : [];
+  /* FOTO DO PRODUTO NO RECIBO (11/10/2026) — a cliente vê o que encomendou.
+     Carrega antes: o desenho no canvas é síncrono e roda duas vezes (medir e
+     desenhar), então as imagens precisam estar prontas. Foto que não carrega
+     vira null e o item sai só com texto, como era. */
+  const fotosItens = await Promise.all(itens.map(function(it){
+    return new Promise(function(res){
+      var src = (typeof window._fotoDoItem==='function') ? window._fotoDoItem(it.nome) : '';
+      if(!src) return res(null);
+      var im = new Image();
+      im.onload = function(){ res(im); };
+      im.onerror = function(){ res(null); };
+      im.src = src;
+    });
+  }));
 
   function wrap(ctx, txt, maxw){
     const words=(txt||'').split(' '); const lines=[]; let line='';
@@ -5787,8 +5801,31 @@ async function gerarImagemRecibo(id, cb) {
     if(itens.length){
       y+=2; ctx.textAlign='left'; ctx.font='700 10px Nunito,Arial,sans-serif'; ctx.fillStyle=PINK;
       if(draw) ctx.fillText('ITENS', LX, y); y+=17;
-      itens.forEach(it=>{ const t='• '+(it.nome||'')+((it.qtd>1)?('  ('+it.qtd+'x)'):''); ctx.font='400 12px Nunito,Arial,sans-serif'; ctx.fillStyle=BROWN;
-        wrap(ctx,t,region-6).forEach((l,i)=>{ if(draw) ctx.fillText(l, LX+(i?10:0), y); y+=18; }); });
+      const LADO=44, ESP=8;
+      itens.forEach((it,ix)=>{
+        const img = fotosItens[ix];
+        const x0 = LX + (img ? LADO+ESP : 0);
+        const larg = region - 6 - (img ? LADO+ESP : 0);
+        const t='• '+(it.nome||'')+((it.qtd>1)?('  ('+it.qtd+'x)'):'');
+        ctx.font='400 12px Nunito,Arial,sans-serif'; ctx.fillStyle=BROWN;
+        const linhas = wrap(ctx,t,larg);
+        const yIni = y;
+        linhas.forEach((l,i)=>{ if(draw) ctx.fillText(l, x0+(i?10:0), y); y+=18; });
+        if(img){
+          if(draw){
+            ctx.save();
+            ctx.beginPath(); ctx.rect(LX, yIni-13, LADO, LADO); ctx.clip();
+            /* recorta no meio, sem achatar a foto */
+            const esc = Math.max(LADO/img.width, LADO/img.height);
+            const lw = img.width*esc, lh = img.height*esc;
+            ctx.drawImage(img, LX+(LADO-lw)/2, yIni-13+(LADO-lh)/2, lw, lh);
+            ctx.restore();
+            ctx.strokeStyle=LINE; ctx.lineWidth=1; ctx.strokeRect(LX+0.5, yIni-12.5, LADO-1, LADO-1);
+          }
+          const alturaTexto = linhas.length*18;
+          if(alturaTexto < LADO+6) y = yIni + LADO + 6;   // a linha acompanha a foto
+        }
+      });
       y+=4;
     }
 
@@ -6012,6 +6049,8 @@ function gerarRecibo(id){
       + '</table>';
   }
   var css='*{margin:0;padding:0;box-sizing:border-box}'
+   +'.fcmd{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;margin:0 auto}'
+   +'@media print{.fcmd{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'
    +"body{font-family:Arial,Helvetica,sans-serif;background:#f4f4f6;margin:0;padding:16px;color:#3a3a40}"
    +'.bar{max-width:1000px;margin:0 auto 14px;text-align:center}'
    +'.bar button,.bar a{border:1.5px solid #ddd;background:#fff;color:#555;border-radius:9px;padding:10px 18px;font-size:13px;font-weight:600;cursor:pointer;margin:3px;text-decoration:none;display:inline-block}'
@@ -6075,7 +6114,18 @@ function gerarComanda(id){
   var mats=(p.materiais||[]).filter(function(m){return m.nome&&m.qtd;});
   var matsHtml = mats.length ? '<table class="t"><tr><th>Material</th><th class="c">Qtd</th><th class="c">Ok</th></tr>'+mats.map(function(m){return '<tr><td>'+(m.nome||'')+'</td><td class="c">'+(m.qtd||'')+'</td><td class="c">▢</td></tr>';}).join('')+'</table>' : '<div class="vazio">— sem materiais listados —</div>';
   var itens=p.itens||[];
-  var itensHtml = itens.length ? '<table class="t"><tr><th>Item</th><th class="c">Qtd</th></tr>'+itens.map(function(x){return '<tr><td>'+(x.nome||'')+'</td><td class="c">'+(x.qtd||0)+' '+(x.un||'un')+'</td></tr>';}).join('')+'</table>' : '';
+  /* a foto do produto entra na comanda: quem produz vê o que é para fazer */
+  var _fts=itens.map(function(x){ return (typeof window._fotoDoItem==='function') ? window._fotoDoItem(x.nome) : ''; });
+  var _temFoto=_fts.some(Boolean);
+  var itensHtml = itens.length
+    ? '<table class="t"><tr>'+(_temFoto?'<th class="c" style="width:66px">Foto</th>':'')+'<th>Item</th><th class="c">Qtd</th></tr>'
+      + itens.map(function(x,i){
+          return '<tr>'
+            + (_temFoto ? ('<td class="c">'+(_fts[i]?'<img class="fcmd" src="'+_fts[i]+'">':'—')+'</td>') : '')
+            + '<td>'+(x.nome||'')+'</td><td class="c">'+(x.qtd||0)+' '+(x.un||'un')+'</td></tr>';
+        }).join('')
+      + '</table>'
+    : '';
   var card='<div class="cmd"><div class="ch"><img src="'+(window._LOGO_TSU||'')+'"><div class="ct"><b>COMANDA DE PRODUCAO</b><span>Tia Su · sem valores</span></div></div>'
    +'<div class="cr"><b style="font-size:15px">'+(p.cliente||'—')+'</b>'+(p.whats?' · '+p.whats:'')+'</div>'
    +'<div class="cr"><span class="k">Produto/Evento:</span> <b>'+(p.produto||'—')+'</b></div>'
@@ -6086,6 +6136,8 @@ function gerarComanda(id){
    +(p.obs?'<div class="cs">Observacoes</div><div class="cobs">'+p.obs+'</div>':'')
    +'</div>';
   var css='*{margin:0;padding:0;box-sizing:border-box}'
+   +'.fcmd{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;margin:0 auto}'
+   +'@media print{.fcmd{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'
    +"body{font-family:'Segoe UI',Arial,sans-serif;color:#222;padding:8mm}"
    +'.cmd{border:2px solid #FF1F78;border-radius:10px;padding:10px 14px;min-height:128mm;margin-bottom:8mm;page-break-inside:avoid}'
    +'.ch{display:flex;align-items:center;gap:10px;border-bottom:2px solid #FCE4EC;padding-bottom:6px;margin-bottom:8px}'
@@ -6109,7 +6161,18 @@ function _cardComanda(p){
   var mats=(p.materiais||[]).filter(function(m){return m.nome&&m.qtd;});
   var matsHtml = mats.length ? '<table class="t"><tr><th>Material</th><th class="c">Qtd</th><th class="c">Ok</th></tr>'+mats.map(function(m){return '<tr><td>'+(m.nome||'')+'</td><td class="c">'+(m.qtd||'')+'</td><td class="c">▢</td></tr>';}).join('')+'</table>' : '<div class="vazio">— sem materiais listados —</div>';
   var itens=p.itens||[];
-  var itensHtml = itens.length ? '<table class="t"><tr><th>Item</th><th class="c">Qtd</th></tr>'+itens.map(function(x){return '<tr><td>'+(x.nome||'')+'</td><td class="c">'+(x.qtd||0)+' '+(x.un||'un')+'</td></tr>';}).join('')+'</table>' : '';
+  /* a foto do produto entra na comanda: quem produz vê o que é para fazer */
+  var _fts=itens.map(function(x){ return (typeof window._fotoDoItem==='function') ? window._fotoDoItem(x.nome) : ''; });
+  var _temFoto=_fts.some(Boolean);
+  var itensHtml = itens.length
+    ? '<table class="t"><tr>'+(_temFoto?'<th class="c" style="width:66px">Foto</th>':'')+'<th>Item</th><th class="c">Qtd</th></tr>'
+      + itens.map(function(x,i){
+          return '<tr>'
+            + (_temFoto ? ('<td class="c">'+(_fts[i]?'<img class="fcmd" src="'+_fts[i]+'">':'—')+'</td>') : '')
+            + '<td>'+(x.nome||'')+'</td><td class="c">'+(x.qtd||0)+' '+(x.un||'un')+'</td></tr>';
+        }).join('')
+      + '</table>'
+    : '';
   return '<div class="cmd"><div class="ch"><img src="'+(window._LOGO_TSU||'')+'"><div class="ct"><b>COMANDA DE PRODUCAO</b><span>Tia Su · sem valores</span></div></div>'
    +'<div class="cr"><b style="font-size:15px">'+(p.cliente||'—')+'</b>'+(p.whats?' · '+p.whats:'')+'</div>'
    +'<div class="cr"><span class="k">Produto/Evento:</span> <b>'+(p.produto||'—')+'</b></div>'
@@ -6122,6 +6185,8 @@ function _cardComanda(p){
 }
 function _cssComanda(){
   return '*{margin:0;padding:0;box-sizing:border-box}'
+   +'.fcmd{width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid #ddd;display:block;margin:0 auto}'
+   +'@media print{.fcmd{-webkit-print-color-adjust:exact;print-color-adjust:exact}}'
    +"body{font-family:'Segoe UI',Arial,sans-serif;color:#222;padding:8mm}"
    +'.cmd{border:2px solid #FF1F78;border-radius:10px;padding:10px 14px;min-height:128mm;margin-bottom:8mm;page-break-inside:avoid}'
    +'.ch{display:flex;align-items:center;gap:10px;border-bottom:2px solid #FCE4EC;padding-bottom:6px;margin-bottom:8px}'
@@ -8323,6 +8388,25 @@ function renderCatalogo(){
 var _fotos = (function(){ try{ return JSON.parse(localStorage.getItem('tiasu_fotos'))||{}; }catch(e){ return {}; } })();
 var _fotoAtual = null;
 function _getFoto(id){ return (_fotos&&_fotos[id])?_fotos[id]:''; }
+/* A FOTO DO PRODUTO VAI PARA A COMANDA E PARA O RECIBO (11/10/2026)
+   "Na aba Precificação vou salvar os kits com fotos para os produtos, mas não
+   quero que gere um catálogo, apenas puxe nos pedidos o que for cadastrado
+   com a foto, para que possa ser impresso na comanda e também no recibo da
+   cliente" (Suzana). O vínculo é pelo NOME do item do pedido — o mesmo nome
+   que ela escolhe da lista de produtos. */
+function _chaveFoto(n){ return String(n||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }
+window._fotoDoItem = function(nome){
+  var k = _chaveFoto(nome); if(!k || typeof catalogo==='undefined') return '';
+  /* o mesmo nome pode existir em mais de um lugar do catálogo (a linha de
+     pedido, o produto da Precificação, o avulso). Vale quem TEM foto —
+     pegar só o primeiro voltava vazio quando a foto estava no segundo. */
+  var achados = catalogo.filter(function(x){ return x && _chaveFoto(x.nome)===k; });
+  for (var i=0; i<achados.length; i++){
+    var f = _getFoto(achados[i].id);
+    if (f) return f;
+  }
+  return '';
+};
 function _salvarFotosLS(){ try{ localStorage.setItem('tiasu_fotos', JSON.stringify(_fotos)); return true; }catch(e){ toast('⚠️ Memória cheia — foto não salva. Use menos fotos ou tire a foto de novo.'); return false; } }
 function _setFoto(id, dataURL){ if(!id) return; if(!dataURL){ delete _fotos[id]; } else { _fotos[id]=dataURL; } _salvarFotosLS(); }
 function _excluirProduto(id){
@@ -9729,7 +9813,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c72';
+  var ver='v11/10-c73';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
