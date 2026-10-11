@@ -9729,7 +9729,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c71';
+  var ver='v11/10-c72';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -9963,6 +9963,9 @@ else appLockInit();
 .le-lin:nth-child(odd){background:#FCFCFD}
 .le-lin input{border:1px solid #e9e9ef;border-radius:8px;padding:6px 7px;font-size:13px;min-width:0;background:#fff}
 .le-lin.sem-preco input[data-k="r.custo"]{border-color:var(--orange);background:#FFF8F0}
+.le-cat{width:120px;flex:0 0 120px;font-size:10px;color:var(--gray-d);white-space:nowrap;
+        overflow:hidden;text-overflow:ellipsis}
+@media (max-width:620px){ .le-cat{display:none} }
 .le-add{width:100%;border:1.5px dashed #00BCD4;background:none;color:#00838F;border-radius:9px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;margin-top:4px}
 .le-tabs{display:flex;gap:6px;background:#F2F2F4;padding:4px;border-radius:12px;margin-bottom:10px}
 .le-tabs button{flex:1;border:none;border-radius:9px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;background:none;color:var(--gray-d)}
@@ -11374,19 +11377,37 @@ else appLockInit();
     if(tit) tit.textContent = (aba==='m') ? 'Materiais' : 'Preço das linhas';
     if(aba==='m'){
       /* MATERIAIS: tudo o que entra dentro de um item, com o preço */
-      var busca=(rasc.busca||'').toLowerCase();
-      var itens=rasc.itens.filter(function(x){ return !busca || x.nome.toLowerCase().indexOf(busca)>=0; });
+      /* o filtro procura no NOME e na CATEGORIA, como era antes da v50
+         ("o filtro deve buscar por categoria além do nome", Suzana 11/10) */
+      var busca=(rasc.busca||'').toLowerCase().trim();
+      var fcat=rasc.catFiltro||'';
+      var cats=[], vistas={};
+      rasc.itens.forEach(function(x){
+        var c=(x.cat||'').trim(); if(c && !vistas[c]){ vistas[c]=1; cats.push(c); }
+      });
+      cats.sort(function(a,b){ return a.localeCompare(b,'pt-BR'); });
+      if(fcat && cats.indexOf(fcat)<0){ fcat=''; rasc.catFiltro=''; }
+      var itens=rasc.itens.filter(function(x){
+        if(fcat && (x.cat||'').trim()!==fcat) return false;
+        if(!busca) return true;
+        return (x.nome||'').toLowerCase().indexOf(busca)>=0
+            || (x.cat ||'').toLowerCase().indexOf(busca)>=0;
+      });
       /* ⚠️ 11/10/2026 — ERA UMA GRADE DE CARTÕES (três colunas na tela larga).
          Pedido da Suzana, repetido: "é uma linha por material, descrição,
          quantidade em estoque e valor unitário, como sempre foi". Agora é
          uma lista: uma linha por material, nada de cartão.                */
       var semPreco = itens.filter(function(x){ return !(parseFloat(x.custo) > 0); }).length;
       box.innerHTML='<div class="le-ajuda">Tudo o que você compra e usa dentro dos itens, em ordem alfabética. O que você lança no Financeiro cai aqui sozinho. Dá para corrigir o nome, o <b>preço por unidade</b> e excluir o que não usa mais.</div>'
-        +'<div class="le-row"><input type="text" id="le-busca" value="'+esc(rasc.busca||'')+'" placeholder="Buscar material" style="flex:1"></div>'
+        +'<div class="le-row"><input type="text" id="le-busca" value="'+esc(rasc.busca||'')+'" placeholder="Buscar pelo nome ou pela categoria" style="flex:1"></div>'
+        +'<div class="le-row"><select id="le-cat" style="flex:1"><option value="">Todas as categorias</option>'
+        + cats.map(function(c){ return '<option'+(c===fcat?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
+        +'</select></div>'
         +'<div class="le-mini" style="margin-bottom:6px">'+itens.length+' materiais'+(busca?(' de '+rasc.itens.length):'')
         + (semPreco ? ' · <b style="color:var(--orange)">'+semPreco+' sem preço</b>' : '')+'</div>'
         +'<div class="le-lista">'
         +  '<div class="le-cab"><span style="flex:1 1 130px">Material</span>'
+        +    '<span class="le-cat">Categoria</span>'
         +    '<span style="width:62px;text-align:center">Tem</span>'
         +    '<span style="width:88px;text-align:center">R$ / unidade</span>'
         +    '<span style="width:22px"></span></div>'
@@ -11395,6 +11416,7 @@ else appLockInit();
               var zerado = !(parseFloat(x.custo) > 0);
               return '<div class="le-lin'+(zerado?' sem-preco':'')+'">'
                 +'<input type="text" data-k="r.nome" data-ri="'+ri+'" value="'+esc(x.nome)+'" title="'+esc(x.cat||'sem categoria')+'" style="flex:1 1 130px;font-weight:600">'
+                +'<span class="le-cat" title="categoria">'+esc(x.cat||'—')+'</span>'
                 +'<input type="number" step="0.1" min="0" data-k="r.qtd" data-ri="'+ri+'" value="'+(parseFloat(x.qtd)||0)+'" title="Quanto tem no estoque" style="width:62px;text-align:center">'
                 +'<input type="number" step="0.01" min="0" data-k="r.custo" data-ri="'+ri+'" value="'+num(x.custo)+'" placeholder="0,00" title="Valor por unidade — sem ele o custo do pedido sai menor do que é" style="width:88px;text-align:right">'
                 +'<button type="button" class="le-x" data-act="delr" data-ri="'+ri+'" title="Excluir material">×</button>'
@@ -11405,6 +11427,8 @@ else appLockInit();
         + '<button type="button" class="le-add" data-act="addr">+ novo material</button>';
       var b=document.getElementById('le-busca');
       if(b) b.addEventListener('input', function(){ rasc.busca=b.value; desenhar(); setTimeout(function(){ var n=document.getElementById('le-busca'); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } },0); });
+      var sc=document.getElementById('le-cat');
+      if(sc) sc.addEventListener('change', function(){ rasc.catFiltro=sc.value; desenhar(); });
       return;
     }
     /* PREÇO DAS LINHAS (Suzana, 20/09): calculadora simples. Soma o
@@ -11534,9 +11558,22 @@ else appLockInit();
   function custoDaMontagem(mt){
     return R2((mt.mats||[]).reduce(function(s,x){ return s+(parseFloat(x.q)||0)*window._valorDoMaterial(x); },0));
   }
+  /* ⚠️ 11/10/2026 — PRODUTO NÃO ENTRA NESTA LISTA.
+     "Está misturado produtos e materiais. Lembre: produtos, aba Precificação
+     e catálogos; materiais, materiais/insumos, sejam eles para vender avulso
+     ou compor arranjos ou kits" (Suzana).
+     Kit e arranjo validado (o que ela salva com foto) moram na Precificação.
+     Aqui fica só o que ela compra e usa: insumo, embalagem, enchimento — e
+     também o material que ela revende solto, que continua sendo material. */
+  function _itensMateriais(){
+    return window._registroItens().filter(function(x){
+      var noCat = (typeof catalogo!=='undefined'?catalogo:[]).filter(function(p){ return p && p.id===x.id; })[0];
+      return !(noCat && window._ehMaterial(noCat) === false);
+    });
+  }
   window._abrirLinhas=function(){
     window._seedItens(); window._seedLinhas(); criarModal();
-    rasc={linhas:copia(linhas()), avulsos:copia(avulsos()), itens:copia(window._registroItens()),
+    rasc={linhas:copia(linhas()), avulsos:copia(avulsos()), itens:copia(_itensMateriais()),
           montagens:montagensParaEditar(), busca:'', removidosL:[], removidosA:[], removidosR:[], removidosM:[]};
     aba='p'; desenhar();
     openModal('modal-linhas');
