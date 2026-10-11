@@ -9880,7 +9880,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c77';
+  var ver='v11/10-c78';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -11515,6 +11515,154 @@ else appLockInit();
     return ret;
   };
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     FOTOS: SAEM DO APERTO E GANHAM CÓPIA NA NUVEM (11/10/2026)
+
+     Como era: toda foto de produto ficava no localStorage, que tem limite de
+     uns 5 MB — dava umas 40 a 60 fotos, e a partir dali o app avisava
+     "memória cheia" e simplesmente não salvava. Pior: **a foto existia só
+     naquele aparelho**. Celular perdido ou dados limpos = fotos perdidas, e
+     o computador nunca via as fotos tiradas no celular.
+
+     Como ficou:
+     · o aparelho guarda as fotos no IndexedDB, que tem espaço de sobra
+       (centenas de MB em vez de 5);
+     · cada foto também sobe para o Firebase, uma por produto, na mesma
+       coleção que as regras de segurança já liberam (`tiasu_fotos`);
+     · ao entrar em outro aparelho, as fotos que faltam descem sozinhas.
+
+     O que não mudou: `_getFoto(id)` continua instantâneo, lendo da memória.
+     É o que mantém catálogo, comanda e recibo funcionando como antes.      */
+
+  var _FOTO_DB_NOME = 'tiasu-fotos', _FOTO_STORE = 'fotos', _fotoDbAberto = null;
+
+  function _fotoDbAbrir(){
+    return new Promise(function(res, rej){
+      if (_fotoDbAberto) return res(_fotoDbAberto);
+      if (!window.indexedDB) return rej(new Error('sem IndexedDB'));
+      var rq = indexedDB.open(_FOTO_DB_NOME, 1);
+      rq.onupgradeneeded = function(){
+        try{ rq.result.createObjectStore(_FOTO_STORE); }catch(e){}
+      };
+      rq.onsuccess = function(){ _fotoDbAberto = rq.result; res(_fotoDbAberto); };
+      rq.onerror   = function(){ rej(rq.error || new Error('erro ao abrir')); };
+    });
+  }
+  function _fotoDbLoja(modo){
+    return _fotoDbAbrir().then(function(db){
+      return db.transaction(_FOTO_STORE, modo).objectStore(_FOTO_STORE);
+    });
+  }
+  window._fotoDB = {
+    gravar: function(id, b64){
+      return _fotoDbLoja('readwrite').then(function(loja){
+        return new Promise(function(res, rej){
+          var rq = loja.put(b64, id);
+          rq.onsuccess = function(){ res(true); };
+          rq.onerror   = function(){ rej(rq.error); };
+        });
+      }).catch(function(e){ console.warn('[fotos] gravar', e); return false; });
+    },
+    apagar: function(id){
+      return _fotoDbLoja('readwrite').then(function(loja){
+        return new Promise(function(res){ var rq = loja.delete(id); rq.onsuccess=function(){res(true);}; rq.onerror=function(){res(false);}; });
+      }).catch(function(){ return false; });
+    },
+    todas: function(){
+      return _fotoDbLoja('readonly').then(function(loja){
+        return new Promise(function(res){
+          var out = {};
+          var rq = loja.openCursor();
+          rq.onsuccess = function(){
+            var c = rq.result;
+            if (!c) return res(out);
+            out[c.key] = c.value; c.continue();
+          };
+          rq.onerror = function(){ res(out); };
+        });
+      }).catch(function(){ return {}; });
+    }
+  };
+
+  /* o localStorage deixa de guardar foto — fica só o IndexedDB e a nuvem */
+  window._salvarFotosLS = function(){ return true; };
+
+  /* grava a foto: memória (instantâneo) + aparelho + nuvem */
+  window._setFoto = function(id, dataURL){
+    if (!id) return;
+    if (!dataURL) { delete _fotos[id]; } else { _fotos[id] = dataURL; }
+    try {
+      if (dataURL) window._fotoDB.gravar(id, dataURL);
+      else         window._fotoDB.apagar(id);
+    } catch(e) { console.warn('[fotos] aparelho', e); }
+    try { window._fotoNuvem(id, dataURL); } catch(e) { console.warn('[fotos] nuvem', e); }
+  };
+
+  /* uma foto por documento, do lado de lá */
+  window._fotoNuvem = function(id, b64){
+    try {
+      if (!window._fbOn || typeof firebase === 'undefined') return;
+      if (!firebase.auth().currentUser) return;          // sem login, não escreve
+      var col = firebase.firestore().collection('tiasu_fotos');
+      if (b64) col.doc(id).set({ b64: b64, em: Date.now() }).catch(function(){});
+      else     col.doc(id).delete().catch(function(){});
+    } catch(e) {}
+  };
+
+  /* roda depois do login: desce o que falta e sobe o que só existe aqui */
+  window._sincronizarFotos = async function(){
+    if (!window._fbOn || typeof firebase === 'undefined') return;
+    if (!firebase.auth().currentUser) return;
+    var baixadas = 0, subidas = 0;
+    try {
+      var snap = await firebase.firestore().collection('tiasu_fotos').get();
+      var naNuvem = {};
+      snap.forEach(function(d){
+        naNuvem[d.id] = 1;
+        var b = (d.data() || {}).b64;
+        if (b && !_fotos[d.id]) {
+          _fotos[d.id] = b;
+          window._fotoDB.gravar(d.id, b);
+          baixadas++;
+        }
+      });
+      Object.keys(_fotos).forEach(function(id){
+        if (!naNuvem[id] && _fotos[id]) { window._fotoNuvem(id, _fotos[id]); subidas++; }
+      });
+    } catch(e) { console.warn('[fotos] sincronizar', e); return; }
+    if (baixadas) {
+      try { if (typeof renderCatalogo === 'function') renderCatalogo(); } catch(e) {}
+      try { if (typeof toast === 'function') toast(baixadas + ' foto(s) baixadas da nuvem'); } catch(e) {}
+    }
+    console.log('[fotos] nuvem: ' + baixadas + ' baixadas, ' + subidas + ' subidas');
+  };
+
+  /* ao abrir o app: traz do IndexedDB e MUDA DE CASA o que ainda estiver no
+     localStorage (libera aquele espaço, que é o mesmo dos outros dados) */
+  (async function _fotosAoAbrir(){
+    try {
+      var guardadas = await window._fotoDB.todas();
+      Object.keys(guardadas).forEach(function(id){ if (!_fotos[id]) _fotos[id] = guardadas[id]; });
+
+      var antigas = null;
+      try { antigas = JSON.parse(localStorage.getItem('tiasu_fotos') || 'null'); } catch(e) {}
+      if (antigas && typeof antigas === 'object') {
+        var n = 0;
+        for (var id in antigas) {
+          if (!antigas[id]) continue;
+          _fotos[id] = antigas[id];
+          await window._fotoDB.gravar(id, antigas[id]);
+          n++;
+        }
+        try { localStorage.removeItem('tiasu_fotos'); } catch(e) {}
+        console.log('[fotos] ' + n + ' foto(s) mudaram do localStorage para o IndexedDB');
+      }
+      if (Object.keys(guardadas).length || antigas) {
+        try { if (typeof renderCatalogo === 'function') renderCatalogo(); } catch(e) {}
+      }
+    } catch(e) { console.warn('[fotos] abrir', e); }
+  })();
+
   /* ═══════════════════════════════════════════════════════════════════
      BAIXAR A VERSÃO MAIS NOVA AGORA (11/10/2026)
 
@@ -12781,6 +12929,8 @@ else appLockInit();
     firebase.auth().onAuthStateChanged(function(user){
       if(user){
         var ov=document.getElementById('app-lock'); if(ov) ov.style.display='none';
+        /* 11/10: as fotos também têm cópia na nuvem agora */
+        try{ if(typeof window._sincronizarFotos==='function') setTimeout(window._sincronizarFotos, 1500); }catch(e){}
         if(fdoc){
           fdoc.onSnapshot(function(snap){
             try{
