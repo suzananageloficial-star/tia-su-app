@@ -1503,6 +1503,13 @@ window._donaDoApp = function(){ return (window.APP_CONFIG||{}).email || ''; };
         </select>
         <div style="font-size:10px;color:var(--gray-d);margin-top:3px">Pergunte no atendimento: <b>"como você me achou?"</b> — é o que faz a tela Tráfego funcionar.</div>
       </div>
+      <!-- 11/10/2026: qual campanha trouxe esta cliente. Só aparece quando a
+           origem é Anúncio — é o que amarra o custo do anúncio à venda. -->
+      <div class="form-group" id="p-campanha-row" style="display:none">
+        <label class="form-label">Qual campanha trouxe?</label>
+        <select class="form-select" id="p-campanha"><option value="">— não sei —</option></select>
+        <div style="font-size:10px;color:var(--gray-d);margin-top:3px">A venda entra sozinha no placar da campanha, em Tráfego.</div>
+      </div>
       <div class="form-group">
         <label class="form-label">Personalização / Observações</label>
         <textarea class="form-textarea" id="p-obs" placeholder="Cores, temas, endereço de entrega..."></textarea>
@@ -2042,6 +2049,7 @@ function save() {
   DB.set('cat',     catalogo);
   DB.set('ativos',  ativos);
   DB.set('lista_compras', listaCompras);
+  if (typeof campanhas !== 'undefined') DB.set('campanhas', campanhas);
   // Carimba a data/hora da última alteração (mostrada no rodapé em FERRAMENTAS)
   if (typeof window._marcarSync === 'function') window._marcarSync();
   // Sync em tempo real (Firebase, com login) — envia esta alteração pra nuvem
@@ -2164,7 +2172,7 @@ function renderScreen(s) {
   if (s==='clientes')   { sincronizarTodosClientes(); }
   if (s==='fornecedores') renderFornecedores();
   if (s==='relatorios')   renderRelatorios();
-  if (s==='trafego')      renderTrafego();
+  if (s==='trafego')    { try{ window._montarCampanhas(); }catch(e){ console.warn('[campanhas]', e); } renderTrafego(); }
 }
 
 // ── FAB ───────────────────────────────────────────────────────
@@ -2640,6 +2648,7 @@ function salvarPedido() {
     status:     document.getElementById('p-status').value,
     pgto:       document.getElementById('p-pgto').value,
     origem:     document.getElementById('p-origem') ? document.getElementById('p-origem').value : '',
+    campanha:   document.getElementById('p-campanha') ? document.getElementById('p-campanha').value : '',
     obs:        document.getElementById('p-obs').value,
     endereco: {
       cep:    (document.getElementById('p-cep')||{}).value||'',
@@ -2756,6 +2765,7 @@ function editarPedido(id) {
   document.getElementById('p-status').value   = p.status||'Novo';
   document.getElementById('p-pgto').value     = p.pgto||'PIX';
   if (document.getElementById('p-origem')) document.getElementById('p-origem').value = p.origem||'';
+  try{ window._prepararCampanhaNoPedido(p.campanha||''); }catch(e){}
   document.getElementById('p-obs').value      = p.obs||'';
   var _end=p.endereco||{};
   if(document.getElementById('p-cep'))      document.getElementById('p-cep').value=_end.cep||'';
@@ -9236,7 +9246,8 @@ function _stores(){
   return { pedidos:pedidos, financeiro:financeiro, estoque:estoque, catalogo:catalogo,
     clientes:clientes, fornecedores:fornecedores,
     ativos:(typeof ativos!=='undefined'?ativos:[]),
-    recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[]) };
+    recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[]),
+    campanhas:(typeof campanhas!=='undefined'?campanhas:[]) };
 }
 let _snapIds = {};
 function _snapshot(){
@@ -9384,6 +9395,21 @@ window.addEventListener('load', function(){ setTimeout(cicloSync, 2000); });
    no Dashboard. "✓ Paguei" lança a despesa no financeiro sozinho. */
 
 let recorrentes = DB.get('recorrentes');
+
+/* ── CAMPANHAS DE ANÚNCIO (11/10/2026) ───────────────────────────────
+   "Criar uma campanha por vez e ir atualizando os dados; ao fechar um
+   pedido, ser específico de cada campanha, para ir contabilizando custos
+   × vendas" (Suzana).
+
+   Cada campanha guarda: nome, destino (perfil ou WhatsApp), quando começou,
+   se está no ar, e os GASTOS lançados dia a dia. A venda não é digitada
+   aqui: ela vem do pedido, que aponta para a campanha (campo `campanha`).
+   Assim o número de vendas nunca discorda da lista de pedidos.
+
+   No app vendido o gasto é lançado à mão. No da Tia Sú, o conector do Meta
+   escreve na planilha e o app pode puxar de lá — mas a mão sempre funciona,
+   que é o que faz isto servir para qualquer compradora.                  */
+let campanhas = DB.get('campanhas') || [];
 
 function _mesRef(){ const n=new Date(); return n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0'); }
 function _recPaga(r){ const m=_mesRef(); return financeiro.some(f=>f.recId===r.id && f.mesRef===m); }
@@ -9889,7 +9915,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c79';
+  var ver='v11/10-c80';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -11521,6 +11547,7 @@ else appLockInit();
        desmarcar; deixou de ser o padrão. Este é o ÚNICO lugar que decide isso:
        este wrapper roda depois do resetModal e vence. */
     if(id==='modal-fin' && isNew){ var c=document.getElementById('f-add-estoque'); if(c) c.checked=true; }
+    if(id==='modal-pedido'){ try{ window._prepararCampanhaNoPedido(isNew ? '' : null); }catch(e){} }
     return ret;
   };
 
@@ -12475,6 +12502,310 @@ else appLockInit();
      (2 · 2,5 · 3) = preço de venda. O catálogo com foto saiu do app.   */
   var calcAberto={};
   /* ═══════════════════════════════════════════════════════════════════════
+     TRÁFEGO PAGO POR CAMPANHA (11/10/2026)
+
+     Pedido da Suzana: "criar uma campanha por vez e ir atualizando os dados.
+     Ao fechar um pedido, ser específico de cada campanha. Tem que ir
+     atualizando os números da campanha para poder ir contabilizando
+     custos × vendas."
+
+     Como funciona, em uma frase: **o gasto você lança, a venda vem sozinha
+     do pedido.** Cada pedido aponta para a campanha que o trouxe, então o
+     número de vendas nunca briga com a lista de pedidos.
+
+     A tela antiga (resumo do mês inteiro) continua embaixo — ela responde
+     "quanto gastei e quanto vendi no mês", que é outra pergunta.          */
+
+  window._campanhaPorId = function(id){
+    if (typeof campanhas === 'undefined') return null;
+    return campanhas.filter(function(c){ return c && c.id === id; })[0] || null;
+  };
+  window._campanhasAtivas = function(){
+    if (typeof campanhas === 'undefined') return [];
+    return campanhas.filter(function(c){ return c && c.ativa !== false; });
+  };
+
+  /* números de uma campanha: o que saiu, o que entrou, e a conta entre os dois */
+  window._numerosDaCampanha = function(c){
+    var gasto = R2((c.gastos || []).reduce(function(s, g){ return s + (parseFloat(g.valor) || 0); }, 0));
+    var vendas = (typeof pedidos !== 'undefined' ? pedidos : [])
+      .filter(function(p){ return p && p.campanha === c.id && p.status !== 'Cancelado'; });
+    var fat = R2(vendas.reduce(function(s, p){ return s + (parseFloat(p.valor) || 0); }, 0));
+    return {
+      gasto: gasto,
+      vendas: vendas.length,
+      faturamento: fat,
+      porVenda: vendas.length ? R2(gasto / vendas.length) : 0,   // quanto custou cada venda
+      retorno: gasto > 0 ? Math.round(fat / gasto * 100) / 100 : 0, // R$ que voltou por R$ gasto
+      sobra: R2(fat - gasto),
+    };
+  };
+
+  window._novaCampanha = function(){
+    window._editarCampanha(null);
+  };
+
+  window._editarCampanha = function(id){
+    var c = id ? window._campanhaPorId(id) : null;
+    var mod = document.getElementById('modal-campanha');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay'; mod.id = 'modal-campanha';
+      document.body.appendChild(mod);
+    }
+    var hoje = (typeof today === 'function') ? today() : new Date().toISOString().slice(0, 10);
+    mod.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
+      '<div class="modal-title">' + (c ? 'Campanha' : 'Nova campanha') + '</div>' +
+      '<div class="modal-body">' +
+        '<div class="form-group"><label class="form-label">Nome da campanha</label>' +
+          '<input class="form-input" id="cp-nome" value="' + esc((c && c.nome) || '') + '" placeholder="Ex.: Dindos — Convite — WhatsApp"></div>' +
+        '<div class="form-row">' +
+          '<div class="form-group"><label class="form-label">Para onde manda</label>' +
+            '<select class="form-select" id="cp-destino">' +
+              ['WhatsApp', 'Perfil do Instagram', 'Outro'].map(function(d){
+                return '<option' + ((c && c.destino === d) ? ' selected' : '') + '>' + d + '</option>';
+              }).join('') +
+            '</select></div>' +
+          '<div class="form-group"><label class="form-label">Começou em</label>' +
+            '<input class="form-input" type="date" id="cp-inicio" value="' + esc((c && c.inicio) || hoje) + '"></div>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<div class="form-group"><label class="form-label">Quanto por dia (R$)</label>' +
+            '<input class="form-input" type="number" step="0.01" min="0" id="cp-dia" value="' + ((c && c.porDia) || '') + '" placeholder="10,00"></div>' +
+          '<div class="form-group"><label class="form-label">Está no ar?</label>' +
+            '<select class="form-select" id="cp-ativa">' +
+              '<option value="1"' + ((!c || c.ativa !== false) ? ' selected' : '') + '>Sim, rodando</option>' +
+              '<option value="0"' + ((c && c.ativa === false) ? ' selected' : '') + '>Pausada</option>' +
+            '</select></div>' +
+        '</div>' +
+        '<div class="form-group"><label class="form-label">Observação</label>' +
+          '<input class="form-input" id="cp-obs" value="' + esc((c && c.obs) || '') + '" placeholder="criativo, público, o que testar"></div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        (c ? '<button class="btn btn-outline" style="border-color:var(--red);color:var(--red)" onclick="_excluirCampanha(\'' + c.id + '\')">Excluir</button>' : '') +
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-campanha\')">Cancelar</button>' +
+        '<button class="btn btn-pink" style="flex:1" onclick="_salvarCampanha(' + (c ? ("'" + c.id + "'") : 'null') + ')">Salvar</button>' +
+      '</div></div>';
+    openModal('modal-campanha');
+  };
+
+  window._salvarCampanha = function(id){
+    var nome = (document.getElementById('cp-nome').value || '').trim();
+    if (!nome) { toast('Dê um nome para a campanha'); return; }
+    var dados = {
+      nome: nome,
+      destino: document.getElementById('cp-destino').value,
+      inicio:  document.getElementById('cp-inicio').value,
+      porDia:  R2(parseFloat(document.getElementById('cp-dia').value) || 0),
+      ativa:   document.getElementById('cp-ativa').value === '1',
+      obs:     (document.getElementById('cp-obs').value || '').trim(),
+      updatedAt: Date.now(),
+    };
+    var c = id ? window._campanhaPorId(id) : null;
+    if (c) { Object.keys(dados).forEach(function(k){ c[k] = dados[k]; }); }
+    else {
+      dados.id = 'cmp_' + uid();
+      dados.gastos = [];
+      campanhas.push(dados);
+    }
+    save();
+    closeModal('modal-campanha');
+    window._renderCampanhas();
+    toast(c ? 'Campanha atualizada' : 'Campanha criada');
+  };
+
+  window._excluirCampanha = function(id){
+    var c = window._campanhaPorId(id); if (!c) return;
+    var presos = (typeof pedidos !== 'undefined' ? pedidos : []).filter(function(p){ return p && p.campanha === id; }).length;
+    var aviso = 'Excluir a campanha "' + c.nome + '"?';
+    if (presos) aviso += '\n\n' + presos + ' pedido(s) apontam para ela. Eles não são apagados — só deixam de ter campanha.';
+    if (!confirm(aviso)) return;
+    campanhas = campanhas.filter(function(x){ return x.id !== id; });
+    save();
+    closeModal('modal-campanha');
+    window._renderCampanhas();
+    toast('Campanha excluída');
+  };
+
+  /* lançar o gasto do dia — é o que mantém o custo × venda de pé */
+  window._lancarGasto = function(id){
+    var c = window._campanhaPorId(id); if (!c) return;
+    var hoje = (typeof today === 'function') ? today() : new Date().toISOString().slice(0, 10);
+    var mod = document.getElementById('modal-gasto');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay'; mod.id = 'modal-gasto';
+      document.body.appendChild(mod);
+    }
+    var jaLancados = (c.gastos || []).slice().sort(function(a, b){ return (b.data || '').localeCompare(a.data || ''); });
+    mod.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Gasto — ' + esc(c.nome) + '</div>' +
+      '<div class="modal-body">' +
+        '<div class="form-row">' +
+          '<div class="form-group"><label class="form-label">Dia</label>' +
+            '<input class="form-input" type="date" id="gs-data" value="' + hoje + '"></div>' +
+          '<div class="form-group"><label class="form-label">Quanto gastou (R$)</label>' +
+            '<input class="form-input" type="number" step="0.01" min="0" id="gs-valor" value="' + (c.porDia || '') + '"></div>' +
+        '</div>' +
+        '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--brown);margin-bottom:10px">' +
+          '<input type="checkbox" id="gs-fin" checked style="width:17px;height:17px;accent-color:var(--pink)">' +
+          'Lançar também no Financeiro (Marketing/Anúncios)</label>' +
+        (jaLancados.length
+          ? '<div style="border-top:1px solid #eee;padding-top:8px">' +
+            '<div style="font-size:10px;font-weight:800;color:var(--brown);margin-bottom:5px">JÁ LANÇADO NESTA CAMPANHA</div>' +
+            jaLancados.slice(0, 8).map(function(g){
+              return '<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;border-bottom:1px solid #f6f6f8">' +
+                '<span style="color:var(--gray-d)">' + (typeof fmtDate === 'function' ? fmtDate(g.data) : g.data) + '</span>' +
+                '<b>' + fmt(g.valor) + '</b></div>';
+            }).join('') +
+            '</div>'
+          : '<div class="le-mini" style="display:block">Nenhum gasto lançado ainda.</div>') +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-gasto\')">Fechar</button>' +
+        '<button class="btn btn-pink" style="flex:1" onclick="_salvarGasto(\'' + id + '\')">Lançar</button>' +
+      '</div></div>';
+    openModal('modal-gasto');
+  };
+
+  window._salvarGasto = function(id){
+    var c = window._campanhaPorId(id); if (!c) return;
+    var data  = document.getElementById('gs-data').value;
+    var valor = R2(parseFloat(document.getElementById('gs-valor').value) || 0);
+    if (!(valor > 0)) { toast('Quanto foi o gasto?'); return; }
+    c.gastos = c.gastos || [];
+    /* mesmo dia lançado de novo: substitui, em vez de somar duas vezes */
+    var ja = c.gastos.filter(function(g){ return g.data === data; })[0];
+    if (ja) ja.valor = valor; else c.gastos.push({ data: data, valor: valor });
+    c.updatedAt = Date.now();
+
+    if (document.getElementById('gs-fin').checked && typeof financeiro !== 'undefined') {
+      var marca = 'cmp:' + id + ':' + data;
+      var antigo = financeiro.filter(function(f){ return f && f.doPedido === marca; })[0];
+      if (antigo) { antigo.valor = valor; antigo.updatedAt = Date.now(); }
+      else financeiro.unshift({
+        id: uid(), tipo: 'Despesa Variável',
+        cat: (typeof CAT_ANUNCIO !== 'undefined') ? CAT_ANUNCIO : 'Marketing/Anúncios',
+        valor: valor, desc: 'Anúncio — ' + c.nome, data: data, pgto: 'Cartão',
+        doPedido: marca, updatedAt: Date.now(),
+      });
+    }
+    save();
+    closeModal('modal-gasto');
+    window._renderCampanhas();
+    toast('Gasto de ' + fmt(valor) + ' lançado');
+  };
+
+  /* a lista de campanhas, com o placar de cada uma */
+  /* o seletor de campanha dentro do pedido: só aparece quando veio de anúncio */
+  window._prepararCampanhaNoPedido = function(escolhida){
+    var sel = document.getElementById('p-campanha');
+    var linha = document.getElementById('p-campanha-row');
+    var org = document.getElementById('p-origem');
+    if (!sel || !linha || !org) return;
+
+    var lista = (typeof campanhas !== 'undefined' ? campanhas : []).slice().sort(function(a, b){
+      if ((a.ativa !== false) !== (b.ativa !== false)) return (a.ativa !== false) ? -1 : 1;
+      return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+    });
+    var valor = (escolhida != null) ? escolhida : sel.value;
+    /* ⚠️ a lista é remontada A CADA abertura do pedido: campanha criada
+       depois que o app abriu precisa aparecer aqui sem recarregar nada. */
+    sel.innerHTML = lista.length
+      ? ('<option value="">— não sei —</option>' +
+         lista.map(function(c){
+           return '<option value="' + c.id + '"' + (c.id === valor ? ' selected' : '') + '>' +
+                  esc(c.nome) + (c.ativa === false ? ' (pausada)' : '') + '</option>';
+         }).join(''))
+      : '<option value="">— cadastre a campanha em Tráfego —</option>';
+
+    function mostrar(){
+      var ehAnuncio = /an[úu]ncio/i.test(org.value || '');
+      linha.style.display = ehAnuncio ? '' : 'none';
+      if (!ehAnuncio) sel.value = '';
+    }
+    mostrar();
+    if (!org.dataset.ligadoCampanha) {
+      org.addEventListener('change', mostrar);
+      org.dataset.ligadoCampanha = '1';
+    }
+  };
+
+  /* cria a caixa das campanhas acima do resumo do mês, uma vez só */
+  window._montarCampanhas = function(){
+    var tela = document.getElementById('screen-trafego'); if (!tela) return;
+    var cx = document.getElementById('campanhas-box');
+    if (!cx) {
+      cx = document.createElement('div');
+      cx.id = 'campanhas-box';
+      cx.style.marginBottom = '16px';
+      var corpo = document.getElementById('trafego-body');
+      if (corpo && corpo.parentNode) corpo.parentNode.insertBefore(cx, corpo);
+      else tela.appendChild(cx);
+    }
+    window._renderCampanhas();
+  };
+
+  window._renderCampanhas = function(){
+    var alvo = document.getElementById('campanhas-box'); if (!alvo) return;
+    var lista = (typeof campanhas !== 'undefined' ? campanhas : []).slice().sort(function(a, b){
+      if ((a.ativa !== false) !== (b.ativa !== false)) return (a.ativa !== false) ? -1 : 1;  // ativas primeiro
+      return (b.inicio || '').localeCompare(a.inicio || '');
+    });
+
+    var topo = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">' +
+      '<div style="flex:1"><div style="font-size:12px;font-weight:800;color:var(--brown)">CAMPANHAS</div>' +
+      '<div style="font-size:10px;color:var(--gray-d)">O gasto você lança aqui. A venda vem sozinha do pedido.</div></div>' +
+      '<button class="btn btn-pink btn-sm" onclick="_novaCampanha()">+ Nova campanha</button></div>';
+
+    if (!lista.length) {
+      alvo.innerHTML = topo +
+        '<div style="border:1.5px dashed #f0cede;border-radius:12px;padding:16px;text-align:center;color:var(--gray-d);font-size:12px">' +
+          'Nenhuma campanha ainda.<br>Crie uma para cada anúncio que você subir — aí dá para ver qual se paga.' +
+        '</div>';
+      return;
+    }
+
+    alvo.innerHTML = topo + lista.map(function(c){
+      var n = window._numerosDaCampanha(c);
+      var corRet = n.gasto <= 0 ? 'var(--gray-d)' : (n.retorno >= 2 ? 'var(--green)' : (n.retorno >= 1 ? 'var(--orange)' : 'var(--red)'));
+      var selo = (c.ativa !== false)
+        ? '<span style="font-size:9px;font-weight:800;color:var(--green);background:var(--green-l);border-radius:10px;padding:2px 7px">NO AR</span>'
+        : '<span style="font-size:9px;font-weight:800;color:var(--gray-d);background:#f1f1f4;border-radius:10px;padding:2px 7px">PAUSADA</span>';
+      return '<div style="border:1px solid #ECEEF3;border-radius:14px;padding:11px;margin-bottom:9px;background:#fff">' +
+        '<div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">' +
+          '<b style="flex:1;font-size:13px;color:var(--brown);cursor:pointer" onclick="_editarCampanha(\'' + c.id + '\')">' + esc(c.nome) + '</b>' + selo +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--gray-d);margin-bottom:8px">' +
+          esc(c.destino || '—') + (c.inicio ? ' · desde ' + (typeof fmtDate === 'function' ? fmtDate(c.inicio) : c.inicio) : '') +
+          (c.porDia ? ' · ' + fmt(c.porDia) + '/dia' : '') +
+        '</div>' +
+        '<div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:9px">' +
+          '<div style="flex:1 1 76px;background:var(--red-l);border-radius:10px;padding:6px 8px">' +
+            '<div style="font-size:9px;font-weight:800;color:var(--red)">GASTOU</div>' +
+            '<div style="font-size:14px;font-weight:800;color:var(--brown)">' + fmt(n.gasto) + '</div></div>' +
+          '<div style="flex:1 1 76px;background:var(--green-l);border-radius:10px;padding:6px 8px">' +
+            '<div style="font-size:9px;font-weight:800;color:var(--green)">VENDEU</div>' +
+            '<div style="font-size:14px;font-weight:800;color:var(--brown)">' + fmt(n.faturamento) + '</div>' +
+            '<div style="font-size:9px;color:var(--gray-d)">' + n.vendas + ' pedido' + (n.vendas === 1 ? '' : 's') + '</div></div>' +
+          '<div style="flex:1 1 76px;background:#F7F7FA;border-radius:10px;padding:6px 8px">' +
+            '<div style="font-size:9px;font-weight:800;color:var(--gray-d)">CADA VENDA CUSTOU</div>' +
+            '<div style="font-size:14px;font-weight:800;color:var(--brown)">' + (n.vendas ? fmt(n.porVenda) : '—') + '</div></div>' +
+          '<div style="flex:1 1 76px;background:#F7F7FA;border-radius:10px;padding:6px 8px">' +
+            '<div style="font-size:9px;font-weight:800;color:var(--gray-d)">RETORNO</div>' +
+            '<div style="font-size:14px;font-weight:800;color:' + corRet + '">' +
+              (n.gasto > 0 ? (String(n.retorno).replace('.', ',') + '×') : '—') + '</div>' +
+            '<div style="font-size:9px;color:var(--gray-d)">' + (n.gasto > 0 ? (n.sobra >= 0 ? 'sobrou ' : 'faltou ') + fmt(Math.abs(n.sobra)) : 'sem gasto') + '</div></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button class="btn btn-ghost btn-sm" style="flex:1;border-color:var(--orange);color:var(--orange)" onclick="_lancarGasto(\'' + c.id + '\')">Lançar gasto</button>' +
+          '<button class="btn btn-ghost btn-sm" style="flex:1;border-color:var(--cyan);color:var(--cyan-d)" onclick="_editarCampanha(\'' + c.id + '\')">Editar</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════════
      O QUE O MÊS CUSTA, À VISTA NA PRECIFICAÇÃO (11/10/2026)
 
      Pedido da Suzana: "uma coisa que precisamos ter: ao ir lançando custos
@@ -12881,6 +13212,7 @@ else appLockInit();
   function iniciar(){
     try{
       window._seedItens(); window._seedLinhas(); criarModal(); botaoPrecificacao(); ajustarMenu(); materiaisPertoDosItens();
+      try{ window._prepararCampanhaNoPedido(); }catch(e){}
       if(!document.getElementById('ts-cores-datalist')){
         var dl=document.createElement('datalist'); dl.id='ts-cores-datalist'; document.body.appendChild(dl);
       }
@@ -12943,6 +13275,7 @@ else appLockInit();
       clientes:clientes, fornecedores:(typeof fornecedores!=='undefined'?fornecedores:[]),
       ativos:(typeof ativos!=='undefined'?ativos:[]), listaCompras:(typeof listaCompras!=='undefined'?listaCompras:[]),
       recorrentes:(typeof recorrentes!=='undefined'?recorrentes:[]),
+      campanhas:(typeof campanhas!=='undefined'?campanhas:[]),
       // as lápides viajam junto: sem elas, o que foi excluído num aparelho
       // voltava do outro na mesclagem
       _tumbas:(typeof tumbas!=='undefined'?tumbas:[]) };
@@ -13019,6 +13352,7 @@ else appLockInit();
       if(typeof fornecedores!=='undefined') fornecedores=junta(fornecedores, data.fornecedores);
       if(typeof ativos!=='undefined')       ativos      =junta(ativos,       data.ativos);
       if(typeof recorrentes!=='undefined')  recorrentes =junta(recorrentes,  data.recorrentes);
+      if(typeof campanhas!=='undefined')    campanhas   =junta(campanhas,    data.campanhas);
       if(typeof listaCompras!=='undefined' && data.listaCompras) listaCompras=data.listaCompras;
       try{
         DB.set('pedidos',pedidos); DB.set('fin',financeiro); DB.set('est',estoque);
@@ -13026,6 +13360,7 @@ else appLockInit();
         if(typeof fornecedores!=='undefined') DB.set('fornecedores',fornecedores);
         if(typeof ativos!=='undefined') DB.set('ativos',ativos);
         if(typeof recorrentes!=='undefined') DB.set('recorrentes',recorrentes);
+        if(typeof campanhas!=='undefined') DB.set('campanhas',campanhas);
         DB.set('lista_compras',(typeof listaCompras!=='undefined'?listaCompras:[]));
       }catch(e){}
       // o que veio da mesclagem não é alteração local: não pode virar lápide
