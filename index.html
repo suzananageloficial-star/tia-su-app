@@ -8024,14 +8024,27 @@ function adicionarMaterialPedido(nome,qtd,status,matId,tipo,size,itemId,valor){
   var row=document.createElement('div'); row.className='material-row'; row.id=rowId;
   row.dataset.matId=id; row.dataset.tipo=tipo;
   var _sz0=size||nome, _isFita0=_ehFita(_sz0), _isBal0=(tipo==='balao'||_ehBalao(_sz0))&&!_isFita0&&!_naoEBalao(_sz0);
-  if(_isFita0 || _isBal0){
+  /* 11/10/2026 — "na precificação, ao lançar o produto, posso escolher se
+     aquele item terá a cor escolhida depois: balão, fita, confete, foil...
+     tudo o que é colorido" (Suzana). Antes só balão e fita viravam seletor
+     de cor; agora qualquer material marcado como `cor` vira — e as opções
+     são os materiais cadastrados que começam com o mesmo nome. */
+  var _isCor0 = (tipo==='cor');
+  if(_isFita0 || _isBal0 || _isCor0){
     var sz=_sz0; row.dataset.balaoSize=sz;
     var ehFit=_isFita0; var emo=ehFit?(_ehPapelCor(sz)?'<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M6 2h8l4 4v16H6Z"/><path d="M14 2v4h4"/><path d="M9 13h6M9 17h5"/></svg>':'<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M12 3a9 9 0 0 0 0 18c1.4 0 1.9-1 1.4-1.9-.5-1 0-1.9 1.1-1.9h1.2A3.8 3.8 0 0 0 21 13c0-5.2-4-10-9-10Z"/><circle cx="7.5" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/><circle cx="16" cy="11" r="1" fill="currentColor" stroke="none"/></svg>'):'<svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M12 3c3 0 5 2.5 5 6 0 3.6-3 6-5 6s-5-2.4-5-6c0-3.5 2-6 5-6Z"/><path d="M12 15v3"/><path d="M12 21c-1.6 0-1.6-1.6 0-3"/></svg>';
-    row.dataset.tipo=ehFit?'fita':'balao';
-    var opts=ehFit
-      ? estoque.filter(function(e){return _ehFita(e.nome)&&matchFita(e.nome,sz);})
-      : estoque.filter(function(e){return _ehBalao(e.nome)&&matchSize(e.nome,sz);});
-    if(!opts.length) opts=estoque.filter(function(e){return ehFit?_ehFita(e.nome):_ehBalao(e.nome);});
+    row.dataset.tipo = _isCor0 ? 'cor' : (ehFit?'fita':'balao');
+    var opts;
+    if(_isCor0){
+      opts = window._opcoesDeCor(sz);                 // material colorido qualquer
+    } else {
+      opts = ehFit
+        ? estoque.filter(function(e){return _ehFita(e.nome)&&matchFita(e.nome,sz);})
+        : estoque.filter(function(e){return _ehBalao(e.nome)&&matchSize(e.nome,sz);});
+      if(!opts.length) opts=estoque.filter(function(e){return ehFit?_ehFita(e.nome):_ehBalao(e.nome);});
+      /* nem balão nem fita acharam nada: tenta pelos irmãos de nome */
+      if(!opts.length) opts = window._opcoesDeCor(sz);
+    }
     var selId=itemId||''; row.dataset.itemId=selId;
     var selItem=estoque.find(function(e){return e.id===selId;});
     var _need0=parseFloat(qtd)||0;
@@ -8903,8 +8916,16 @@ function coletarItensFicha(){
     var qtd=parseNum((r.querySelector('.fi-qtd')||{}).value)||0;
     var valor=parseNum((r.querySelector('.fi-valor')||{}).value)||0;
     var balao=(r.querySelector('.fi-balao')||{}).checked||false;
-    var fita=!balao && (typeof _ehFita==='function') && _ehFita(nm);
-    if(nm) out.push({nome:nm,qtd:qtd,valor:valor,tipo:balao?'balao':(fita?'fita':'normal'),size:(balao||fita)?nm:''});
+    var fita=(typeof _ehFita==='function') && _ehFita(nm);
+    /* 11/10/2026 - o marcador quer dizer "a cor eu escolho no pedido".
+       Balao e fita tem tratamento proprio (tamanho, largura); qualquer
+       outro material colorido vira 'cor', que oferece os irmaos pelo nome
+       - confete, foil, papel, laco, o que ela cadastrar. */
+    var _ehBal = (typeof _ehBalao==='function') && _ehBalao(nm)
+                 && !((typeof _naoEBalao==='function') && _naoEBalao(nm));
+    var _tipo = balao ? (_ehBal ? 'balao' : (fita ? 'fita' : 'cor'))
+                      : (fita ? 'fita' : 'normal');
+    if(nm) out.push({nome:nm,qtd:qtd,valor:valor,tipo:_tipo,size:(_tipo!=='normal')?nm:''});
   });
   return out;
 }
@@ -9915,7 +9936,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c80';
+  var ver='v11/10-c81';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -12697,6 +12718,39 @@ else appLockInit();
   };
 
   /* a lista de campanhas, com o placar de cada uma */
+  /* ═══════════════════════════════════════════════════════════════════════
+     "A COR EU ESCOLHO DEPOIS" (11/10/2026)
+
+     Na precificação ela marca o material como colorido; no pedido, aquele
+     item vira um seletor com as cores que ela tem cadastradas. Antes isso
+     valia só para balão e fita (nomes reconhecidos por uma lista fixa).
+     Agora vale para qualquer coisa — confete, foil, papel, laço — porque as
+     opções saem do NOME: cadastrou "CONFETE METALIZADO DOURADO" e
+     "CONFETE METALIZADO PRATA"? Então escrever "CONFETE METALIZADO" na ficha
+     oferece as duas na hora do pedido.                                     */
+  window._opcoesDeCor = function(base){
+    var b = chaveNome(base || '');
+    if (!b) return [];
+    var vistos = {}, out = [];
+    (typeof estoque !== 'undefined' ? estoque : []).forEach(function(e){
+      if (!e || !e.nome) return;
+      var k = chaveNome(e.nome);
+      /* irmão = começa com o nome base, mas não é exatamente ele */
+      if (k.indexOf(b) !== 0 || k === b) return;
+      if (vistos[k]) return; vistos[k] = 1;
+      out.push(e);
+    });
+    /* material cadastrado pela compra (catálogo) também entra */
+    (typeof catalogo !== 'undefined' ? catalogo : []).forEach(function(c){
+      if (!c || !c.avulso || !c.nome) return;
+      var k = chaveNome(c.nome);
+      if (k.indexOf(b) !== 0 || k === b) return;
+      if (vistos[k]) return; vistos[k] = 1;
+      out.push({ id: c.id, nome: c.nome, qtd: parseFloat(c.qtd) || 0, preco: parseFloat(c.custo) || 0 });
+    });
+    return out.sort(function(x, y){ return (x.nome || '').localeCompare(y.nome || '', 'pt-BR'); });
+  };
+
   /* o seletor de campanha dentro do pedido: só aparece quando veio de anúncio */
   window._prepararCampanhaNoPedido = function(escolhida){
     var sel = document.getElementById('p-campanha');
