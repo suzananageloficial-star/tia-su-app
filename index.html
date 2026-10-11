@@ -9821,7 +9821,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c75';
+  var ver='v11/10-c76';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -12447,12 +12447,14 @@ else appLockInit();
       .then(window._avaliarVersao)
       .catch(function(){});
   }
-  function atualizarAgora(){
+  async function atualizarAgora(){
     if(window._telaOcupada && window._telaOcupada()){
       toast('Tem uma janela aberta. Feche ou salve e toque em Atualizar de novo');
       return;
     }
     var b=document.querySelector('#aviso-versao button'); if(b){ b.disabled=true; b.textContent='Atualizando...'; }
+    /* se algo travar no meio, recarrega assim mesmo depois de 6 segundos */
+    var socorro=setTimeout(function(){ recarregarDeVerdade(); }, 6000);
     var passos=[];
     if(navigator.serviceWorker && navigator.serviceWorker.getRegistration){
       passos.push(navigator.serviceWorker.getRegistration().then(function(r){
@@ -12471,14 +12473,29 @@ else appLockInit();
        num endereço que o navegador nunca viu (?v=agora) não tem como vir do
        cache. O endereço do app não muda — só esta recarga leva o carimbo. */
     function recarregarDeVerdade(){
+      try{ clearTimeout(socorro); }catch(e){}
       try{
         var base = location.href.replace(/[?#].*$/, '');
         location.replace(base + '?v=' + Date.now());
       }catch(e){ location.reload(); }
     }
-    Promise.all(passos).then(recarregarDeVerdade, recarregarDeVerdade);
-    /* se algum passo travar, recarrega assim mesmo depois de 4 segundos */
-    setTimeout(recarregarDeVerdade, 4000);
+    /* ⚠️ 11/10/2026, segunda rodada — "cliquei em atualizar e não deu de novo".
+       Recarregar não bastava: o GitHub Pages manda o navegador guardar o app
+       por 10 minutos, então a recarga voltava com a MESMA página.
+       A saída estava à vista: a faixa "Versão nova disponível" só aparece
+       porque o app CONSEGUE baixar o arquivo novo (a checagem usa no-store).
+       Então, em vez de pedir para o navegador recarregar e torcer, pegamos
+       o arquivo novo por esse mesmo caminho e TROCAMOS a página na hora.
+       Os dados ficam no aparelho; isso troca só o programa.               */
+    /* ⚠️ TENTATIVA DESCARTADA (11/10/2026, testada e reprovada):
+       baixar o index novo com no-store e trocar a página com document.write.
+       Troca mesmo — mas o JavaScript antigo continua na memória e o app novo
+       sobe com erro ("Identifier 'DB' has already been declared"). Página
+       nova por cima de programa velho não é atualização, é remendo.
+       O caminho bom continua sendo recarregar num endereço que o cache do
+       navegador não conhece. */
+    try{ await Promise.all(passos); }catch(e){}
+    recarregarDeVerdade();
   }
   setTimeout(checarVersao, 8000);
   setInterval(checarVersao, 5*60*1000);
