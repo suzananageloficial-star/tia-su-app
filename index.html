@@ -1842,6 +1842,13 @@ html, body {
         <p style="font-size:10px;color:var(--gray-d);margin-top:6px">Pede uma senha toda vez que abrir o app neste aparelho.</p>
       </div>
 
+      <div style="margin-top:14px;border-top:1px solid var(--gray);padding-top:12px">
+        <p style="font-size:11px;font-weight:700;color:var(--brown);margin-bottom:8px">Versão do app</p>
+        <div id="sync-versao" style="font-size:11px;color:var(--gray-d);margin-bottom:8px">—</div>
+        <button class="btn btn-ghost btn-sm" style="width:100%;border-color:var(--pink);color:var(--pink)" onclick="_forcarAtualizacao()">Baixar a versão mais nova agora</button>
+        <p style="font-size:10px;color:var(--gray-d);margin-top:6px">Usa a internet para pegar o app do zero, ignorando o que está guardado no aparelho. Seus dados não são tocados.</p>
+      </div>
+
       <div style="margin-top:14px;border-top:1.5px dashed var(--red-l);padding-top:12px">
         <p style="font-size:11px;color:var(--red);font-weight:700;margin-bottom:8px"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 10v4"/><circle cx="12" cy="17.5" r="0.6" fill="currentColor" stroke="none"/></svg> Zona de perigo</p>
         <button class="btn" style="width:100%;background:var(--red-l);color:var(--red);font-weight:700;border:1.5px solid var(--red)" onclick="closeModal('modal-sync');setTimeout(()=>openModal('modal-reset',false),200)"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg> Zerar pedidos e estoque</button>
@@ -4352,6 +4359,7 @@ function openSyncConfig() {
   box.style.display = 'none';
   const txt = document.getElementById('ultimo-sync-txt');
   txt.textContent = lastSync ? 'Última sincronização: ' + lastSync : 'Nunca sincronizado';
+  try{ if(typeof window._mostrarVersaoNoSync==='function') window._mostrarVersaoNoSync(); }catch(e){}
   openModal('modal-sync', false);
 }
 
@@ -9813,7 +9821,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c74';
+  var ver='v11/10-c75';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -11438,6 +11446,45 @@ else appLockInit();
        este wrapper roda depois do resetModal e vence. */
     if(id==='modal-fin' && isNew){ var c=document.getElementById('f-add-estoque'); if(c) c.checked=true; }
     return ret;
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════
+     BAIXAR A VERSÃO MAIS NOVA AGORA (11/10/2026)
+
+     "Eu clico em atualizar e nada muda." O GitHub Pages manda o navegador
+     guardar o app por 10 minutos (Cache-Control: max-age=600) — inclusive o
+     service worker. Dentro dessa janela, o aparelho nem pergunta ao
+     servidor: devolve a cópia que tem.
+
+     Este botão é o caminho que não depende de nada disso:
+       1. desliga o service worker que está no comando;
+       2. apaga tudo que ele guardou;
+       3. abre o app num endereço que o cache não conhece (?v=hora).
+     Os dados ficam onde estão — isso só troca o programa.            */
+  window._forcarAtualizacao = async function(){
+    var bt = event && event.target && event.target.closest ? event.target.closest('button') : null;
+    if (bt) { bt.disabled = true; bt.textContent = 'Baixando...'; }
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        var regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(function(r){ return r.unregister().catch(function(){}); }));
+      }
+    } catch(e) {}
+    try {
+      if (window.caches && caches.keys) {
+        var ks = await caches.keys();
+        await Promise.all(ks.map(function(k){ return caches.delete(k); }));
+      }
+    } catch(e) {}
+    var base = location.href.replace(/[?#].*$/, '');
+    location.replace(base + '?v=' + Date.now());
+  };
+
+  /* mostra a versão que está rodando dentro de Configurar sync */
+  window._mostrarVersaoNoSync = function(){
+    var el = document.getElementById('sync-versao'); if (!el) return;
+    var m = document.documentElement.innerHTML.match(/var\s+ver\s*=\s*'(v\d{2}\/\d{2}-c\d+)'/);
+    el.textContent = m ? ('Rodando a ' + m[1]) : '—';
   };
 
   /* ── editor: Precificação › Linhas do pedido e avulsos ─────────── */
