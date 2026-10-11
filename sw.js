@@ -5,10 +5,15 @@
 // Atualiza sozinho assim que um sw.js novo é detectado.
 
 // >>> Ao subir uma atualização do app, troque a data abaixo para forçar a renovação. <<<
-const CACHE = 'tiasu-v11-10-c73';
+const CACHE = 'tiasu-v11-10-c74';
 
 self.addEventListener('install', (e) => {
   self.skipWaiting(); // ativa a nova versão na hora, sem esperar fechar o app
+});
+
+/* o botão Atualizar do app pede para a versão nova assumir na hora */
+self.addEventListener('message', (e) => {
+  if (e && e.data && e.data.tipo === 'assumir') self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
@@ -20,13 +25,27 @@ self.addEventListener('activate', (e) => {
   })());
 });
 
+/* A PÁGINA PRECISA VIR DA REDE DE VERDADE (11/10/2026)
+   "Clico em atualizar e não atualiza" (Suzana). O service worker já era
+   rede-primeiro, mas o `fetch` dele passa pelo CACHE DO NAVEGADOR, e o
+   GitHub Pages manda guardar o index.html por alguns minutos. Resultado:
+   ele ia à rede e recebia a página velha de volta.
+   Para o documento (e só para ele), agora o fetch ignora esse cache. */
+const _ehPagina = (req) => {
+  if (req.mode === 'navigate') return true;
+  try {
+    const u = new URL(req.url);
+    return u.origin === self.location.origin && /(\/|\.html)$/.test(u.pathname);
+  } catch (e) { return false; }
+};
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return; // não mexe em envios (POST de sync etc.)
   e.respondWith((async () => {
     try {
       // 1) Tenta a rede primeiro → versão sempre fresca
-      const fresh = await fetch(req);
+      const fresh = _ehPagina(req) ? await fetch(req, { cache: 'reload' }) : await fetch(req);
       const cache = await caches.open(CACHE);
       cache.put(req, fresh.clone());
       return fresh;

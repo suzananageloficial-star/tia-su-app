@@ -9813,7 +9813,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c73';
+  var ver='v11/10-c74';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -11455,6 +11455,18 @@ else appLockInit();
     m.addEventListener('click', aoClicar);
   }
   function num(v){ var n=parseFloat(v)||0; return n>0 ? R2(n) : ''; }   // sem 5,60000001
+  /* 11/10 — "padronize os preços, coloque o símbolo de R$ em todos eles".
+     O campo era número cru: aparecia 1,1 num, 0,45 noutro, e sem R$. Agora é
+     dinheiro de verdade: R$ 1,10 · R$ 0,45, sempre com duas casas. A conta
+     continua guardando número; o R$ é só o que ela lê e digita. */
+  function _rs(v){ return 'R$ ' + window._moedaBR(parseFloat(v) || 0); }
+  function _maskRS(el){
+    var d = String(el.value || '').replace(/\D/g, '');
+    var v = (parseInt(d, 10) || 0) / 100;
+    el.value = _rs(v);
+    try { el.setSelectionRange(el.value.length, el.value.length); } catch(e) {}
+    return v;
+  }
   function desenhar(){
     var box=document.getElementById('le-conteudo'); if(!box || !rasc) return;
     var tit=document.getElementById('le-titulo');
@@ -11502,7 +11514,7 @@ else appLockInit();
                 +'<input type="text" data-k="r.nome" data-ri="'+ri+'" value="'+esc(x.nome)+'" title="'+esc(x.cat||'sem categoria')+'" style="flex:1 1 130px;font-weight:600">'
                 +'<span class="le-cat" title="categoria">'+esc(x.cat||'—')+'</span>'
                 +'<input type="number" step="0.1" min="0" data-k="r.qtd" data-ri="'+ri+'" value="'+(parseFloat(x.qtd)||0)+'" title="Quanto tem no estoque" style="width:62px;text-align:center">'
-                +'<input type="number" step="0.01" min="0" data-k="r.custo" data-ri="'+ri+'" value="'+num(x.custo)+'" placeholder="0,00" title="Valor por unidade — sem ele o custo do pedido sai menor do que é" style="width:88px;text-align:right">'
+                +'<input type="text" inputmode="decimal" data-k="r.custo" data-ri="'+ri+'" value="'+_rs(x.custo)+'" title="Valor por unidade — sem ele o custo do pedido sai menor do que é" style="width:92px;text-align:right">'
                 +'<button type="button" class="le-x" data-act="delr" data-ri="'+ri+'" title="Excluir material">×</button>'
                 +'</div>';
             }).join('')
@@ -11564,7 +11576,7 @@ else appLockInit();
       case 'mm.q': if(MM){ MM.q=parseFloat(val)||0; desenhar(); } break;
       case 'mm.v': if(MM){ MM.v=R2(val); desenhar(); } break;
       case 'g.filtro': if(G) G.filtro=val; break;
-      case 'r.custo': if(R){ R.custo=R2(val); R.mexido=true; } break;
+      case 'r.custo': if(R){ R.custo = (t.type==='text') ? R2(_maskRS(t)) : R2(val); R.mexido=true; } break;
       case 'r.qtd': if(R){ R.qtd=parseFloat(val)||0; R.mexido=true; } break;
       case 'r.nome': if(R){ R.nome=val; R.mexido=true; } break;
       case 'l.nome': if(L) L.nome=val; break;
@@ -12390,18 +12402,36 @@ else appLockInit();
   }
   function atualizarAgora(){
     if(window._telaOcupada && window._telaOcupada()){
-      toast('Salve ou feche o que está aberto e toque em Atualizar de novo');
+      toast('Tem uma janela aberta. Feche ou salve e toque em Atualizar de novo');
       return;
     }
     var b=document.querySelector('#aviso-versao button'); if(b){ b.disabled=true; b.textContent='Atualizando...'; }
     var passos=[];
     if(navigator.serviceWorker && navigator.serviceWorker.getRegistration){
-      passos.push(navigator.serviceWorker.getRegistration().then(function(r){ return r && r.update(); }).catch(function(){}));
+      passos.push(navigator.serviceWorker.getRegistration().then(function(r){
+        if(!r) return;
+        /* se a versão nova já baixou e está esperando, manda assumir agora */
+        if(r.waiting){ try{ r.waiting.postMessage({tipo:'assumir'}); }catch(e){} }
+        return r.update();
+      }).catch(function(){}));
     }
     if(window.caches && caches.keys){
       passos.push(caches.keys().then(function(ks){ return Promise.all(ks.map(function(k){ return caches.delete(k); })); }).catch(function(){}));
     }
-    Promise.all(passos).then(function(){ location.reload(); }, function(){ location.reload(); });
+    /* ⚠️ 11/10/2026 — "clico em atualizar e não atualiza". Faltava isto:
+       `location.reload()` ainda pode servir a página do CACHE DO NAVEGADOR
+       (o GitHub Pages manda guardar o index por alguns minutos). Recarregar
+       num endereço que o navegador nunca viu (?v=agora) não tem como vir do
+       cache. O endereço do app não muda — só esta recarga leva o carimbo. */
+    function recarregarDeVerdade(){
+      try{
+        var base = location.href.replace(/[?#].*$/, '');
+        location.replace(base + '?v=' + Date.now());
+      }catch(e){ location.reload(); }
+    }
+    Promise.all(passos).then(recarregarDeVerdade, recarregarDeVerdade);
+    /* se algum passo travar, recarrega assim mesmo depois de 4 segundos */
+    setTimeout(recarregarDeVerdade, 4000);
   }
   setTimeout(checarVersao, 8000);
   setInterval(checarVersao, 5*60*1000);
