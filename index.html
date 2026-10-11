@@ -9729,7 +9729,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v11/10-c70';
+  var ver='v11/10-c71';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -9955,6 +9955,14 @@ else appLockInit();
 .le-grupo{background:#F6F6F8;border-radius:10px;padding:8px;margin:6px 0}
 .le-mini{font-size:11px;color:var(--gray-d);display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 .le-x{background:none;border:none;color:#E53935;font-size:20px;line-height:1;cursor:pointer;padding:0 4px}
+/* lista de materiais: uma linha por material (11/10/2026) */
+.le-lista{grid-column:1/-1;border:1px solid #ECEEF3;border-radius:12px;overflow:hidden;background:#fff;margin-bottom:8px}
+.le-cab{display:flex;gap:6px;align-items:center;padding:7px 8px;background:var(--pink-l);
+        font-size:10px;font-weight:800;color:var(--brown);text-transform:uppercase;letter-spacing:.04em}
+.le-lin{display:flex;gap:6px;align-items:center;padding:5px 8px;border-top:1px solid #F3F4F6}
+.le-lin:nth-child(odd){background:#FCFCFD}
+.le-lin input{border:1px solid #e9e9ef;border-radius:8px;padding:6px 7px;font-size:13px;min-width:0;background:#fff}
+.le-lin.sem-preco input[data-k="r.custo"]{border-color:var(--orange);background:#FFF8F0}
 .le-add{width:100%;border:1.5px dashed #00BCD4;background:none;color:#00838F;border-radius:9px;padding:7px;font-size:12px;font-weight:700;cursor:pointer;margin-top:4px}
 .le-tabs{display:flex;gap:6px;background:#F2F2F4;padding:4px;border-radius:12px;margin-bottom:10px}
 .le-tabs button{flex:1;border:none;border-radius:9px;padding:8px;font-size:12px;font-weight:700;cursor:pointer;background:none;color:var(--gray-d)}
@@ -11368,19 +11376,32 @@ else appLockInit();
       /* MATERIAIS: tudo o que entra dentro de um item, com o preço */
       var busca=(rasc.busca||'').toLowerCase();
       var itens=rasc.itens.filter(function(x){ return !busca || x.nome.toLowerCase().indexOf(busca)>=0; });
+      /* ⚠️ 11/10/2026 — ERA UMA GRADE DE CARTÕES (três colunas na tela larga).
+         Pedido da Suzana, repetido: "é uma linha por material, descrição,
+         quantidade em estoque e valor unitário, como sempre foi". Agora é
+         uma lista: uma linha por material, nada de cartão.                */
+      var semPreco = itens.filter(function(x){ return !(parseFloat(x.custo) > 0); }).length;
       box.innerHTML='<div class="le-ajuda">Tudo o que você compra e usa dentro dos itens, em ordem alfabética. O que você lança no Financeiro cai aqui sozinho. Dá para corrigir o nome, o <b>preço por unidade</b> e excluir o que não usa mais.</div>'
         +'<div class="le-row"><input type="text" id="le-busca" value="'+esc(rasc.busca||'')+'" placeholder="Buscar material" style="flex:1"></div>'
-        +'<div class="le-mini" style="margin-bottom:6px">'+itens.length+' materiais'+(busca?(' de '+rasc.itens.length):'')+'</div>'
-        + itens.map(function(x){
-            var ri=rasc.itens.indexOf(x);
-            return '<div class="le-card" style="padding:8px">'
-              +'<div class="le-row"><input type="text" data-k="r.nome" data-ri="'+ri+'" value="'+esc(x.nome)+'" style="flex:1;font-weight:600">'
-              +'<button type="button" class="le-x" data-act="delr" data-ri="'+ri+'" title="Excluir material">×</button></div>'
-              +'<div class="le-row" style="margin-bottom:0"><span class="le-mini" style="flex:1">'+esc(x.cat||'sem categoria')+'</span>'
-              +'<span class="le-mini">tem</span><input type="number" step="0.1" min="0" data-k="r.qtd" data-ri="'+ri+'" value="'+(parseFloat(x.qtd)||0)+'" title="Quanto tem no estoque" style="width:64px">'
-              +'<span class="le-mini">R$ por unidade</span><input type="number" step="0.01" min="0" data-k="r.custo" data-ri="'+ri+'" value="'+num(x.custo)+'" placeholder="0,00" style="width:90px"></div>'
-              +'</div>';
-          }).join('')
+        +'<div class="le-mini" style="margin-bottom:6px">'+itens.length+' materiais'+(busca?(' de '+rasc.itens.length):'')
+        + (semPreco ? ' · <b style="color:var(--orange)">'+semPreco+' sem preço</b>' : '')+'</div>'
+        +'<div class="le-lista">'
+        +  '<div class="le-cab"><span style="flex:1 1 130px">Material</span>'
+        +    '<span style="width:62px;text-align:center">Tem</span>'
+        +    '<span style="width:88px;text-align:center">R$ / unidade</span>'
+        +    '<span style="width:22px"></span></div>'
+        +  (itens.length ? itens.map(function(x){
+              var ri=rasc.itens.indexOf(x);
+              var zerado = !(parseFloat(x.custo) > 0);
+              return '<div class="le-lin'+(zerado?' sem-preco':'')+'">'
+                +'<input type="text" data-k="r.nome" data-ri="'+ri+'" value="'+esc(x.nome)+'" title="'+esc(x.cat||'sem categoria')+'" style="flex:1 1 130px;font-weight:600">'
+                +'<input type="number" step="0.1" min="0" data-k="r.qtd" data-ri="'+ri+'" value="'+(parseFloat(x.qtd)||0)+'" title="Quanto tem no estoque" style="width:62px;text-align:center">'
+                +'<input type="number" step="0.01" min="0" data-k="r.custo" data-ri="'+ri+'" value="'+num(x.custo)+'" placeholder="0,00" title="Valor por unidade — sem ele o custo do pedido sai menor do que é" style="width:88px;text-align:right">'
+                +'<button type="button" class="le-x" data-act="delr" data-ri="'+ri+'" title="Excluir material">×</button>'
+                +'</div>';
+            }).join('')
+          : '<div class="le-mini" style="display:block;padding:14px;text-align:center">Nenhum material com esse nome.</div>')
+        +'</div>'
         + '<button type="button" class="le-add" data-act="addr">+ novo material</button>';
       var b=document.getElementById('le-busca');
       if(b) b.addEventListener('input', function(){ rasc.busca=b.value; desenhar(); setTimeout(function(){ var n=document.getElementById('le-busca'); if(n){ n.focus(); n.setSelectionRange(n.value.length,n.value.length); } },0); });
