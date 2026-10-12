@@ -1074,6 +1074,7 @@ window._imgMarca = function(classe){
         <button onclick="sincronizarBaixasEntregues()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--pink);color:var(--pink);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg>Baixar pedidos entregues</button>
         <button onclick="importarEstoquePlanilha()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--cyan);color:var(--cyan-d);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 21h14"/></svg>Importar estoque da planilha</button>
         <button onclick="preencherAtributosAuto()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--cyan);color:var(--cyan-d);margin-top:4px;margin-left:6px;display:inline-flex;align-items:center;gap:5px"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M3 12V4a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></svg> Preencher características (auto)</button>
+        <button onclick="_conferirPrecos()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--orange);color:var(--orange);margin-right:5px;margin-top:5px;border-radius:20px">⚖️ Conferir preços</button>
         <button onclick="abrirAtivos()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--purple);color:var(--purple);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>Equipamentos & Ativos</button>
       </div>
       <div id="estoque-alertas"></div>
@@ -8235,6 +8236,17 @@ function _cfgTaxa(){ return (_precoCfg.taxa!=null?+_precoCfg.taxa:4); }
 function _cfgHorasMes(){ return (_precoCfg.horasMes!=null && +_precoCfg.horasMes>0 ? +_precoCfg.horasMes : 100); }
 function _totalFixosMes(){ try{ return (typeof recorrentes!=='undefined'?recorrentes:[]).filter(function(r){return r && r.ativo!==false;}).reduce(function(s,r){return s+(parseFloat(r.valor)||0);},0); }catch(e){ return 0; } }
 function _custoFixoHora(){ var h=_cfgHorasMes(); if(h<=0) return 0; return _totalFixosMes()/h; }
+/* 12/10/2026 — o anúncio dividido pelos pedidos do mês: é o que cada pedido
+   precisa carregar para o tráfego se pagar. Sem anúncio ou sem pedido no mês
+   dá zero, e a linha nem aparece na conta. */
+function _custoAnuncioPedido(){
+  try{
+    var g = (typeof window._gastoAnuncioMes === 'function') ? window._gastoAnuncioMes() : 0;
+    var n = (typeof window._pedidosDoMes === 'function') ? window._pedidosDoMes() : 0;
+    if(!(g > 0) || !(n > 0)) return 0;
+    return Math.round((g / n) * 100) / 100;
+  }catch(e){ return 0; }
+}
 function setNivelCMV(nv){
   var niveis=['simples','medio','elaborado','especial'];
   if(niveis.indexOf(nv)<0) nv='medio';
@@ -8256,7 +8268,7 @@ function setPrecoModo(m){
   var tit=document.getElementById('nivel-titulo'); if(tit) tit.textContent = (_precoModo==='detalhado') ? 'Nível de trabalho (define o valor da hora)' : 'Nível de trabalho (define o multiplicador)';
   var exp=document.getElementById('preco-explica');
   if(exp) exp.innerHTML = (_precoModo==='detalhado')
-    ? 'Preço = custo (material + mão de obra + custos fixos) + sua margem de lucro. Mostra o CMV%.'
+    ? 'Preço = custo (material + mão de obra + custos fixos + anúncios) + sua margem de lucro. Mostra o CMV%.'
     : 'Preço = custo do material × multiplicador do nível. <b>Fácil ×2 · Médio ×2,5 · Difícil ×3 · Especial ×3,5</b>';
   if(typeof calcPreco==='function') calcPreco();
 }
@@ -8956,8 +8968,11 @@ function calcPreco(){
   var tempoMin=parseNum((document.getElementById('pr-tempo')||{}).value)||0;
   var mo=Math.round(rateH*(tempoMin/60)*100)/100;
   var cfHora=_custoFixoHora(); var custoFixo=Math.round(cfHora*(tempoMin/60)*100)/100;
+  /* 12/10/2026 — o tráfego entra na conta. Ela: "no CMV detalhado ele vai
+     compondo com os custos fixos, mão de obra e custos com tráfego pago". */
+  var anuncio=_custoAnuncioPedido();
   var lucroPct=_cfgLucro(); var taxaPct=_cfgTaxa();
-  var custo=Math.round((mat+mo+custoFixo)*100)/100;
+  var custo=Math.round((mat+mo+custoFixo+anuncio)*100)/100;
   var precoPix=Math.round(custo*(1+lucroPct/100)*100)/100;
   window._cmvCusto = custo;
   var me=document.getElementById('cmv-materiais'); if(me) me.textContent=fmt(mat);
@@ -8967,10 +8982,11 @@ function calcPreco(){
     _cmvLinha('Material', mat)+
     _cmvLinha('Mão de obra ('+(MO_LABEL[_nivelCMV]||'')+' · R$ '+rateH+'/h × '+tempoMin+'min)', mo)+
     _cmvLinha('Custos fixos (R$ '+(Math.round(cfHora*100)/100)+'/h × '+tempoMin+'min)', custoFixo)+
-    '<div style="display:flex;justify-content:space-between;border-top:1px dashed #ddd;padding-top:5px;margin-top:3px"><span style="color:var(--gray-d)">Custo (= material + m. de obra + fixos)</span><b>'+fmt(custo)+'</b></div>'+
+    (anuncio>0 ? _cmvLinha('Anúncios (o mês ÷ '+((typeof window._pedidosDoMes==='function')?window._pedidosDoMes():0)+' pedidos)', anuncio) : '')+
+    '<div style="display:flex;justify-content:space-between;border-top:1px dashed #ddd;padding-top:5px;margin-top:3px"><span style="color:var(--gray-d)">Custo (= material + m. de obra + fixos'+(anuncio>0?' + anúncios':'')+')</span><b>'+fmt(custo)+'</b></div>'+
     _cmvLinha('Lucro ('+lucroPct+'%)', lucroV);
   var pe=document.getElementById('cmv-preco'); if(pe) pe.value = precoPix? precoPix.toFixed(2): '';
-  var ci=document.getElementById('cmv-info'); if(ci) ci.textContent=(MO_LABEL[_nivelCMV]||'')+': R$ '+rateH+'/h × '+tempoMin+'min = '+fmt(mo)+' · lucro '+lucroPct+'% · cartão '+taxaPct+'%';
+  var ci=document.getElementById('cmv-info'); if(ci) ci.textContent=(MO_LABEL[_nivelCMV]||'')+': R$ '+rateH+'/h × '+tempoMin+'min = '+fmt(mo)+(anuncio>0?(' · anúncio '+fmt(anuncio)):'')+' · lucro '+lucroPct+'% · cartão '+taxaPct+'%';
   _cmvAtualizaMargem();
 }
 
@@ -10047,7 +10063,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v12/10-c82';
+  var ver='v12/10-c83';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -12573,6 +12589,146 @@ else appLockInit();
   };
 
   /* editor do material cadastrado pela compra (o do estoque antigo tem o seu) */
+  /* ══ CONFERIR PREÇOS (12/10/2026) ════════════════════════════════
+
+     "Tenho pedidos para lançar e não estou conseguindo por erro nos valores."
+
+     O erro não está na conta do app — está no que foi guardado. Material
+     comprado em pacote entra com o preço do PACOTE como se fosse o preço de
+     UM: a caixa de suco de R$ 69,90 vira R$ 69,90 por garrafa, e o custo do
+     pedido estoura.
+
+     Consertar um por um, abrindo cada material, é lento demais quando são
+     dezenas. Aqui ela vê todos de uma vez, do mais caro para o mais barato
+     (os errados sobem), escreve quantos vêm em cada embalagem, confere o
+     valor novo ao lado, e salva tudo junto.                                */
+
+  /* grava o preço nos DOIS lugares onde o material pode morar, procurando
+     pelo nome — é assim que a lista de materiais lê, então é assim que ela
+     tem de escrever, senão o valor volta ao antigo na próxima abertura. */
+  window._aplicarPrecoMaterial = function(nome, novo){
+    var k = chaveNome(nome), n = 0;
+    (typeof catalogo !== 'undefined' ? catalogo : []).forEach(function(c){
+      if (c && c.avulso && chaveNome(c.nome) === k) {
+        c.custo = novo; c.matCusto = novo; c.updatedAt = Date.now(); n++;
+      }
+    });
+    (typeof estoque !== 'undefined' ? estoque : []).forEach(function(e){
+      if (e && chaveNome(e.nome) === k) { e.preco = novo; e.updatedAt = Date.now(); n++; }
+    });
+    return n;
+  };
+
+  window._conferirPrecos = function(){
+    var lista = _matsDaTela()
+      .filter(function(m){ return m.custo > 0; })
+      .sort(function(a, b){ return b.custo - a.custo; });
+
+    var mod = document.getElementById('modal-conf-precos');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay'; mod.id = 'modal-conf-precos';
+      document.body.appendChild(mod);
+    }
+
+    if (!lista.length) {
+      mod.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
+        '<div class="modal-title">Conferir preços</div>' +
+        '<div class="modal-body"><div style="padding:18px;text-align:center;color:var(--gray-d);font-size:13px">' +
+        'Nenhum material com preço cadastrado ainda.</div></div>' +
+        '<div class="form-actions"><button class="btn btn-pink" style="flex:1" onclick="closeModal(\'modal-conf-precos\')">Fechar</button></div></div>';
+      openModal('modal-conf-precos');
+      return;
+    }
+
+    window._confPrecoLista = lista;
+    var linhas = lista.map(function(m, i){
+      return '<div class="cp-lin" data-i="' + i + '" style="display:grid;grid-template-columns:1fr 74px 58px 74px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid #f4f4f6">' +
+        '<div style="min-width:0">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--brown);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(m.nome) + '</div>' +
+          '<div style="font-size:10px;color:var(--gray-d)">por ' + esc(m.un) + (m.cat ? (' · ' + esc(m.cat)) : '') + '</div>' +
+        '</div>' +
+        '<div style="text-align:right;font-size:12px;font-weight:700;color:var(--brown)">' + fmt(m.custo) + '</div>' +
+        '<input class="cp-div" type="number" step="any" min="0" placeholder="÷" inputmode="decimal" ' +
+          'oninput="_confPrecoCalc(' + i + ')" ' +
+          'style="text-align:center;padding:7px 2px;border:1.5px solid var(--cyan);border-radius:8px;font-size:13px;width:100%">' +
+        '<div class="cp-novo" id="cp-novo-' + i + '" style="text-align:right;font-size:12px;font-weight:800;color:var(--gray-d)">—</div>' +
+      '</div>';
+    }).join('');
+
+    mod.innerHTML = '<div class="modal" style="max-height:88vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Conferir preços dos materiais</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+        '<div style="background:var(--orange-l);border-radius:10px;padding:10px;margin-bottom:12px;font-size:11.5px;color:var(--brown);line-height:1.45">' +
+          'Material comprado em pacote costuma entrar com o preço do <b>pacote inteiro</b> ' +
+          'no lugar do preço de <b>um</b>. Escreva quantos vêm em cada embalagem e o app divide.' +
+          '<br><span style="color:var(--gray-d)">Estão do mais caro para o mais barato — os errados costumam estar no topo. ' +
+          'Deixe em branco o que já está certo.</span>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 74px 58px 74px;gap:6px;font-size:9.5px;font-weight:800;color:var(--gray-d);text-transform:uppercase;letter-spacing:.03em;padding-bottom:5px;border-bottom:1.5px solid #ECEEF3">' +
+          '<span>Material</span><span style="text-align:right">Hoje</span><span style="text-align:center">Vem</span><span style="text-align:right">Fica</span>' +
+        '</div>' +
+        linhas +
+        '<div id="cp-resumo" style="font-size:11.5px;color:var(--gray-d);margin-top:11px;text-align:center">Nenhuma correção marcada ainda.</div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-conf-precos\')">Cancelar</button>' +
+        '<button class="btn btn-pink" style="flex:1" onclick="_salvarConfPrecos()">Salvar as correções</button>' +
+      '</div></div>';
+    openModal('modal-conf-precos');
+  };
+
+  window._confPrecoCalc = function(i){
+    var m = (window._confPrecoLista || [])[i]; if (!m) return;
+    var lin = document.querySelector('#modal-conf-precos .cp-lin[data-i="' + i + '"]');
+    var inp = lin && lin.querySelector('.cp-div');
+    var out = document.getElementById('cp-novo-' + i);
+    var d = parseFloat(inp && inp.value) || 0;
+    if (!(d > 0) || d === 1) {
+      if (out) { out.textContent = '—'; out.style.color = 'var(--gray-d)'; }
+    } else {
+      var novo = Math.round((m.custo / d) * 100) / 100;
+      if (out) { out.textContent = fmt(novo); out.style.color = 'var(--green)'; }
+    }
+    /* o resumo embaixo, para ela ver quantas vai mexer antes de salvar */
+    var n = 0;
+    document.querySelectorAll('#modal-conf-precos .cp-div').forEach(function(e){
+      var v = parseFloat(e.value) || 0; if (v > 0 && v !== 1) n++;
+    });
+    var r = document.getElementById('cp-resumo');
+    if (r) r.textContent = n
+      ? (n > 1 ? (n + ' materiais serão corrigidos.') : '1 material será corrigido.')
+      : 'Nenhuma correção marcada ainda.';
+  };
+
+  window._salvarConfPrecos = function(){
+    var lista = window._confPrecoLista || [];
+    var mudancas = [];
+    document.querySelectorAll('#modal-conf-precos .cp-lin').forEach(function(lin){
+      var i = parseInt(lin.dataset.i, 10);
+      var m = lista[i]; if (!m) return;
+      var d = parseFloat((lin.querySelector('.cp-div') || {}).value) || 0;
+      if (!(d > 0) || d === 1) return;
+      mudancas.push({ nome: m.nome, de: m.custo, para: Math.round((m.custo / d) * 100) / 100 });
+    });
+    if (!mudancas.length) { toast('Nenhuma correção marcada'); return; }
+
+    var aviso = 'Corrigir ' + mudancas.length +
+      (mudancas.length > 1 ? ' materiais?' : ' material?') + '\n\n' +
+      mudancas.slice(0, 10).map(function(c){
+        return '· ' + c.nome + ': ' + fmt(c.de) + ' → ' + fmt(c.para);
+      }).join('\n') +
+      (mudancas.length > 10 ? ('\n· ... e mais ' + (mudancas.length - 10)) : '') +
+      '\n\nOs pedidos já salvos não mudam — isto vale dos próximos em diante.';
+    if (!confirm(aviso)) return;
+
+    mudancas.forEach(function(c){ window._aplicarPrecoMaterial(c.nome, c.para); });
+    save();
+    closeModal('modal-conf-precos');
+    window.renderEstoque();
+    toast(mudancas.length > 1 ? (mudancas.length + ' preços corrigidos') : '1 preço corrigido');
+  };
+
   window._editarMaterial = function(id){
     var m = catalogo.filter(function(p){ return p && p.id === id; })[0];
     if (!m) { toast('Material não encontrado'); return; }
@@ -13246,7 +13402,9 @@ else appLockInit();
             '</div>'
           : '') +
         (anunc > 0
-          ? '<div style="font-size:10px;color:var(--gray-d);margin-top:6px">O preço calculado abaixo <b>não</b> soma o anúncio sozinho — ele aparece aqui para você decidir se cabe na margem.</div>'
+          ? '<div style="font-size:10px;color:var(--gray-d);margin-top:6px">No <b>CMV detalhado</b> o anúncio já entra na conta (' +
+            (nPed > 0 ? (fmt(R2(anunc / nPed)) + ' por pedido') : 'falta pedido no mês') +
+            '). No <b>Multiplicador</b> não entra — ele só olha o material.</div>'
           : '') +
       '</div>';
   };
