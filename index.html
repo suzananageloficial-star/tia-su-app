@@ -8227,9 +8227,31 @@ var CMV_NIVEIS = {
 var _nivelCMV = 'medio';
 var MO_LABEL = {simples:'Fácil', medio:'Médio', elaborado:'Difícil', especial:'Especial'};
 var _precoCfg = (function(){ try{ return JSON.parse(localStorage.getItem('tiasu_precoCfg'))||{}; }catch(e){ return {}; } })();
-function _cfgMO(){ /* agora são R$/HORA por nível */
+/* ══ O VALOR DA HORA DE TRABALHO ══════════════════════════════
+   Revisto em 12/10/2026. Era 11 / 22 / 44 / 66.
+
+   O R$ 11 estava abaixo de qualquer piso: o salário mínimo de 2026 dá
+   R$ 7,37/h para quem é CLT e tem 13º, férias e INSS pagos pela empresa.
+   Quem trabalha por conta não tem nada disso, e só metade das horas
+   trabalhadas é faturada (atendimento, fornecedor, rede social não entram
+   em pedido nenhum).
+
+   A conta, pelo método do Sebrae: pró-labore desejado ÷ horas produtivas.
+   R$ 4.000 ÷ 100 h = R$ 40/h, mais ~30% dos encargos que ela mesma paga,
+   dá ~R$ 52/h. A escada abaixo gira em torno disso.
+
+   ⚠️ A dificuldade NÃO muda o valor da hora dela — a hora custa o mesmo
+   amarrando balão ou desenhando painel. O que muda é o prêmio pela
+   habilidade. Por isso a escada é curta (35 → 75), e não 11 → 66.
+   ═════════════════════════════════════════════════════════════ */
+var HORA_PADRAO = { simples:35, medio:45, elaborado:60, especial:75 };
+var HORA_ANTIGA = { simples:11, medio:22, elaborado:44, especial:66 };
+function _cfgMO(){ /* são R$/HORA por nível */
   var m=_precoCfg.moH||{};
-  return { simples:(m.simples!=null?+m.simples:11), medio:(m.medio!=null?+m.medio:22), elaborado:(m.elaborado!=null?+m.elaborado:44), especial:(m.especial!=null?+m.especial:66) };
+  return { simples:(m.simples!=null?+m.simples:HORA_PADRAO.simples),
+           medio:(m.medio!=null?+m.medio:HORA_PADRAO.medio),
+           elaborado:(m.elaborado!=null?+m.elaborado:HORA_PADRAO.elaborado),
+           especial:(m.especial!=null?+m.especial:HORA_PADRAO.especial) };
 }
 function _cfgLucro(){ return (_precoCfg.lucro!=null?+_precoCfg.lucro:25); }
 function _cfgTaxa(){ return (_precoCfg.taxa!=null?+_precoCfg.taxa:4); }
@@ -8287,10 +8309,10 @@ function _togglePrecoCfg(){
 function _salvarPrecoCfg(){
   function gv(id){ return parseFloat(String((document.getElementById(id)||{}).value).replace(',','.')); }
   _precoCfg.moH={
-    simples:(isNaN(gv('cfg-mo-simples'))?11:gv('cfg-mo-simples')),
-    medio:(isNaN(gv('cfg-mo-medio'))?22:gv('cfg-mo-medio')),
-    elaborado:(isNaN(gv('cfg-mo-elaborado'))?44:gv('cfg-mo-elaborado')),
-    especial:(isNaN(gv('cfg-mo-especial'))?66:gv('cfg-mo-especial'))
+    simples:(isNaN(gv('cfg-mo-simples'))?HORA_PADRAO.simples:gv('cfg-mo-simples')),
+    medio:(isNaN(gv('cfg-mo-medio'))?HORA_PADRAO.medio:gv('cfg-mo-medio')),
+    elaborado:(isNaN(gv('cfg-mo-elaborado'))?HORA_PADRAO.elaborado:gv('cfg-mo-elaborado')),
+    especial:(isNaN(gv('cfg-mo-especial'))?HORA_PADRAO.especial:gv('cfg-mo-especial'))
   };
   _precoCfg.lucro=(isNaN(gv('cfg-lucro'))?25:gv('cfg-lucro'));
   _precoCfg.taxa=(isNaN(gv('cfg-taxa'))?4:gv('cfg-taxa'));
@@ -10001,6 +10023,85 @@ function _mudarFiltroMes(val){
 
 <!-- ════════ ÚLTIMA ATUALIZAÇÃO (carimbo de data/hora) — Claude jun/2026 ════════ -->
 <script>
+/* ══ MIGRAÇÃO DO VALOR DA HORA — 12/10/2026 ══════════════════════
+
+   O valor da hora fica guardado NO APARELHO (localStorage `tiasu_precoCfg`),
+   não na nuvem. Trocar o padrão no código não muda o que já está salvo no
+   celular dela — por isso esta passagem, que roda uma vez por aparelho.
+
+   Ela só mexe em quem ainda está com a escada antiga inteira (11/22/44/66).
+   Se a dona tiver posto valores próprios, não encosta em nada: a escolha dela
+   vale mais que o nosso padrão.
+
+   E não muda preço escondido: na próxima vez que a Precificação abrir,
+   aparece um aviso dizendo o que mudou, de quanto para quanto.             */
+(function(){
+  var MARCA = 'ts_hora_migrada_2026_10';
+  var VISTO = 'ts_hora_aviso_2026_10';
+  try { if (localStorage.getItem(MARCA)) return; } catch(e){ return; }
+  try { localStorage.setItem(MARCA, '1'); } catch(e){}
+  if (typeof _precoCfg === 'undefined' || typeof HORA_PADRAO === 'undefined') return;
+
+  var m = _precoCfg.moH;
+  var niveis = ['simples','medio','elaborado','especial'];
+  var eraAEscadaAntiga = !m || niveis.every(function(k){
+    return Math.round(parseFloat(m[k]) || 0) === HORA_ANTIGA[k];
+  });
+  if (!eraAEscadaAntiga) return;   // ela escolheu os próprios valores
+
+  _precoCfg.moH = {
+    simples: HORA_PADRAO.simples, medio: HORA_PADRAO.medio,
+    elaborado: HORA_PADRAO.elaborado, especial: HORA_PADRAO.especial
+  };
+  try { localStorage.setItem('tiasu_precoCfg', JSON.stringify(_precoCfg)); } catch(e){}
+  try { localStorage.setItem(VISTO, 'mostrar'); } catch(e){}
+})();
+
+/* o aviso, na própria tela de Precificação, uma vez só */
+window._avisoDaHora = function(){
+  var VISTO = 'ts_hora_aviso_2026_10';
+  var estado = ''; try { estado = localStorage.getItem(VISTO) || ''; } catch(e){}
+  var velho = document.getElementById('aviso-hora');
+  if (estado !== 'mostrar') { if (velho) velho.remove(); return; }
+  if (velho) return;
+  var tela = document.getElementById('screen-preco'); if (!tela) return;
+
+  var cx = document.createElement('div');
+  cx.id = 'aviso-hora';
+  cx.innerHTML =
+    '<div style="border:1.5px solid var(--pink);background:var(--pink-l);border-radius:14px;padding:12px;margin-bottom:14px">' +
+      '<div style="font-size:12px;font-weight:800;color:var(--pink-d);margin-bottom:7px">O VALOR DA SUA HORA FOI CORRIGIDO</div>' +
+      '<div style="font-size:12px;color:var(--brown);line-height:1.5">' +
+        'A hora estava a partir de <b>R$ 11</b>. Isso é abaixo do piso de quem é ' +
+        'contratada — e você trabalha por conta, sem 13º, sem férias e pagando o ' +
+        'próprio INSS. Ficou assim:' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:1fr 56px 14px 56px;gap:4px;align-items:center;font-size:12px;margin-top:9px">' +
+        ['simples','medio','elaborado','especial'].map(function(k){
+          return '<span style="color:var(--gray-d)">' + (MO_LABEL[k] || k) + '</span>' +
+                 '<span style="text-align:right;color:var(--gray-d);text-decoration:line-through">' + fmt(HORA_ANTIGA[k]) + '</span>' +
+                 '<span style="text-align:center;color:var(--gray-d)">→</span>' +
+                 '<b style="text-align:right;color:var(--pink-d)">' + fmt(HORA_PADRAO[k]) + '</b>';
+        }).join('') +
+      '</div>' +
+      '<div style="font-size:11px;color:var(--gray-d);margin-top:9px;line-height:1.45">' +
+        'Vale no modo <b>CMV detalhado</b>. O <b>Multiplicador</b> não usa a hora — ' +
+        'ele só olha o material, então continua igual.<br>' +
+        'Para mudar: ⚙️ aqui em cima, em "ajustar valores".' +
+      '</div>' +
+      '<button type="button" onclick="_fecharAvisoDaHora()" style="width:100%;margin-top:10px;background:var(--pink);color:#fff;border:none;border-radius:10px;padding:9px;font-size:12px;font-weight:700;cursor:pointer">Entendi</button>' +
+    '</div>';
+
+  var cab = tela.querySelector('.page-header');
+  if (cab && cab.nextSibling) tela.insertBefore(cx, cab.nextSibling);
+  else tela.insertBefore(cx, tela.firstChild);
+};
+window._fecharAvisoDaHora = function(){
+  try { localStorage.setItem('ts_hora_aviso_2026_10', 'visto'); } catch(e){}
+  var el = document.getElementById('aviso-hora'); if (el) el.remove();
+};
+</script>
+<script>
 /* ═══════════════════════════════════════════════════════════════════════
    ESTADO HONESTO DA SINCRONIZAÇÃO (23/09/2026)
 
@@ -10063,7 +10164,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v12/10-c83';
+  var ver='v12/10-c84';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -13439,6 +13540,7 @@ else appLockInit();
     var sub=tela.querySelector('.page-sub');
     if(sub) sub.textContent='Digite o produto e os materiais — o preço sai do custo × fator';
     try{ window._painelCustosDoMes(); }catch(e){ console.warn('[preco] painel de custos', e); }
+    try{ window._avisoDaHora(); }catch(e){ console.warn('[preco] aviso da hora', e); }
     desenharCalc();
   }
   window._telaPreco=botaoPrecificacao;
