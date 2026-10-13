@@ -10175,7 +10175,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v13/10-c86';
+  var ver='v13/10-c87';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -12070,7 +12070,7 @@ else appLockInit();
          quantidade em estoque e valor unitário, como sempre foi". Agora é
          uma lista: uma linha por material, nada de cartão.                */
       var semPreco = itens.filter(function(x){ return !(parseFloat(x.custo) > 0); }).length;
-      box.innerHTML='<div class="le-ajuda">Tudo o que você compra e usa dentro dos itens, em ordem alfabética. O que você lança no Financeiro cai aqui sozinho. Dá para corrigir o nome, o <b>preço por unidade</b> e excluir o que não usa mais.</div>'
+      box.innerHTML='<div class="le-ajuda">Tudo o que você compra e usa dentro dos itens, em ordem alfabética. O que você lança no Financeiro cai aqui sozinho. Comprou em pacote? Escreva na coluna <b>Vem</b> quantos vêm dentro e o preço de UM sai sozinho. Dá para corrigir o nome, o <b>preço por unidade</b> e excluir o que não usa mais.</div>'
         +'<div class="le-row"><input type="text" id="le-busca" value="'+esc(rasc.busca||'')+'" placeholder="Buscar pelo nome ou pela categoria" style="flex:1"></div>'
         +'<div class="le-row"><select id="le-cat" style="flex:1"><option value="">Todas as categorias</option>'
         + cats.map(function(c){ return '<option'+(c===fcat?' selected':'')+'>'+esc(c)+'</option>'; }).join('')
@@ -12081,6 +12081,7 @@ else appLockInit();
         +  '<div class="le-cab"><span style="flex:1 1 130px">Material</span>'
         +    '<span class="le-cat">Categoria</span>'
         +    '<span style="width:62px;text-align:center">Tem</span>'
+        +    '<span style="width:54px;text-align:center" title="Quantos vêm em cada embalagem">Vem</span>'
         +    '<span style="width:88px;text-align:center">R$ / unidade</span>'
         +    '<span style="width:22px"></span></div>'
         +  (itens.length ? itens.map(function(x){
@@ -12090,6 +12091,11 @@ else appLockInit();
                 +'<input type="text" data-k="r.nome" data-ri="'+ri+'" value="'+esc(x.nome)+'" title="'+esc(x.cat||'sem categoria')+'" style="flex:1 1 130px;font-weight:600">'
                 +'<span class="le-cat" title="categoria">'+esc(x.cat||'—')+'</span>'
                 +'<input type="number" step="0.1" min="0" data-k="r.qtd" data-ri="'+ri+'" value="'+(parseFloat(x.qtd)||0)+'" title="Quanto tem no estoque" style="width:62px;text-align:center">'
+                /* 13/10/2026 — a divisão da embalagem, AQUI, que é onde ela
+                   corrige preço. Material comprado em pacote entra com o
+                   preço do pacote como se fosse o de um; escrever quantos
+                   vêm dentro divide na hora, na coluna do lado. */
+                +'<input type="number" step="any" min="0" class="le-vem" data-ri="'+ri+'" data-base="'+(parseFloat(x.custo)||0)+'" value="" placeholder="÷" oninput="_leVem(this)" title="Quantos vêm em cada embalagem (rolo, caixa, pacote). Deixe vazio se o preço já é de UM." style="width:54px;text-align:center">'
                 +'<input type="text" inputmode="decimal" data-k="r.custo" data-ri="'+ri+'" value="'+_rs(x.custo)+'" title="Valor por unidade — sem ele o custo do pedido sai menor do que é" style="width:92px;text-align:right">'
                 +'<button type="button" class="le-x" data-act="delr" data-ri="'+ri+'" title="Excluir material">×</button>'
                 +'</div>';
@@ -12137,6 +12143,24 @@ else appLockInit();
             +'</div>';
         }).join('');
   }
+  /* ══ "VEM" — divide o preço da embalagem pelo que vem dentro (13/10/2026)
+     Ela digita 12 na caixa de suco de R$ 69,90 e o R$/unidade vira R$ 5,83.
+     A conta sai sempre do valor ORIGINAL guardado em data-base, então
+     corrigir o número duas vezes não divide duas vezes. Apagar devolve o
+     valor de antes.                                                        */
+  window._leVem = function(el){
+    var lin = el.closest('.le-lin'); if (!lin) return;
+    var alvo = lin.querySelector('input[data-k="r.custo"]'); if (!alvo) return;
+    var base = parseFloat(el.dataset.base) || 0;
+    var d = parseFloat(el.value) || 0;
+    var novo = (d > 0) ? (Math.round((base / d) * 100) / 100) : base;
+    alvo.value = (typeof _rs === 'function') ? _rs(novo) : novo.toFixed(2);
+    /* dispara o mesmo caminho de quando ela digita à mão, para o Salvar levar */
+    alvo.dispatchEvent(new Event('input', { bubbles: true }));
+    lin.classList.toggle('sem-preco', !(novo > 0));
+    el.style.borderColor = (d > 0) ? 'var(--green)' : '#e9e9ef';
+  };
+
   function idx(el, k){ var v=el.dataset[k]; return v==null ? -1 : parseInt(v,10); }
   function aoDigitar(ev){
     var t=ev.target; var k=t.dataset && t.dataset.k; if(!k || !rasc) return;
