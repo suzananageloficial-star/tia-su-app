@@ -1353,7 +1353,7 @@ window._imgMarca = function(classe){
       <div class="form-actions" style="margin-top:8px">
         <button class="btn btn-pink btn-full" onclick="salvarProduto()"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M5 3h11l3 3v15H5Z"/><path d="M8 3v5h7"/><rect x="8" y="13" width="8" height="5"/></svg> Salvar no catálogo</button>
       </div>
-      <div class="section-title">Catálogo de produtos</div>
+      <div style="display:flex;align-items:center;gap:8px"><div class="section-title" style="flex:1">Catálogo de produtos</div><button type="button" onclick="_limparCatalogo()" style="font-size:10px;font-weight:700;background:none;border:1px dashed var(--red);color:var(--red);border-radius:20px;padding:3px 10px;cursor:pointer;white-space:nowrap">Limpar catálogo</button></div>
       <button type="button" onclick="_gerarCatalogoPDF()" style="width:100%;padding:12px;background:var(--pink);color:#fff;border:none;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="18" height="18" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>Gerar catálogo em PDF (enviar no Whats)</button>
       <button type="button" onclick="_gerarCatalogo()" style="width:100%;padding:9px;background:var(--cyan-l);color:var(--cyan-d);border:1.5px solid var(--cyan);border-radius:12px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px">Ver no navegador (no computador)</button>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
@@ -10164,7 +10164,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v12/10-c84';
+  var ver='v12/10-c85';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -12681,8 +12681,8 @@ else appLockInit();
                do pedido sai errado. Avisa em vez de fingir que vale zero. */
             : '<div style="font-size:10px;color:var(--orange);font-weight:700">sem preço</div>') +
           '<div style="display:flex;gap:5px;margin-top:2px">' +
-            '<button onclick="event.stopPropagation();' + abrir + '" style="font-size:10px;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:10px;padding:3px 8px;cursor:pointer;font-weight:700">Editar</button>' +
-            '<button onclick="event.stopPropagation();' + apagar + '" style="font-size:10px;background:var(--red-l);color:var(--red);border:none;border-radius:10px;padding:3px 8px;cursor:pointer;font-weight:700">Excluir</button>' +
+            '<button onclick="event.stopPropagation();' + abrir + '" style="font-size:10px;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:10px;padding:3px 8px;cursor:pointer;font-weight:700"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="m4 20 1-4L16 5l3 3L8 19l-4 1Z"/></svg> Editar</button>' +
+            '<button onclick="event.stopPropagation();' + apagar + '" style="font-size:10px;background:var(--red-l);color:var(--red);border:none;border-radius:10px;padding:3px 8px;cursor:pointer;font-weight:700"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg> Excluir</button>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -12718,6 +12718,130 @@ else appLockInit();
       if (e && chaveNome(e.nome) === k) { e.preco = novo; e.updatedAt = Date.now(); n++; }
     });
     return n;
+  };
+
+  /* ══ LIMPAR O CATÁLOGO (12/10/2026) ═════════════════════════════
+
+     "Quero que salve só o que eu for colocando daqui pra frente e apague o
+     que está lá, o mais antigo."
+
+     ⚠️ PERIGO QUE ESTA FUNÇÃO EVITA: produto de vitrine e material moram no
+     MESMO array `catalogo`. Apagar "o catálogo" de qualquer jeito levaria a
+     despensa inteira junto — os 44 materiais dela. Aqui só entra o que
+     `_produtosDoCatalogo()` devolve, que por definição não é material.
+
+     E não apaga no escuro: mostra a lista, do mais antigo para o mais novo,
+     tudo marcado, e ela desmarca o que quiser guardar.                     */
+  window._limparCatalogo = function(){
+    var lista = window._produtosDoCatalogo();   /* ordem do array = mais antigo primeiro */
+    var mod = document.getElementById('modal-limpar-cat');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay'; mod.id = 'modal-limpar-cat';
+      document.body.appendChild(mod);
+    }
+
+    if (!lista.length) {
+      mod.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
+        '<div class="modal-title">Limpar o catálogo</div>' +
+        '<div class="modal-body"><div style="padding:18px;text-align:center;color:var(--gray-d);font-size:13px">' +
+        'O catálogo já está vazio. Os materiais continuam na aba Materiais.</div></div>' +
+        '<div class="form-actions"><button class="btn btn-pink" style="flex:1" onclick="closeModal(\'modal-limpar-cat\')">Fechar</button></div></div>';
+      openModal('modal-limpar-cat');
+      return;
+    }
+
+    window._limparCatLista = lista;
+    var temFoto = function(id){
+      try { return typeof _getFoto === 'function' && !!_getFoto(id); } catch(e){ return false; }
+    };
+
+    var linhas = lista.map(function(p, i){
+      return '<label class="lc-lin" style="display:flex;gap:9px;align-items:center;padding:8px 0;border-bottom:1px solid #f4f4f6;cursor:pointer">' +
+        '<input type="checkbox" class="lc-ck" data-i="' + i + '" checked onchange="_limparCatConta()" style="width:18px;height:18px;accent-color:var(--pink);flex-shrink:0">' +
+        '<div style="flex:1;min-width:0">' +
+          '<div style="font-size:12px;font-weight:700;color:var(--brown);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+            esc(p.nome || '(sem nome)') +
+            (temFoto(p.id) ? ' <span style="font-size:9px;color:var(--cyan-d);background:var(--cyan-l);border-radius:7px;padding:1px 5px">com foto</span>' : '') +
+          '</div>' +
+          '<div style="font-size:10px;color:var(--gray-d)">' + esc(p.cat || 'sem categoria') + '</div>' +
+        '</div>' +
+        '<div style="font-size:12px;font-weight:700;color:var(--pink-d);flex-shrink:0">' + fmt(p.preco || 0) + '</div>' +
+      '</label>';
+    }).join('');
+
+    mod.innerHTML = '<div class="modal" style="max-height:88vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Limpar o catálogo</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+        '<div style="background:var(--cyan-l);border-radius:10px;padding:10px;margin-bottom:11px;font-size:11.5px;color:var(--brown);line-height:1.45">' +
+          'Marcados serão <b>apagados do catálogo</b>. Os <b>materiais não entram nesta lista</b> ' +
+          'e não são tocados — a aba Materiais continua inteira.' +
+          '<br><span style="color:var(--gray-d)">Estão do mais antigo para o mais novo. Desmarque o que quiser guardar.</span>' +
+        '</div>' +
+        '<div style="background:var(--orange-l);border-radius:10px;padding:9px;margin-bottom:11px;font-size:11px;color:var(--orange);line-height:1.4">' +
+          'Pedido antigo não muda de valor, mas <b>produto apagado some da comanda e do recibo com foto</b>, ' +
+          'porque a foto vem do cadastro. Vale baixar um backup antes.' +
+        '</div>' +
+        '<div style="display:flex;gap:7px;margin-bottom:9px">' +
+          '<button type="button" onclick="_limparCatTodos(true)" style="flex:1;font-size:11px;font-weight:700;background:var(--gray-l);color:var(--brown);border:1px solid #e5e5ea;border-radius:9px;padding:7px;cursor:pointer">Marcar todos</button>' +
+          '<button type="button" onclick="_limparCatTodos(false)" style="flex:1;font-size:11px;font-weight:700;background:var(--gray-l);color:var(--brown);border:1px solid #e5e5ea;border-radius:9px;padding:7px;cursor:pointer">Desmarcar todos</button>' +
+          '<button type="button" onclick="(typeof exportData===\'function\')&&exportData()" style="flex:1;font-size:11px;font-weight:700;background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:9px;padding:7px;cursor:pointer">Backup</button>' +
+        '</div>' +
+        linhas +
+        '<div id="lc-resumo" style="font-size:12px;font-weight:700;color:var(--brown);margin-top:11px;text-align:center"></div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-limpar-cat\')">Cancelar</button>' +
+        '<button class="btn btn-pink" style="flex:1;background:var(--red)" onclick="_limparCatApagar()">Apagar os marcados</button>' +
+      '</div></div>';
+    openModal('modal-limpar-cat');
+    window._limparCatConta();
+  };
+
+  window._limparCatTodos = function(lig){
+    document.querySelectorAll('#modal-limpar-cat .lc-ck').forEach(function(c){ c.checked = !!lig; });
+    window._limparCatConta();
+  };
+
+  window._limparCatConta = function(){
+    var n = 0, total = (window._limparCatLista || []).length;
+    document.querySelectorAll('#modal-limpar-cat .lc-ck').forEach(function(c){ if (c.checked) n++; });
+    var r = document.getElementById('lc-resumo');
+    if (!r) return;
+    if (!n) { r.textContent = 'Nada marcado.'; r.style.color = 'var(--gray-d)'; return; }
+    r.innerHTML = (n === 1 ? '1 produto será apagado' : (n + ' produtos serão apagados')) +
+      '<span style="font-weight:600;color:var(--gray-d)"> · ' + (total - n) +
+      ' fica' + ((total - n) === 1 ? '' : 'm') + ' no catálogo</span>';
+    r.style.color = 'var(--red)';
+  };
+
+  window._limparCatApagar = function(){
+    var lista = window._limparCatLista || [];
+    var alvos = [];
+    document.querySelectorAll('#modal-limpar-cat .lc-ck').forEach(function(c){
+      if (!c.checked) return;
+      var p = lista[parseInt(c.dataset.i, 10)];
+      if (p && p.id) alvos.push(p);
+    });
+    if (!alvos.length) { toast('Nada marcado'); return; }
+
+    if (!confirm('Apagar ' + alvos.length + (alvos.length > 1 ? ' produtos' : ' produto') +
+                 ' do catálogo?\n\nIsto não tem volta sem o backup.\n' +
+                 'Os materiais e os pedidos já feitos não são apagados.')) return;
+
+    var ids = {}; alvos.forEach(function(p){ ids[p.id] = 1; });
+    /* a foto sai junto: ela ocupa espaço e não serve mais a ninguém */
+    alvos.forEach(function(p){
+      try { if (typeof _setFoto === 'function') _setFoto(p.id, ''); } catch(e) {}
+    });
+    /* a lápide (para não voltar pela nuvem) nasce sozinha no save */
+    catalogo = catalogo.filter(function(p){ return !(p && ids[p.id]); });
+    save();
+    closeModal('modal-limpar-cat');
+    try { if (typeof renderCatalogo === 'function') renderCatalogo(); } catch(e) {}
+    try { window.renderEstoque(); } catch(e) {}
+    toast(alvos.length > 1 ? (alvos.length + ' produtos apagados do catálogo')
+                           : '1 produto apagado do catálogo');
   };
 
   window._conferirPrecos = function(){
@@ -12802,6 +12926,60 @@ else appLockInit();
       : 'Nenhuma correção marcada ainda.';
   };
 
+  /* ══ OS PRODUTOS QUE USAM O MATERIAL CORRIGIDO ═══════════════════
+
+     "Os valores de custos também estão puxando errado" (12/10).
+
+     O kit salvo guarda o preço do material DENTRO dele (`materiais[].valor`)
+     e o custo total congelado no dia em que foi salvo. Consertar o material
+     na despensa não mexe nisso — então o pedido continuava puxando o custo
+     velho mesmo depois da varredura. Era a metade que faltava.
+
+     O que esta função faz: acha os produtos cuja ficha usa algum dos
+     materiais corrigidos, atualiza o valor lá dentro e recalcula o custo.
+     ⚠️ NÃO mexe no PREÇO DE VENDA — esse é dela. O que muda é a margem, que
+     passa a mostrar a verdade.                                            */
+  window._produtosQueUsam = function(nomes){
+    var chaves = {}; nomes.forEach(function(n){ chaves[chaveNome(n)] = 1; });
+    return (typeof catalogo !== 'undefined' ? catalogo : []).filter(function(p){
+      if (!p || !Array.isArray(p.materiais) || !p.materiais.length) return false;
+      if (window._ehMaterial && window._ehMaterial(p)) return false;   // material não é produto
+      return p.materiais.some(function(m){ return m && chaves[chaveNome(m.nome || '')]; });
+    });
+  };
+
+  window._recalcularProdutos = function(nomes){
+    var afetados = window._produtosQueUsam(nomes);
+    if (!afetados.length) return [];
+
+    /* o preço de agora de cada material, pela mesma porta que o pedido usa */
+    var agora = {};
+    (window._todosOsMateriais ? window._todosOsMateriais() : []).forEach(function(m){
+      agora[chaveNome(m.nome)] = parseFloat(m.custo) || 0;
+    });
+
+    var mudou = [];
+    afetados.forEach(function(p){
+      var antes = R2(parseFloat(p.matCusto) || parseFloat(p.custo) || 0);
+      var total = 0, tocou = false;
+      p.materiais.forEach(function(m){
+        if (!m || !m.nome) return;
+        var novo = agora[chaveNome(m.nome)];
+        if (novo != null && R2(novo) !== R2(parseFloat(m.valor) || 0)) { m.valor = R2(novo); tocou = true; }
+        total += (parseFloat(m.valor) || 0) * (parseFloat(m.qtd) || 0);
+      });
+      if (!tocou) return;
+      total = R2(total);
+      var extras = R2((parseFloat(p.mo) || 0) + (parseFloat(p.custoFixo) || 0));
+      p.matCusto = total;
+      p.custo = R2(total + extras);
+      p.updatedAt = Date.now();
+      mudou.push({ nome: p.nome || '(sem nome)', de: antes, para: p.matCusto,
+                   preco: parseFloat(p.preco) || 0 });
+    });
+    return mudou;
+  };
+
   window._salvarConfPrecos = function(){
     var lista = window._confPrecoLista || [];
     var mudancas = [];
@@ -12824,10 +13002,29 @@ else appLockInit();
     if (!confirm(aviso)) return;
 
     mudancas.forEach(function(c){ window._aplicarPrecoMaterial(c.nome, c.para); });
+
+    /* a metade que faltava: os kits já salvos guardam o preço antigo dentro
+       deles, e é de lá que o pedido puxa o custo */
+    var kits = window._recalcularProdutos(mudancas.map(function(c){ return c.nome; }));
     save();
     closeModal('modal-conf-precos');
     window.renderEstoque();
-    toast(mudancas.length > 1 ? (mudancas.length + ' preços corrigidos') : '1 preço corrigido');
+    try { if (typeof renderCatalogo === 'function') renderCatalogo(); } catch(e) {}
+
+    if (kits.length) {
+      alert('Preços corrigidos: ' + mudancas.length + '.\n\n' +
+        'E ' + (kits.length > 1 ? (kits.length + ' produtos usavam') : '1 produto usava') +
+        ' esses materiais — o custo deles também foi refeito:\n\n' +
+        kits.slice(0, 10).map(function(k){
+          return '· ' + k.nome + ': custo ' + fmt(k.de) + ' → ' + fmt(k.para) +
+                 (k.preco > 0 ? ('  (venda ' + fmt(k.preco) + ')') : '');
+        }).join('\n') +
+        (kits.length > 10 ? ('\n· ... e mais ' + (kits.length - 10)) : '') +
+        '\n\nO PREÇO DE VENDA não foi mexido — esse é seu. O que mudou foi a margem,\n' +
+        'que agora mostra a verdade. Vale reabrir os que ficaram apertados.');
+    } else {
+      toast(mudancas.length > 1 ? (mudancas.length + ' preços corrigidos') : '1 preço corrigido');
+    }
   };
 
   window._editarMaterial = function(id){
