@@ -10175,7 +10175,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v13/10-c87';
+  var ver='v13/10-c88';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -12880,9 +12880,16 @@ else appLockInit();
   };
 
   window._conferirPrecos = function(){
-    var lista = _matsDaTela()
-      .filter(function(m){ return m.custo > 0; })
-      .sort(function(a, b){ return b.custo - a.custo; });
+    /* 13/10 — entram TAMBÉM os sem preço. Antes só vinham os que tinham
+       valor, e os em branco só davam para arrumar um a um, pelo editor. Como
+       agora existe UMA tela só, esta é a única ferramenta de preço em massa:
+       os sem preço sobem para o topo, porque são os que mais estragam o
+       custo do pedido. */
+    var lista = _matsDaTela().sort(function(a, b){
+      var sa = !(a.custo > 0), sb = !(b.custo > 0);
+      if (sa !== sb) return sa ? -1 : 1;     // sem preço primeiro
+      return b.custo - a.custo;              // depois, do mais caro
+    });
 
     var mod = document.getElementById('modal-conf-precos');
     if (!mod) {
@@ -12911,8 +12918,14 @@ else appLockInit();
         '<div style="text-align:right;font-size:12px;font-weight:700;color:var(--brown)">' + fmt(m.custo) + '</div>' +
         '<input class="cp-div" type="number" step="any" min="0" placeholder="÷" inputmode="decimal" ' +
           'oninput="_confPrecoCalc(' + i + ')" ' +
-          'style="text-align:center;padding:7px 2px;border:1.5px solid var(--cyan);border-radius:8px;font-size:13px;width:100%">' +
-        '<div class="cp-novo" id="cp-novo-' + i + '" style="text-align:right;font-size:12px;font-weight:800;color:var(--gray-d)">—</div>' +
+          (m.custo > 0 ? '' : 'disabled title="Sem preço para dividir — escreva o valor na coluna do lado" ') +
+          'style="text-align:center;padding:7px 2px;border:1.5px solid ' + (m.custo > 0 ? 'var(--cyan)' : '#e9e9ef') + ';border-radius:8px;font-size:13px;width:100%' + (m.custo > 0 ? '' : ';background:#F7F7F9') + '">' +
+        /* 13/10 — o "Fica" virou campo: dá para dividir a embalagem OU escrever
+           o valor direto, que é o único jeito para quem está sem preço nenhum */
+        '<input class="cp-novo" id="cp-novo-' + i + '" type="text" inputmode="decimal" value="" ' +
+          'placeholder="' + (m.custo > 0 ? fmt(m.custo) : 'R$ 0,00') + '" ' +
+          'oninput="_confPrecoDigitou(' + i + ')" title="O valor de UM. Escreva aqui ou use a coluna do lado." ' +
+          'style="text-align:right;padding:7px 5px;border:1.5px solid ' + (m.custo > 0 ? '#e9e9ef' : 'var(--orange)') + ';border-radius:8px;font-size:12px;font-weight:700;width:100%' + (m.custo > 0 ? '' : ';background:#FFF8F0') + '">' +
       '</div>';
     }).join('');
 
@@ -12921,8 +12934,10 @@ else appLockInit();
       '<div class="modal-body" style="overflow:auto">' +
         '<div style="background:var(--orange-l);border-radius:10px;padding:10px;margin-bottom:12px;font-size:11.5px;color:var(--brown);line-height:1.45">' +
           'Material comprado em pacote costuma entrar com o preço do <b>pacote inteiro</b> ' +
-          'no lugar do preço de <b>um</b>. Escreva quantos vêm em cada embalagem e o app divide.' +
-          '<br><span style="color:var(--gray-d)">Estão do mais caro para o mais barato — os errados costumam estar no topo. ' +
+          'no lugar do preço de <b>um</b>. Em <b>Vem</b>, escreva quantos vêm em cada ' +
+          'embalagem e o app divide. Em <b>Fica</b>, dá para escrever o valor direto — ' +
+          'é assim que se resolve quem está <b>sem preço</b>.' +
+          '<br><span style="color:var(--gray-d)">Os sem preço vieram primeiro; depois, do mais caro para o mais barato. ' +
           'Deixe em branco o que já está certo.</span>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 74px 58px 74px;gap:6px;font-size:9.5px;font-weight:800;color:var(--gray-d);text-transform:uppercase;letter-spacing:.03em;padding-bottom:5px;border-bottom:1.5px solid #ECEEF3">' +
@@ -12938,27 +12953,66 @@ else appLockInit();
     openModal('modal-conf-precos');
   };
 
+  /* ══ DOIS CAMINHOS PARA O PREÇO DE UM (13/10/2026) ══════════════════
+     Esta virou a única ferramenta de preço em massa, então precisa dar conta
+     dos dois casos: o que está com o preço da embalagem (divide em "Vem") e
+     o que está SEM preço nenhum (escreve direto em "Fica").            */
+  window._confPrecoValor = function(i){
+    var m = (window._confPrecoLista || [])[i]; if (!m) return null;
+    var lin = document.querySelector('#modal-conf-precos .cp-lin[data-i="' + i + '"]');
+    if (!lin) return null;
+    var campo = lin.querySelector('.cp-novo');
+    var txt = (campo && campo.value) || '';
+    var digitado = (typeof window._parseMoeda === 'function')
+      ? window._parseMoeda(txt)
+      : parseFloat(String(txt).replace(/[^0-9,.-]/g, '').replace(',', '.'));
+    if (digitado > 0) return R2(digitado);
+    var d = parseFloat((lin.querySelector('.cp-div') || {}).value) || 0;
+    if (d > 0 && d !== 1 && m.custo > 0) return R2(m.custo / d);
+    return null;
+  };
+
+  /* escreveu direto no "Fica": a divisão sai da frente */
+  window._confPrecoDigitou = function(i){
+    var lin = document.querySelector('#modal-conf-precos .cp-lin[data-i="' + i + '"]'); if (!lin) return;
+    var campo = lin.querySelector('.cp-novo');
+    var div = lin.querySelector('.cp-div');
+    var v = window._confPrecoValor(i);
+    if (v > 0 && div && !div.disabled) div.value = '';
+    if (campo) campo.style.borderColor = (v > 0) ? 'var(--green)' : '#e9e9ef';
+    window._confPrecoResumo();
+  };
+
+  /* usou a divisão: o resultado aparece escrito no "Fica" */
   window._confPrecoCalc = function(i){
     var m = (window._confPrecoLista || [])[i]; if (!m) return;
-    var lin = document.querySelector('#modal-conf-precos .cp-lin[data-i="' + i + '"]');
-    var inp = lin && lin.querySelector('.cp-div');
-    var out = document.getElementById('cp-novo-' + i);
+    var lin = document.querySelector('#modal-conf-precos .cp-lin[data-i="' + i + '"]'); if (!lin) return;
+    var inp = lin.querySelector('.cp-div');
+    var campo = lin.querySelector('.cp-novo');
     var d = parseFloat(inp && inp.value) || 0;
     if (!(d > 0) || d === 1) {
-      if (out) { out.textContent = '—'; out.style.color = 'var(--gray-d)'; }
+      if (campo) { campo.value = ''; campo.style.borderColor = (m.custo > 0) ? '#e9e9ef' : 'var(--orange)'; }
     } else {
       var novo = Math.round((m.custo / d) * 100) / 100;
-      if (out) { out.textContent = fmt(novo); out.style.color = 'var(--green)'; }
+      if (campo) { campo.value = fmt(novo); campo.style.borderColor = 'var(--green)'; }
     }
-    /* o resumo embaixo, para ela ver quantas vai mexer antes de salvar */
-    var n = 0;
-    document.querySelectorAll('#modal-conf-precos .cp-div').forEach(function(e){
-      var v = parseFloat(e.value) || 0; if (v > 0 && v !== 1) n++;
+    window._confPrecoResumo();
+  };
+
+  window._confPrecoResumo = function(){
+    var lista = window._confPrecoLista || [];
+    var n = 0, semPreco = 0;
+    lista.forEach(function(m, i){
+      var v = window._confPrecoValor(i);
+      if (v != null && R2(v) !== R2(m.custo)) { n++; if (!(m.custo > 0)) semPreco++; }
     });
     var r = document.getElementById('cp-resumo');
-    if (r) r.textContent = n
-      ? (n > 1 ? (n + ' materiais serão corrigidos.') : '1 material será corrigido.')
-      : 'Nenhuma correção marcada ainda.';
+    if (!r) return;
+    if (!n) { r.textContent = 'Nenhuma correção marcada ainda.'; r.style.color = 'var(--gray-d)'; return; }
+    r.innerHTML = (n > 1 ? (n + ' materiais serão corrigidos.') : '1 material será corrigido.') +
+      (semPreco ? ('<span style="font-weight:600;color:var(--orange)"> ' + semPreco +
+                   ' estava' + (semPreco > 1 ? 'm' : '') + ' sem preço.</span>') : '');
+    r.style.color = 'var(--brown)';
   };
 
   /* ══ OS PRODUTOS QUE USAM O MATERIAL CORRIGIDO ═══════════════════
@@ -13018,12 +13072,13 @@ else appLockInit();
   window._salvarConfPrecos = function(){
     var lista = window._confPrecoLista || [];
     var mudancas = [];
-    document.querySelectorAll('#modal-conf-precos .cp-lin').forEach(function(lin){
-      var i = parseInt(lin.dataset.i, 10);
-      var m = lista[i]; if (!m) return;
-      var d = parseFloat((lin.querySelector('.cp-div') || {}).value) || 0;
-      if (!(d > 0) || d === 1) return;
-      mudancas.push({ nome: m.nome, de: m.custo, para: Math.round((m.custo / d) * 100) / 100 });
+    /* 13/10 — lê pelos DOIS caminhos (dividir a embalagem ou escrever o
+       valor), pelo mesmo ajudante que desenha a tela. Assim o que ela vê no
+       "Fica" é exatamente o que vai ser gravado. */
+    lista.forEach(function(m, i){
+      var v = window._confPrecoValor(i);
+      if (v == null || R2(v) === R2(m.custo)) return;
+      mudancas.push({ nome: m.nome, de: m.custo, para: R2(v) });
     });
     if (!mudancas.length) { toast('Nenhuma correção marcada'); return; }
 
@@ -13181,10 +13236,18 @@ else appLockInit();
     toast('"' + nome + '" excluído');
   };
 
+  /* ⚠️ 13/10/2026 — UMA TELA DE MATERIAIS, SÓ.
+     Esta função reapontava o botão "Materiais" do menu para o editor da
+     Precificação (_abrirProdutos), e a tela de verdade (screen-estoque)
+     ficava órfã: existia no app e nenhum botão chegava nela. Passei um dia
+     inteiro consertando a tela que ela não conseguia abrir.
+     Palavras dela: "só quero uma tela de materiais, não entendi pq tem duas"
+     — e escolheu esta, a do menu.
+     ⚠️ NÃO reapontar o menu de novo. Falta alguma coisa? Entra NELA.        */
   function ajustarMenu(){
     var b=document.getElementById('nav-estoque');
     if(!b) return;
-    b.setAttribute('onclick','_abrirProdutos()');
+    b.setAttribute('onclick', "navigate('estoque')");
     var lb=b.querySelector('.nav-label'); if(lb) lb.textContent='Materiais';
   }
 
