@@ -1074,10 +1074,21 @@ window._imgMarca = function(classe){
         <button onclick="sincronizarBaixasEntregues()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--pink);color:var(--pink);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M21 8 12 3 3 8l9 5 9-5Z"/><path d="M3 8v8l9 5 9-5V8"/></svg>Baixar pedidos entregues</button>
         <button onclick="importarEstoquePlanilha()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--cyan);color:var(--cyan-d);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M5 21h14"/></svg>Importar estoque da planilha</button>
         <button onclick="preencherAtributosAuto()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--cyan);color:var(--cyan-d);margin-top:4px;margin-left:6px;display:inline-flex;align-items:center;gap:5px"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M3 12V4a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></svg> Preencher características (auto)</button>
-        <button onclick="_conferirPrecos()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--orange);color:var(--orange);margin-right:5px;margin-top:5px;border-radius:20px">⚖️ Conferir preços</button>
         <button onclick="abrirAtivos()" class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 10px;border:1px dashed var(--purple);color:var(--purple);margin-top:4px;display:inline-flex;align-items:center;gap:5px"><svg width="13" height="13" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>Equipamentos & Ativos</button>
       </div>
       <div id="estoque-alertas"></div>
+      <!-- 13/10/2026 — este botão já existia lá em cima, com 10px de letra numa
+           fileira de seis iguais: na tela do computador ela não o enxergava.
+           Agora fica debaixo da tarja laranja, que é o que ela VÊ, e do
+           tamanho de um botão de verdade. -->
+      <button type="button" onclick="_conferirPrecos()" id="btn-conferir-precos"
+        style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
+               background:var(--orange);color:#fff;border:none;border-radius:12px;
+               padding:13px;font-size:14px;font-weight:800;cursor:pointer;
+               margin-bottom:12px;box-shadow:var(--shadow-s)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 7h10"/><path d="m5 11 2-4 2 4a2 2 0 0 1-4 0Z"/><path d="m15 11 2-4 2 4a2 2 0 0 1-4 0Z"/></svg>
+        Conferir preços dos materiais
+      </button>
       <div class="section-title">Todos os materiais</div>
       <div style="margin-bottom:8px"><input type="search" id="estoque-busca" placeholder="🔎 Buscar item pelo nome" oninput="_setBuscaEstoque(this.value)" class="form-input" style="font-size:13px"></div>
       <div style="margin-bottom:8px"><select class="form-select" id="estoque-filtro-cat" onchange="renderEstoque()" style="font-size:13px"><option value="">Todas as categorias</option></select></div>
@@ -10164,7 +10175,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v12/10-c85';
+  var ver='v13/10-c86';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
