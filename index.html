@@ -1364,12 +1364,17 @@ window._imgMarca = function(classe){
       <div class="form-actions" style="margin-top:8px">
         <button class="btn btn-pink btn-full" onclick="salvarProduto()"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M5 3h11l3 3v15H5Z"/><path d="M8 3v5h7"/><rect x="8" y="13" width="8" height="5"/></svg> Salvar no catálogo</button>
       </div>
-      <div style="display:flex;align-items:center;gap:8px"><div class="section-title" style="flex:1">Catálogo de produtos</div><button type="button" onclick="_limparCatalogo()" style="font-size:10px;font-weight:700;background:none;border:1px dashed var(--red);color:var(--red);border-radius:20px;padding:3px 10px;cursor:pointer;white-space:nowrap">Limpar catálogo</button></div>
-      <button type="button" onclick="_gerarCatalogoPDF()" style="width:100%;padding:12px;background:var(--pink);color:#fff;border:none;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer;margin-bottom:6px;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="18" height="18" viewBox="0 0 24 24" style="fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/></svg>Gerar catálogo em PDF (enviar no Whats)</button>
-      <button type="button" onclick="_gerarCatalogo()" style="width:100%;padding:9px;background:var(--cyan-l);color:var(--cyan-d);border:1.5px solid var(--cyan);border-radius:12px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:8px">Ver no navegador (no computador)</button>
+      <div style="display:flex;align-items:center;gap:8px"><div class="section-title" style="flex:1">Catálogo de produtos</div><button type="button" onclick="_limparCatalogo()" style="font-size:12px;font-weight:700;background:none;border:1px dashed var(--red);color:var(--red);border-radius:20px;padding:5px 12px;cursor:pointer;white-space:nowrap">Limpar catálogo</button></div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
         <select id="cat-filtro" class="form-select" onchange="renderCatalogo()" style="flex:1;min-width:150px;padding:9px;font-size:13px"></select>
-        <button type="button" onclick="_marcarTodosCat()" style="padding:9px 12px;background:var(--pink-l);color:var(--pink);border:1.5px solid var(--pink);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">☑️ Marcar todos</button>
+        <!-- 14/10/2026, 2a volta: as caixinhas VOLTARAM. Palavras dela:
+             "as caixinhas de marcar, selecionar por categoria, filtro e
+             edicao deixa, pois vou precisar". Sem o PDF, elas servem para
+             mexer em varios de uma vez: o filtro escolhe a categoria,
+             "Marcar todos" pega os que estao na tela e dai da para excluir
+             o lote inteiro. -->
+        <button type="button" onclick="_marcarTodosCat()" class="btn btn-ghost" style="font-size:12px;font-weight:700;padding:9px 12px;white-space:nowrap">Marcar todos</button>
+        <button type="button" id="cat-excluir-marcados" onclick="_excluirMarcadosCat()" style="display:none;font-size:12px;font-weight:700;padding:9px 12px;white-space:nowrap;background:var(--red-l);color:var(--red);border:none;border-radius:10px;cursor:pointer">Excluir marcados</button>
       </div>
       <div class="card"><div id="catalogo-list"></div></div>
       <div style="height:80px"></div>
@@ -8715,7 +8720,34 @@ function _marcarTodosCat(){
   // se todos já marcados, desmarca; senão marca todos os visíveis
   var todosMarcados=true; boxes.forEach(function(c){ if(!c.checked) todosMarcados=false; });
   boxes.forEach(function(c){ c.checked=!todosMarcados; });
+  _contarMarcadosCat();
 }
+/* mostra o "Excluir marcados" só quando há algo marcado, com a conta */
+window._contarMarcadosCat=function(){
+  var n=document.querySelectorAll('#catalogo-list .cat-sel:checked').length;
+  var bt=document.getElementById('cat-excluir-marcados'); if(!bt) return n;
+  bt.style.display = n ? '' : 'none';
+  bt.textContent = n===1 ? 'Excluir 1 marcado' : ('Excluir '+n+' marcados');
+  return n;
+};
+/* apaga de uma vez os que ela marcou — é para isso que a caixinha serve
+   agora que o catálogo não vira mais PDF */
+window._excluirMarcadosCat=function(){
+  var ids=[]; document.querySelectorAll('#catalogo-list .cat-sel:checked').forEach(function(c){ ids.push(c.dataset.id); });
+  if(!ids.length){ toast('Marque os produtos que quer excluir'); return; }
+  var nomes=catalogo.filter(function(p){ return ids.indexOf(p.id)>=0; }).map(function(p){ return '· '+p.nome; });
+  var pergunta = ids.length===1
+    ? ('Excluir este produto do catálogo?' + '\n\n' + nomes[0])
+    : ('Excluir estes ' + ids.length + ' produtos do catálogo?' + '\n\n' +
+       nomes.slice(0,12).join('\n') + (nomes.length>12 ? ('\n… e mais ' + (nomes.length-12)) : ''));
+  if(!confirm(pergunta)) return;
+  /* mesmo caminho da limpeza do catálogo: a foto sai junto e a lápide
+     (para não voltar pela nuvem) nasce sozinha no save */
+  ids.forEach(function(id){ try{ if(typeof _setFoto==='function') _setFoto(id,''); }catch(e){} });
+  catalogo = catalogo.filter(function(p){ return !(p && ids.indexOf(p.id)>=0); });
+  save(); renderCatalogo(); _contarMarcadosCat();
+  toast(ids.length===1 ? 'Produto excluído' : (ids.length+' produtos excluídos'));
+};
 function renderCatalogo(){
   var el=document.getElementById('catalogo-list'); if(!el) return;
   _popularFiltroCat();
@@ -8725,8 +8757,69 @@ function renderCatalogo(){
   el.innerHTML=lista.map(function(p){
     var foto=_getFoto(p.id);
     var thumb = foto ? `<img src="${foto}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;flex-shrink:0">` : `<div class="li-icon" style="background:var(--pink-l)"><svg xmlns="http://www.w3.org/2000/svg" width="1.05em" height="1.05em" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.16em;flex-shrink:0"><path d="M3 12V4a1 1 0 0 1 1-1h8l8 8-9 9-8-8Z"/><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"/></svg></div>`;
+    /* ══ 14/10/2026 — A LINHA SE EDITA AQUI MESMO ═════════════════════
+       *"Ele precisa ser editável e eu também posso excluir."*
+       O nome e o preço viraram campo na própria linha; o excluir era um ✕
+       cinza de 11px que ela não enxergava. O "editar" continua, para quando
+       ela quiser mexer na foto, na descrição ou nos materiais.
+       A caixinha de marcar FICA (ela pediu de volta no mesmo dia): serve
+       para mexer em vários de uma vez, não mais para escolher o que ia no
+       PDF — o catálogo agora é para BUSCAR NO PEDIDO.                     */
+    /* ⚠️ a linha QUEBRA no celular (flex-wrap): com o nome num campo, a
+       390px ele ficava cortado em "ARRANJO BUI...". Agora o nome ocupa a
+       largura toda e o preço desce. Em tela larga nada muda: cabe tudo. */
+    return `<div class="list-item" style="flex-wrap:wrap;row-gap:6px">`+
+      `<input type="checkbox" class="cat-sel" data-id="${p.id}" onclick="event.stopPropagation();_contarMarcadosCat()" title="marcar este produto" style="width:18px;height:18px;accent-color:var(--pink);flex-shrink:0">`+
+      thumb+
+      `<div class="li-info" style="flex:1 1 170px;min-width:150px">`+
+        `<input type="text" class="cat-nome" data-id="${p.id}" value="${_escHtml(p.nome||'')}" `+
+          `onchange="_catSalvarCampo('${p.id}','nome',this.value)" `+
+          `title="Nome do produto — é por ele que você acha no pedido" `+
+          `style="width:100%;font-size:13px;font-weight:700;color:var(--brown);border:1px solid transparent;border-radius:7px;padding:4px 6px;background:transparent">`+
+        `<div class="li-sub" style="padding-left:6px">${_escHtml(p.cat||'')} · `+
+          `<span style="cursor:pointer;color:var(--cyan-d);text-decoration:underline" onclick="editarProdutoCatalogo('${p.id}')">editar foto, descrição e materiais</span></div>`+
+      `</div>`+
+      `<div class="li-right" style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:auto">`+
+        `<label style="display:flex;align-items:center;gap:3px">`+
+          `<span style="font-size:10px;font-weight:700;color:var(--pink)">R$</span>`+
+          `<input type="text" inputmode="decimal" class="cat-preco" data-id="${p.id}" value="${(parseFloat(p.preco)||0) ? (parseFloat(p.preco)).toFixed(2).replace('.',',') : ''}" placeholder="0,00" `+
+            `onchange="_catSalvarCampo('${p.id}','preco',this.value)" `+
+            `title="Preço de venda" `+
+            `style="width:82px;text-align:right;font-size:13px;font-weight:800;color:var(--pink);border:1px solid #ECEEF3;border-radius:8px;padding:4px 6px">`+
+        `</label>`+
+      `<div style="display:flex;align-items:center;gap:4px">`+
+        `<button onclick="event.stopPropagation();_marcarComoMaterial('${p.id}')" title="tirar do catálogo: isto é material, não produto" style="font-size:12px;color:var(--cyan-d);background:var(--cyan-l);border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-weight:700">é material</button>`+
+        `<button onclick="event.stopPropagation();_excluirProduto('${p.id}')" title="Excluir este produto do catálogo" style="font-size:12px;color:var(--red);background:var(--red-l);border:none;border-radius:8px;padding:5px 10px;cursor:pointer;font-weight:700">Excluir</button>`+
+      `</div>`+
+      `</div>`+
+    `</div>`;
+  }).join('');
+  if(window._contarMarcadosCat) _contarMarcadosCat();
+}
+
+/* grava o que ela escreveu na linha, sem sair da lista */
+window._catSalvarCampo = function(id, campo, valor){
+  var p = (typeof catalogo !== 'undefined' ? catalogo : []).filter(function(x){ return x && x.id === id; })[0];
+  if (!p) return;
+  if (campo === 'nome') {
+    var nome = String(valor || '').trim();
+    if (!nome) { toast('O produto precisa de um nome'); renderCatalogo(); return; }
+    p.nome = nome;
+  } else if (campo === 'preco') {
+    /* ela digita 119,90 — a vírgula é o separador do teclado dela */
+    valor = String(valor == null ? '' : valor).trim().replace(/[^0-9,.\-]/g, '').replace(',', '.');
+    p.preco = Math.round((parseFloat(valor) || 0) * 100) / 100;   /* R2 não existe neste bloco */
+  }
+  p.updatedAt = Date.now();
+  save();
+  toast('Salvo');
+};
+
+function _renderCatalogoVelho_NAO_USAR(){
+  var lista = [];
+  return lista.map(function(p){
+    var foto='', thumb='';
     return `<div class="list-item">`+
-      `<input type="checkbox" class="cat-sel" data-id="${p.id}" onclick="event.stopPropagation()" title="marcar para o catálogo" style="width:18px;height:18px;accent-color:var(--pink);flex-shrink:0">`+
       thumb+
       `<div class="li-info" style="cursor:pointer" onclick="editarProdutoCatalogo('${p.id}')">`+
         `<div class="li-title">${_escHtml(p.nome||'')}</div>`+
@@ -10175,7 +10268,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v14/10-c89';
+  var ver='v14/10-c91';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -13843,15 +13936,18 @@ else appLockInit();
      atalho para repreçar o que já está salvo — sem tapar nada.          */
   function botaoPrecificacao(){
     var tela=document.getElementById('screen-preco'); if(!tela) return;
-    if(!tela.dataset.calc){
-      /* nada de esconder: a tela de sempre fica */
-      var box=document.createElement('div'); box.id='calc-preco';
-      box.style.marginTop='18px';
-      tela.appendChild(box);
-      box.addEventListener('click', calcClique);
-      box.addEventListener('change', calcMudou);
-      tela.dataset.calc='1';
-    }
+    /* ⚠️ 14/10/2026 — A LISTA "MATERIAL × FATOR" SAIU.
+       Ela entrou em 11/10 como atalho para repreçar, e virou uma SEGUNDA
+       lista de produtos embaixo do Catálogo, na mesma tela. Palavras dela:
+       *"tirar essa lista Material × fator, foi o que incluímos por último e
+       não quero ela. Vamos manter a precificação como era, que gera um
+       catálogo."*
+       Duas listas da mesma coisa na mesma tela já nos custou um dia (as duas
+       telas de material, 13/10). Uma só.
+       ⚠️ NÃO voltar a pendurar lista nenhuma aqui.                        */
+    var velha=document.getElementById('calc-preco');
+    if(velha) velha.remove();
+    tela.dataset.calc='';
     /* se alguma versão anterior escondeu os blocos, devolve */
     [].slice.call(tela.children).forEach(function(c){
       if(c && c.id!=='calc-preco' && c.style && c.style.display==='none') c.style.display='';
