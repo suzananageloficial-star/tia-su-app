@@ -10175,7 +10175,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v13/10-c88';
+  var ver='v14/10-c89';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -11770,6 +11770,8 @@ else appLockInit();
   };
   /* material de balão ou fita vira seletor de cor: a linha é refeita, e a
      nova precisa continuar dentro do item que a trouxe */
+  /* material de balão ou fita vira seletor de cor: a linha é refeita, e a
+     nova precisa continuar dentro do item que a trouxe */
   var convOrig=window._maybeConvertColor;
   window._maybeConvertColor=function(rowId){
     var velha=document.getElementById(rowId);
@@ -11784,7 +11786,29 @@ else appLockInit();
       // já é um produto cadastrado: fica como está, só puxa o preço dele
       var exato=produtoExato(nm);
       if(exato){ precoDoProduto(velha, exato); calcularGastoReal(); return; }
-      if(!coresDoCadastro(nm).length) return;
+      /* ══ 14/10/2026 — SÓ O GENÉRICO ABRE A LISTA DE COR ══════════════
+
+         Relato dela, com print: *"eu digitei o material e ele trocou
+         automático para escolher cor, mas eu já tinha escolhido qual o item
+         da lista"*. Era o FOIL 16" número 4 dourado virando seletor.
+
+         A culpa era do `coresDoCadastro`, que tem uma regra de MESMO
+         TAMANHO: para "BALÃO 9 LISO" ela devolve as cores de 9 polegadas,
+         o que é certo. Mas para "FOIL 16 NÚMERO 4 DOURADO" ela devolvia os
+         outros FOIL 16" — números 5, 6, 7 — como se fossem cores. Não são
+         cores: são produtos diferentes do mesmo tamanho.
+
+         Aqui, na conversão automática, vale só o teste de PREFIXO: o que
+         ela escreveu tem de ser o começo do nome das cores.
+           "BALÃO 9 POLEGADAS"          → "... LISO AZUL"   ✓ converte
+           "FOIL 16\" NÚMERO 4 DOURADO" → nada começa com isso ✗ fica texto
+         `coresDoCadastro` segue como estava para o resto do app (preço teto,
+         seletor da ficha): quem ficou mais exigente foi só esta porta.     */
+      var base=chaveNome(nm);
+      var variantes=coresDoCadastro(nm).filter(function(x){
+        return chaveNome(x.nome).indexOf(base)===0;
+      });
+      if(!variantes.length) return;
     }
     var antes=document.querySelectorAll('#modal-pedido .material-row').length;
     var ret=convOrig.apply(this, arguments);
