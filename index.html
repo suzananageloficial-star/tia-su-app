@@ -4907,7 +4907,14 @@ function renderTrafego(){
     .reduce(function(s,f){ return s + (parseFloat(f.valor)||0); }, 0);
 
   // ---- pedidos do mês ----
-  var pedMes    = (pedidos||[]).filter(function(p){ return _trafNoMes(p.criadoEm || p.dataEntrega); });
+  /* ⚠️ 16/10/2026 — PEDIDO CANCELADO NÃO É VENDA.
+     Ele entrava aqui: o valor dele somava no faturamento vindo de anúncio
+     (inflando o ROAS), contava no custo por venda e aparecia no "de onde
+     vieram os pedidos". Um cancelado marcado como Anúncio fazia a conta
+     parecer melhor do que foi. A planilha já separa os cancelados. */
+  var pedMes    = (pedidos||[]).filter(function(p){
+    return p && p.status !== 'Cancelado' && _trafNoMes(p.criadoEm || p.dataEntrega);
+  });
   var deAnuncio = pedMes.filter(function(p){ return p.origem === 'Anúncio'; });
   var semOrigem = pedMes.filter(function(p){ return !p.origem; }).length;
 
@@ -5009,10 +5016,23 @@ function renderTrafego(){
         + kpi('var(--gray-l)', lucroLiq>=0?'var(--green)':'var(--red)', 'LUCRO LÍQUIDO', fmt(lucroLiq), 'já tirando tudo')
         + '</div>';
 
+  /* 16/10/2026 — o aviso virou BOTÃO.
+     Ele dizia "abra o pedido e preencha", e abrir 161 pedidos um a um
+     ninguém faz: a origem ficava vazia e o ROAS acima saía menor que a
+     realidade. Agora leva para a marcação em lote (_quemMeAchou).
+     Barra de largura inteira, como a de conferir preços — função
+     importante não mora em letra de 10 pixels (lição de 13/10). */
   if (semOrigem > 0) {
-    html += '<div style="background:#FFF9E6;border:1px solid var(--yellow);border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--brown);line-height:1.45">'
+    html += '<div style="background:#FFF9E6;border:1px solid var(--yellow);border-radius:10px;padding:10px 12px;margin-bottom:9px;font-size:12px;color:var(--brown);line-height:1.45">'
           + '<b>'+semOrigem+' pedido(s) deste mês sem origem preenchida.</b><br>'
-          + 'Abra o pedido e preencha "Como me achou?" — sem isso o ROAS acima fica menor que a realidade.</div>';
+          + 'Sem isso o ROAS acima fica menor que a realidade: a venda que o anúncio trouxe não aparece.</div>'
+          + '<button type="button" onclick="_quemMeAchou()" style="width:100%;min-height:45px;margin-bottom:14px;'
+          + 'background:var(--cyan-d);color:#fff;border:none;border-radius:11px;font-size:13.5px;font-weight:800;cursor:pointer">'
+          + 'Marcar quem me achou (' + semOrigem + ')</button>';
+  } else {
+    html += '<button type="button" onclick="_quemMeAchou(\'90\')" style="width:100%;min-height:40px;margin-bottom:14px;'
+          + 'background:#fff;color:var(--cyan-d);border:1.5px solid var(--cyan);border-radius:11px;font-size:12.5px;font-weight:700;cursor:pointer">'
+          + 'Conferir a origem dos pedidos</button>';
   }
 
   html += '<div class="card" style="margin-bottom:14px"><div class="card-body">'
@@ -10268,7 +10288,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v14/10-c91';
+  var ver='v16/10-c92';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -14430,6 +14450,210 @@ else appLockInit();
       }
     });
   }catch(e){ console.warn('[FB] auth watch', e); }
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     QUEM ME ACHOU — marcar a origem de VÁRIOS pedidos de uma vez
+     16/10/2026. Palavras dela: *"tem que atualizar a planilha com os dados
+     de quem me achou para o cálculo do tráfego pago"*.
+
+     O QUE ESTAVA ACONTECENDO
+     A coluna "Como me achou" existe no pedido desde 08/10, está no `.gs` e
+     JÁ CHEGA na planilha (coluna L da aba Pedidos — conferido em 16/10).
+     O que falta é o DADO: os pedidos antigos estão sem origem, e o único
+     caminho era abrir pedido por pedido. São 161 pedidos. Ninguém faz isso.
+
+     ⚠️ DIGITAR NA PLANILHA NÃO ADIANTA: o `.gs` reescreve a aba Pedidos
+     inteira a partir do app a cada sincronização. O dado tem que entrar
+     AQUI; para a planilha ele vai sozinho.
+
+     O DESENHO é o mesmo da varredura de preços, que funcionou: lista,
+     seleção em lote, salva tudo de uma vez. Marcar 20 pedidos como
+     "Instagram" é um toque em cada caixinha e um no botão.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  /* as mesmas opções do seletor do pedido — não inventar outras aqui, ou o
+     relatório de origem passa a contar duas coisas com nomes diferentes */
+  var ORIGENS = [
+    { v:'Anúncio',         rot:'Anúncio pago',  cor:'var(--pink)' },
+    { v:'Instagram',       rot:'Instagram',     cor:'var(--cyan-d)' },
+    { v:'Indicação',       rot:'Indicação',     cor:'var(--green)' },
+    { v:'Cliente antigo',  rot:'Já era cliente',cor:'var(--brown)' },
+    { v:'WhatsApp/Status', rot:'WhatsApp',      cor:'var(--green)' },
+    { v:'Outro',           rot:'Outro',         cor:'var(--gray-d)' }
+  ];
+
+  var PERIODOS = [
+    { v:'mes',  rot:'Este mês' },
+    { v:'90',   rot:'Últimos 3 meses' },
+    { v:'todos',rot:'Todos' }
+  ];
+
+  function escH(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function dinheiro(v){
+    return 'R$ ' + (parseFloat(v)||0).toFixed(2).replace('.', ',');
+  }
+  function dataDo(p){ return p.criadoEm || p.dataEntrega || ''; }
+  function dataBR(v){
+    var s = String(v||'');
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? (m[3]+'/'+m[2]+'/'+m[1]) : (s ? s.slice(0,10) : '—');
+  }
+
+  /* os pedidos SEM origem, do mais novo para o mais velho */
+  window._pedidosSemOrigem = function(periodo){
+    var lista = (typeof pedidos !== 'undefined' ? pedidos : []).filter(function(p){
+      if (!p) return false;
+      if (String(p.origem||'').trim()) return false;      // já tem
+      if (p.status === 'Cancelado') return false;         // não entra no cálculo
+      return true;
+    });
+    if (periodo === 'mes') {
+      lista = lista.filter(function(p){
+        try { return _trafNoMes(dataDo(p)); } catch(e){ return true; }
+      });
+    } else if (periodo === '90') {
+      var corte = new Date(); corte.setDate(corte.getDate() - 90);
+      lista = lista.filter(function(p){
+        var d = dataDo(p); if (!d) return true;
+        var dt = new Date(String(d).slice(0,10) + 'T12:00:00');
+        return !isNaN(dt) ? (dt >= corte) : true;
+      });
+    }
+    return lista.sort(function(a,b){
+      return String(dataDo(b)).localeCompare(String(dataDo(a)));
+    });
+  };
+
+  window._origemPeriodo = 'mes';
+
+  window._quemMeAchou = function(periodo){
+    if (periodo) window._origemPeriodo = periodo;
+    var lista = window._pedidosSemOrigem(window._origemPeriodo);
+    window._origemLista = lista;
+
+    var mod = document.getElementById('modal-quem-achou');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-quem-achou';
+      document.body.appendChild(mod);
+    }
+
+    var seletor = '<select id="org-periodo" onchange="_quemMeAchou(this.value)" ' +
+      'style="padding:8px 10px;border:1.5px solid #e9e9ef;border-radius:9px;font-size:12.5px;font-weight:700;color:var(--brown);background:#fff">' +
+      PERIODOS.map(function(p){
+        return '<option value="'+p.v+'"'+(p.v===window._origemPeriodo?' selected':'')+'>'+p.rot+'</option>';
+      }).join('') + '</select>';
+
+    var topo =
+      '<div style="background:var(--cyan-l);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:11.5px;color:var(--brown);line-height:1.5">' +
+        'Marque de onde veio cada cliente. É isto que faz a conta do <b>anúncio</b> fechar: ' +
+        'sem a origem, a venda que o anúncio trouxe não aparece no ROAS.' +
+        '<br><span style="color:var(--gray-d)">Escolha vários e marque todos de uma vez. ' +
+        'Vai para a planilha sozinho, na próxima sincronização.</span>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">' +
+        seletor +
+        '<button type="button" class="btn btn-ghost" onclick="_orgMarcarTodos()" ' +
+          'style="font-size:12px;font-weight:700;padding:8px 12px">Escolher todos</button>' +
+        '<span id="org-conta" style="font-size:11.5px;color:var(--gray-d);font-weight:700"></span>' +
+      '</div>';
+
+    if (!lista.length) {
+      mod.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
+        '<div class="modal-title">Quem me achou?</div>' +
+        '<div class="modal-body">' + topo +
+          '<div style="padding:16px;text-align:center;color:var(--green);font-size:13px;font-weight:700">' +
+          'Todos os pedidos deste período já têm a origem preenchida.</div></div>' +
+        '<div class="form-actions"><button class="btn btn-pink" style="flex:1" ' +
+          'onclick="closeModal(\'modal-quem-achou\')">Fechar</button></div></div>';
+      openModal('modal-quem-achou');
+      return;
+    }
+
+    var linhas = lista.map(function(p, i){
+      return '<label class="org-lin" style="display:flex;gap:9px;align-items:flex-start;padding:8px 2px;border-bottom:1px solid #f4f4f6;cursor:pointer">' +
+        '<input type="checkbox" class="org-ck" data-i="'+i+'" onchange="_orgConta()" ' +
+          'style="width:19px;height:19px;accent-color:var(--pink);flex-shrink:0;margin-top:2px">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="font-size:12.5px;font-weight:700;color:var(--brown);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+            escH(p.cliente || '(sem nome)') + '</div>' +
+          '<div style="font-size:10.5px;color:var(--gray-d);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+            dataBR(dataDo(p)) + ' · ' + dinheiro(p.valor) +
+            (p.produto ? (' · ' + escH(p.produto)) : '') + '</div>' +
+        '</div>' +
+      '</label>';
+    }).join('');
+
+    var botoes = ORIGENS.map(function(o){
+      return '<button type="button" onclick="_orgAplicar(\'' + o.v.replace(/'/g,"\\'") + '\')" ' +
+        'style="flex:1 1 92px;min-height:40px;font-size:12px;font-weight:800;color:#fff;background:' + o.cor +
+        ';border:none;border-radius:10px;cursor:pointer;padding:8px 6px">' + o.rot + '</button>';
+    }).join('');
+
+    mod.innerHTML = '<div class="modal" style="max-height:90vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Quem me achou?</div>' +
+      '<div class="modal-body" style="overflow:auto">' + topo +
+        '<div style="font-size:11px;font-weight:800;color:var(--gray-d);margin-bottom:4px">' +
+          lista.length + (lista.length === 1 ? ' PEDIDO SEM ORIGEM' : ' PEDIDOS SEM ORIGEM') + '</div>' +
+        '<div id="org-lista">' + linhas + '</div>' +
+      '</div>' +
+      '<div style="padding:10px 14px 4px;border-top:1px solid #ECEEF3">' +
+        '<div style="font-size:11.5px;font-weight:800;color:var(--brown);margin-bottom:7px">' +
+          'Marcar os escolhidos como:</div>' +
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">' + botoes + '</div>' +
+      '</div>' +
+      '<div class="form-actions"><button class="btn btn-outline" style="flex:1" ' +
+        'onclick="closeModal(\'modal-quem-achou\')">Fechar</button></div></div>';
+
+    openModal('modal-quem-achou');
+    _orgConta();
+  };
+
+  window._orgConta = function(){
+    var n = document.querySelectorAll('#modal-quem-achou .org-ck:checked').length;
+    var el = document.getElementById('org-conta');
+    if (el) el.textContent = n ? (n === 1 ? '1 escolhido' : (n + ' escolhidos')) : '';
+    return n;
+  };
+
+  window._orgMarcarTodos = function(){
+    var cks = document.querySelectorAll('#modal-quem-achou .org-ck');
+    if (!cks.length) return;
+    var todos = true;
+    cks.forEach(function(c){ if (!c.checked) todos = false; });
+    cks.forEach(function(c){ c.checked = !todos; });
+    _orgConta();
+  };
+
+  window._orgAplicar = function(origem){
+    var cks = document.querySelectorAll('#modal-quem-achou .org-ck:checked');
+    if (!cks.length) { toast('Escolha os pedidos primeiro'); return; }
+    var lista = window._origemLista || [];
+    var n = 0;
+    cks.forEach(function(c){
+      var p = lista[parseInt(c.dataset.i, 10)];
+      if (!p) return;
+      p.origem = origem;
+      p.updatedAt = Date.now();
+      n++;
+    });
+    if (!n) return;
+    save();
+    toast(n === 1 ? ('1 pedido marcado como ' + origem) : (n + ' pedidos marcados como ' + origem));
+    /* redesenha a lista: os marcados saem dela */
+    window._quemMeAchou();
+    try { if (currentScreen === 'trafego') renderTrafego(); } catch(e){}
+  };
 })();
 </script>
 </body>
