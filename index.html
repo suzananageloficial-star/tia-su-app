@@ -10288,7 +10288,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v16/10-c92';
+  var ver='v21/10-c93';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -13016,13 +13016,62 @@ else appLockInit();
                            : '1 produto apagado do catálogo');
   };
 
+  /* ══ 21/10/2026 — O APP APONTA O PREÇO DE PACOTE SOZINHO ═══════════
+     Palavras dela: *"ali no balão branco perolado está puxando o valor do
+     pacote e não o valor unitário"*. Era dado, não conta: o BALÃO 5"
+     PEROLADO BRANCO está no estoque dela a R$ 11,90 com quantidade 1 — o
+     pacote inteiro lançado como uma unidade. Os outros balões 5" dela
+     custam R$ 0,18.
+     A varredura ordenava do mais caro para o mais barato, e isso não
+     separa o errado do caro de verdade: uma caixa de MDF a R$ 5,70 está
+     certa, um balão de 5" a R$ 11,90 não. O que denuncia é a comparação
+     com os IRMÃOS — material do mesmo tipo e tamanho.
+     Grupo = primeira palavra + primeiro número do nome
+     ("BALÃO 5" PEROLADO BRANCO" e "BALÃO 5" LISO AZUL" caem no mesmo).  */
+  function _grupoDoMaterial(nome){
+    var n = String(nome || '').toUpperCase()
+      .replace(/[\u201C\u201D\u2033]/g, '"').replace(/[\u2018\u2019]/g, "'");
+    n = n.normalize ? n.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : n;
+    var palavra = (n.match(/[A-Z]{3,}/) || [''])[0];
+    if (!palavra) return '';
+    var num = (n.match(/(\d+)\s*(?:"|POLEGADA|MM|CM)/) || n.match(/(\d+)/) || [])[1];
+    return palavra + '|' + (num || '');
+  }
+  /* o preço do meio entre os irmãos: resiste a um ou dois errados no meio */
+  function _medianaIrmaos(lista, grupo, excluirNome){
+    var irmaos = lista.filter(function(m){
+      return m.custo > 0 && _grupoDoMaterial(m.nome) === grupo && m.nome !== excluirNome;
+    }).sort(function(a, b){ return a.custo - b.custo; });
+    if (irmaos.length < 4) return null;       // poucos irmãos: não dá para julgar
+    var i = Math.floor(irmaos.length / 2);
+    var med = irmaos.length % 2 ? irmaos[i].custo : (irmaos[i - 1].custo + irmaos[i].custo) / 2;
+    /* devolve também UM irmão de exemplo, com o nome que ela reconhece:
+       "o BALÃO 5" LISO AZUL custa R$ 0,18" convence mais que uma categoria */
+    return { valor: med, exemplo: irmaos[i].nome };
+  }
   window._conferirPrecos = function(){
     /* 13/10 — entram TAMBÉM os sem preço. Antes só vinham os que tinham
        valor, e os em branco só davam para arrumar um a um, pelo editor. Como
        agora existe UMA tela só, esta é a única ferramenta de preço em massa:
        os sem preço sobem para o topo, porque são os que mais estragam o
        custo do pedido. */
-    var lista = _matsDaTela().sort(function(a, b){
+    var lista = _matsDaTela();
+    /* 21/10 — marca quem parece estar com o preço do pacote */
+    lista.forEach(function(m){
+      m.irmaos = 0;
+      var g = _grupoDoMaterial(m.nome);
+      if (!g || !(m.custo > 0)) return;
+      var med = _medianaIrmaos(lista, g, m.nome);
+      if (med && med.valor > 0 && m.custo >= med.valor * 5 && m.custo >= 1) {
+        m.irmaos = med.valor;
+        m.exemplo = med.exemplo;
+      }
+    });
+    lista.sort(function(a, b){
+      /* 1º os que parecem pacote (estragam o custo e ela não vê),
+         2º os sem preço, 3º do mais caro para o mais barato */
+      var pa = !!a.irmaos, pb = !!b.irmaos;
+      if (pa !== pb) return pa ? -1 : 1;
       var sa = !(a.custo > 0), sb = !(b.custo > 0);
       if (sa !== sb) return sa ? -1 : 1;     // sem preço primeiro
       return b.custo - a.custo;              // depois, do mais caro
@@ -13047,12 +13096,18 @@ else appLockInit();
 
     window._confPrecoLista = lista;
     var linhas = lista.map(function(m, i){
-      return '<div class="cp-lin" data-i="' + i + '" style="display:grid;grid-template-columns:1fr 74px 58px 74px;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid #f4f4f6">' +
+      return '<div class="cp-lin" data-i="' + i + '" style="display:grid;grid-template-columns:1fr 74px 58px 74px;gap:6px;align-items:center;padding:7px ' + (m.irmaos ? '6px' : '0') + ';border-bottom:1px solid #f4f4f6' + (m.irmaos ? ';background:#FFF8F0;border-radius:8px' : '') + '">' +
         '<div style="min-width:0">' +
-          '<div style="font-size:12px;font-weight:700;color:var(--brown);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(m.nome) + '</div>' +
-          '<div style="font-size:10px;color:var(--gray-d)">por ' + esc(m.un) + (m.cat ? (' · ' + esc(m.cat)) : '') + '</div>' +
+          '<div style="font-size:12px;font-weight:700;color:var(--brown);line-height:1.3;word-break:break-word">' + esc(m.nome) + '</div>' +
+          /* 21/10 — o aviso do pacote fica NA LINHA, dizendo com o que foi
+             comparado: sem isso é só uma tarja laranja que não explica nada */
+          (m.irmaos
+            ? ('<div style="font-size:10px;color:var(--orange);font-weight:700;line-height:1.35">' +
+               'parece o pre\u00e7o do pacote \u2014 ' + esc(m.exemplo || 'material parecido') +
+               ' custa ' + fmt(m.irmaos) + '</div>')
+            : ('<div style="font-size:10px;color:var(--gray-d)">por ' + esc(m.un) + (m.cat ? (' · ' + esc(m.cat)) : '') + '</div>')) +
         '</div>' +
-        '<div style="text-align:right;font-size:12px;font-weight:700;color:var(--brown)">' + fmt(m.custo) + '</div>' +
+        '<div style="text-align:right;font-size:12px;font-weight:700;color:' + (m.irmaos ? 'var(--orange)' : 'var(--brown)') + '">' + fmt(m.custo) + '</div>' +
         '<input class="cp-div" type="number" step="any" min="0" placeholder="÷" inputmode="decimal" ' +
           'oninput="_confPrecoCalc(' + i + ')" ' +
           (m.custo > 0 ? '' : 'disabled title="Sem preço para dividir — escreva o valor na coluna do lado" ') +
@@ -13074,9 +13129,20 @@ else appLockInit();
           'no lugar do preço de <b>um</b>. Em <b>Vem</b>, escreva quantos vêm em cada ' +
           'embalagem e o app divide. Em <b>Fica</b>, dá para escrever o valor direto — ' +
           'é assim que se resolve quem está <b>sem preço</b>.' +
-          '<br><span style="color:var(--gray-d)">Os sem preço vieram primeiro; depois, do mais caro para o mais barato. ' +
-          'Deixe em branco o que já está certo.</span>' +
+          '<br><span style="color:var(--gray-d)">Deixe em branco o que já está certo.</span>' +
         '</div>' +
+        /* 21/10 — a conta de quantos parecem pacote, no topo: é o número que
+           ela precisa ver antes de rolar a lista */
+        (function(){
+          var n = lista.filter(function(m){ return m.irmaos; }).length;
+          if (!n) return '';
+          return '<div style="background:#FFF8F0;border:1.5px solid var(--orange);border-radius:10px;padding:10px;margin-bottom:11px;font-size:12px;color:var(--brown);line-height:1.45">' +
+            '<b>' + (n === 1
+              ? '1 material parece estar com o preço do pacote.'
+              : (n + ' materiais parecem estar com o preço do pacote.')) + '</b><br>' +
+            '<span style="color:var(--gray-d)">Estão no topo, em laranja: o preço deles é muito maior que o dos ' +
+            'materiais do mesmo tipo e tamanho. São os que mais estragam o custo do pedido.</span></div>';
+        })() +
         '<div style="display:grid;grid-template-columns:1fr 74px 58px 74px;gap:6px;font-size:9.5px;font-weight:800;color:var(--gray-d);text-transform:uppercase;letter-spacing:.03em;padding-bottom:5px;border-bottom:1.5px solid #ECEEF3">' +
           '<span>Material</span><span style="text-align:right">Hoje</span><span style="text-align:center">Vem</span><span style="text-align:right">Fica</span>' +
         '</div>' +
