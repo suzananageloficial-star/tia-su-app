@@ -10288,7 +10288,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v21/10-c93';
+  var ver='v21/10-c94';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -13160,6 +13160,17 @@ else appLockInit();
      Esta virou a única ferramenta de preço em massa, então precisa dar conta
      dos dois casos: o que está com o preço da embalagem (divide em "Vem") e
      o que está SEM preço nenhum (escreve direto em "Fica").            */
+  /* ⚠️ 21/10/2026 — PREÇO DE UM NEM SEMPRE CABE EM CENTAVOS.
+     Pacote de 1000 unidades por R$ 2,00 dá R$ 0,002: arredondado a 2 casas
+     vira R$ 0,00 e o material fica SEM PREÇO, que é pior do que estava.
+     Normal é centavo; quando não cabe, guarda 4 casas. O estoque dela já
+     tem valores assim (0,436), então nada quebra com isso. */
+  window._arredPreco = function(v){
+    v = parseFloat(v) || 0;
+    if (!(v > 0)) return 0;
+    var dois = Math.round(v * 100) / 100;
+    return dois > 0 ? dois : Math.round(v * 10000) / 10000;
+  };
   window._confPrecoValor = function(i){
     var m = (window._confPrecoLista || [])[i]; if (!m) return null;
     var lin = document.querySelector('#modal-conf-precos .cp-lin[data-i="' + i + '"]');
@@ -13169,9 +13180,9 @@ else appLockInit();
     var digitado = (typeof window._parseMoeda === 'function')
       ? window._parseMoeda(txt)
       : parseFloat(String(txt).replace(/[^0-9,.-]/g, '').replace(',', '.'));
-    if (digitado > 0) return R2(digitado);
+    if (digitado > 0) return window._arredPreco(digitado);
     var d = parseFloat((lin.querySelector('.cp-div') || {}).value) || 0;
-    if (d > 0 && d !== 1 && m.custo > 0) return R2(m.custo / d);
+    if (d > 0 && d !== 1 && m.custo > 0) return window._arredPreco(m.custo / d);
     return null;
   };
 
@@ -13196,8 +13207,17 @@ else appLockInit();
     if (!(d > 0) || d === 1) {
       if (campo) { campo.value = ''; campo.style.borderColor = (m.custo > 0) ? '#e9e9ef' : 'var(--orange)'; }
     } else {
-      var novo = Math.round((m.custo / d) * 100) / 100;
-      if (campo) { campo.value = fmt(novo); campo.style.borderColor = 'var(--green)'; }
+      /* ⚠️ 21/10/2026 — ARREDONDAR A 2 CASAS PODE ZERAR MATERIAL BARATO.
+         Pacote de 1000 unidades por R$ 2,00 dá R$ 0,002 — em 2 casas vira
+         R$ 0,00 e o material fica SEM PREÇO, que é pior do que estava.
+         Quando a conta não cabe em centavos, guarda 4 casas. */
+      var novo = window._arredPreco(m.custo / d);
+      /* fmt() só mostra 2 casas: num valor de 4 casas ele apareceria como
+         R$ 0,00 na tela e seria lido de volta como zero ao salvar */
+      var texto = (novo < 0.01)
+        ? ('R$ ' + novo.toFixed(4).replace('.', ','))
+        : fmt(novo);
+      if (campo) { campo.value = texto; campo.style.borderColor = 'var(--green)'; }
     }
     window._confPrecoResumo();
   };
@@ -13280,8 +13300,8 @@ else appLockInit();
        "Fica" é exatamente o que vai ser gravado. */
     lista.forEach(function(m, i){
       var v = window._confPrecoValor(i);
-      if (v == null || R2(v) === R2(m.custo)) return;
-      mudancas.push({ nome: m.nome, de: m.custo, para: R2(v) });
+      if (v == null || window._arredPreco(v) === window._arredPreco(m.custo)) return;
+      mudancas.push({ nome: m.nome, de: m.custo, para: window._arredPreco(v) });
     });
     if (!mudancas.length) { toast('Nenhuma correção marcada'); return; }
 
