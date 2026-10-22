@@ -10288,7 +10288,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v22/10-c96';
+  var ver='v22/10-c97';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -11065,11 +11065,26 @@ else appLockInit();
   function puxarMontagem(row){
     var nome=nomeDoItem(row); if(!nome) return;
     if(matsDaLinha(row.id).length) return;
-    var mats=window._montagemDe(nome); if(!mats) return;
+    /* ⚠️ 22/10/2026 — A FICHA DO PRODUTO TAMBÉM VALE COMO RECEITA.
+       Antes isto só olhava `_montagemDe`, que lê as montagens do
+       localStorage — e elas NÃO sincronizam. Ela cadastrava a ficha na
+       Precificação, escolhia o produto no pedido e vinham só nome e preço:
+       lançava material por material, em todo pedido.
+       Agora: montagem do aparelho primeiro (é o ajuste fino do último
+       pedido igual); não havendo, a ficha do catálogo, que viaja entre o
+       celular e o computador.                                           */
+    var r = (typeof window._receitaDoItem==='function') ? window._receitaDoItem(nome) : null;
+    var mats = r ? r.mats : window._montagemDe(nome);
+    if(!mats || !mats.length) return;
     row.dataset.tipoItem='composto';
     mats.forEach(function(m){ addMaterialAoItem(row, m.n, m.q, window._valorDoMaterial(m)); });
     renderPainel(row); calcularGastoReal(); recalcularTotal();
-    toast('Materiais de "'+nome+'" vieram da última vez');
+    toast(mats.length + (mats.length===1?' material veio':' materiais vieram') +
+          ' d' + ((r && r.de==='catálogo') ? 'a ficha de "' : 'a última vez: "') + nome + '"');
+    /* com os materiais na tela, pergunta as cores de uma vez só */
+    if (typeof window._perguntarCoresDoItem === 'function') {
+      setTimeout(function(){ window._perguntarCoresDoItem(row.id); }, 250);
+    }
   }
   window._puxarMontagem=function(rowId){ var r=document.getElementById(rowId); if(r) puxarMontagem(r); };
   function renderPainel(row){
@@ -15204,6 +15219,260 @@ else appLockInit();
     var row = el.closest && el.closest('.material-row');
     if (row) { try { olhar(row); } catch(e){} }
   });
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     A FICHA DO PRODUTO DESCE NO PEDIDO
+     22/10/2026. Palavras dela: *"é muito chato na hora que eu vou fazer um
+     pedido... tenho que colocar tantos balão tamanho tal, tantos balão
+     tamanho tal, vai isso, vai aquilo outro. (...) na hora de cadastrar o
+     pedido demora e é chato"*.
+
+     O QUE ESTAVA ACONTECENDO
+     Ela cadastra o produto na Precificação COM a ficha de materiais
+     (`catalogo[].materiais`). No pedido, escolhia o produto e vinham só o
+     NOME e o PREÇO — a ficha ficava para trás e ela lançava material por
+     material, de novo, em todo pedido.
+     `puxarMontagem` só olhava `_montagemDe(nome)`, que lê as montagens do
+     `localStorage ts_montagens`. ⚠️ Essas montagens **não sincronizam**:
+     o que ela monta no celular não existe no computador. Por isso refazia
+     tudo mesmo em arranjo repetido.
+
+     O QUE MUDA
+     A ficha do produto do catálogo passa a valer como receita, e ela
+     sincroniza (o `catalogo` vai na nuvem). Ordem de busca:
+       1. a montagem daquele aparelho (o ajuste mais recente dela);
+       2. a ficha do produto no catálogo  ← novo, e é o que viaja.
+
+     ⚠️ NÃO mexer na montagem do localStorage: ela guarda o ajuste fino do
+     último pedido igual, que é melhor que a ficha genérica quando existe.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  function chave(s){
+    s = String(s || '').toLowerCase().trim()
+      .replace(/[“”″]/g, '"').replace(/[‘’]/g, "'");
+    return s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s;
+  }
+
+  /* a ficha de materiais do produto cadastrado, no formato que o pedido usa
+     ({n: nome, q: quantidade, v: valor}) */
+  window._fichaDoProduto = function(nome){
+    var k = chave(nome);
+    if (!k) return null;
+    var lista = (typeof catalogo !== 'undefined' ? catalogo : []).filter(function(p){
+      return p && chave(p.nome) === k && p.materiais && p.materiais.length;
+    });
+    if (!lista.length) return null;
+    /* entre homônimos, vale o que tem mais materiais — é a ficha completa */
+    var p = lista.sort(function(a, b){ return b.materiais.length - a.materiais.length; })[0];
+    return p.materiais.map(function(m){
+      return { n: m.nome, q: parseFloat(m.qtd) || 1, v: parseFloat(m.valor) || 0 };
+    });
+  };
+
+  /* a receita de um item: o ajuste do último pedido igual vem primeiro;
+     não havendo, a ficha cadastrada na Precificação */
+  window._receitaDoItem = function(nome){
+    var daVez = null;
+    try { daVez = window._montagemDe(nome); } catch(e){}
+    if (daVez && daVez.length) return { mats: daVez, de: 'montagem' };
+    var ficha = window._fichaDoProduto(nome);
+    if (ficha && ficha.length) return { mats: ficha, de: 'catálogo' };
+    return null;
+  };
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     AS CORES DO ARRANJO, DE UMA VEZ SÓ
+     22/10/2026. Palavras dela: *"e aí eu boto as cores e tu vai já puxar as
+     cores também"*.
+
+     Depois que a ficha do produto desce, sobram os balões genéricos
+     ("BALÃO 9" LISO"), cada um esperando a cor. Tocar em cada seletor é o
+     mesmo trabalho de antes, só que menor. Esta janela pergunta as cores
+     UMA vez e aplica em todos.
+
+     COMO ESCOLHE A COR DE CADA LINHA
+     - 1 cor escolhida  → todas as linhas ficam dessa cor;
+     - 2 ou 3 cores     → distribui na ordem das linhas, repetindo o ciclo.
+     Linha cujo tamanho não tem aquela cor cadastrada fica como está — e a
+     janela avisa, em vez de inventar.
+     ⚠️ Ela pode trocar linha a linha depois: isto é um atalho, não uma
+     amarra.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  function escH(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function chave(s){
+    s = String(s || '').toLowerCase().trim()
+      .replace(/[“”″]/g, '"').replace(/[‘’]/g, "'");
+    return s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s;
+  }
+
+  /* as linhas do item que estão esperando cor */
+  function linhasComCor(rowId){
+    var painel = document.querySelector('.linha-painel[data-for="' + rowId + '"]');
+    if (!painel) return [];
+    return [].slice.call(painel.querySelectorAll('.material-row')).filter(function(r){
+      var sel = r.querySelector('.mat-sel');
+      return sel && sel.options && sel.options.length > 2;   // tem variantes de verdade
+    });
+  }
+
+  /* a cor é o que sobra do nome da variante depois do nome genérico */
+  function corDaOpcao(generico, nomeVariante){
+    var g = chave(generico), v = chave(nomeVariante);
+    var cor = (v.indexOf(g) === 0) ? String(nomeVariante).slice(String(generico).length) : nomeVariante;
+    return String(cor).replace(/^[\s\-–—·]+/, '').trim() || String(nomeVariante).trim();
+  }
+
+  window._perguntarCoresDoItem = function(rowId){
+    var linhas = linhasComCor(rowId);
+    if (!linhas.length) return false;
+    /* já tem cor escolhida em todas? então não atrapalha */
+    var faltando = linhas.filter(function(r){
+      var s = r.querySelector('.mat-sel');
+      return !s.value || s.value === '__texto';
+    });
+    if (!faltando.length) return false;
+
+    /* junta as cores de todas as linhas, contando em quantas aparecem */
+    var conta = {}, exemplo = {};
+    linhas.forEach(function(r){
+      var sel = r.querySelector('.mat-sel');
+      var gen = r.dataset.balaoSize || '';
+      var vistas = {};
+      [].slice.call(sel.options).forEach(function(o){
+        if (!o.value || o.value === '__texto') return;
+        var cor = corDaOpcao(gen, o.value);
+        var k = chave(cor);
+        if (!k || vistas[k]) return;
+        vistas[k] = 1;
+        conta[k] = (conta[k] || 0) + 1;
+        if (!exemplo[k]) exemplo[k] = cor;
+      });
+    });
+    var cores = Object.keys(conta).map(function(k){
+      return { k: k, nome: exemplo[k], em: conta[k] };
+    }).sort(function(a, b){
+      if (b.em !== a.em) return b.em - a.em;             // a que serve a mais linhas primeiro
+      return a.nome.localeCompare(b.nome, 'pt');
+    });
+    if (!cores.length) return false;
+
+    window._coresAlvo = { rowId: rowId, cores: cores, escolhidas: [] };
+
+    var mod = document.getElementById('modal-cores-item');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-cores-item';
+      document.body.appendChild(mod);
+    }
+    mod.innerHTML = '<div class="modal" style="max-height:88vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Quais as cores deste arranjo?</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+        '<div style="background:var(--cyan-l);border-radius:10px;padding:10px 12px;margin-bottom:11px;font-size:12px;color:var(--brown);line-height:1.5">' +
+          'Toque nas cores que vão neste arranjo. Com mais de uma, elas se ' +
+          'revezam entre os balões.' +
+          '<br><span style="color:var(--gray-d)">Dá para trocar cada linha depois, se quiser.</span>' +
+        '</div>' +
+        '<div id="cores-lista" style="display:flex;flex-wrap:wrap;gap:7px"></div>' +
+        '<div id="cores-previa" style="font-size:11.5px;color:var(--gray-d);margin-top:12px;line-height:1.6"></div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-cores-item\')">Escolho uma a uma</button>' +
+        '<button class="btn btn-pink" style="flex:1" onclick="_aplicarCoresDoItem()">Usar estas cores</button>' +
+      '</div></div>';
+    openModal('modal-cores-item');
+    _desenharCores();
+    return true;
+  };
+
+  function _desenharCores(){
+    var alvo = window._coresAlvo || {};
+    var el = document.getElementById('cores-lista');
+    if (!el) return;
+    el.innerHTML = (alvo.cores || []).map(function(c, i){
+      var on = (alvo.escolhidas || []).indexOf(c.k) >= 0;
+      var ordem = (alvo.escolhidas || []).indexOf(c.k) + 1;
+      return '<button type="button" onclick="_togglarCor(' + i + ')" ' +
+        'style="font-size:12.5px;font-weight:700;padding:10px 13px;border-radius:20px;cursor:pointer;' +
+        (on ? 'background:var(--pink);color:#fff;border:none' :
+              'background:#fff;color:var(--brown);border:1.5px solid #e9e9ef') + '">' +
+        (on ? (ordem + '. ') : '') + escH(c.nome) + '</button>';
+    }).join('');
+    _previaCores();
+  }
+
+  window._togglarCor = function(i){
+    var alvo = window._coresAlvo || {};
+    var c = (alvo.cores || [])[i]; if (!c) return;
+    var pos = alvo.escolhidas.indexOf(c.k);
+    if (pos >= 0) alvo.escolhidas.splice(pos, 1);
+    else alvo.escolhidas.push(c.k);
+    _desenharCores();
+  };
+
+  /* que cor cai em cada linha, para ela ver antes de confirmar */
+  function _planoDeCores(){
+    var alvo = window._coresAlvo || {};
+    var linhas = linhasComCor(alvo.rowId);
+    var esc = alvo.escolhidas || [];
+    if (!esc.length) return [];
+    return linhas.map(function(r, i){
+      var sel = r.querySelector('.mat-sel');
+      var gen = r.dataset.balaoSize || '';
+      var corK = esc[i % esc.length];
+      var opt = [].slice.call(sel.options).filter(function(o){
+        return o.value && o.value !== '__texto' && chave(corDaOpcao(gen, o.value)) === corK;
+      })[0];
+      return { row: r, sel: sel, gen: gen, valor: opt ? opt.value : null,
+               cor: (alvo.cores.filter(function(c){ return c.k === corK; })[0] || {}).nome || '' };
+    });
+  }
+
+  function _previaCores(){
+    var el = document.getElementById('cores-previa');
+    if (!el) return;
+    var plano = _planoDeCores();
+    if (!plano.length) { el.innerHTML = ''; return; }
+    var faltam = plano.filter(function(p){ return !p.valor; });
+    el.innerHTML = plano.map(function(p){
+      return '<div>' + escH(p.gen) + ' → <b style="color:' +
+        (p.valor ? 'var(--brown)' : 'var(--orange)') + '">' +
+        (p.valor ? escH(p.cor) : 'não tem essa cor cadastrada') + '</b></div>';
+    }).join('') +
+    (faltam.length ? ('<div style="color:var(--orange);margin-top:6px">' +
+      'O que não tem a cor cadastrada fica como está, para você escolher na linha.</div>') : '');
+  }
+
+  window._aplicarCoresDoItem = function(){
+    var alvo = window._coresAlvo || {};
+    if (!(alvo.escolhidas || []).length) { toast('Toque nas cores primeiro'); return; }
+    var plano = _planoDeCores();
+    var n = 0;
+    plano.forEach(function(p){
+      if (!p.valor) return;
+      p.sel.value = p.valor;
+      p.sel.dispatchEvent(new Event('change', { bubbles: true }));
+      n++;
+    });
+    closeModal('modal-cores-item');
+    if (typeof calcularGastoReal === 'function') calcularGastoReal();
+    toast(n ? (n === 1 ? '1 cor aplicada' : (n + ' cores aplicadas')) : 'Nenhuma cor coube');
+  };
 })();
 </script>
 </body>
