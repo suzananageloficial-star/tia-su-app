@@ -10288,7 +10288,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v22/10-c97';
+  var ver='v22/10-c98';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -11081,8 +11081,19 @@ else appLockInit();
     renderPainel(row); calcularGastoReal(); recalcularTotal();
     toast(mats.length + (mats.length===1?' material veio':' materiais vieram') +
           ' d' + ((r && r.de==='catálogo') ? 'a ficha de "' : 'a última vez: "') + nome + '"');
-    /* com os materiais na tela, pergunta as cores de uma vez só */
-    if (typeof window._perguntarCoresDoItem === 'function') {
+    /* ⚠️ 22/10/2026 — CONVERTER OS GENÉRICOS NUMA PASSADA, NO FIM.
+       A conversão em seletor de cor REFAZ a linha e procura a nova pelo
+       `:last-child` da lista. Lançando 6 materiais em sequência, uma
+       conversão pegava a linha de outra e um dos balões ficava para trás
+       como texto — foi o que ela viu: "não puxou os balões".
+       Agora: lança tudo primeiro, converte depois, um de cada vez. */
+    if (typeof window._converterGenericosDoItem === 'function') {
+      window._converterGenericosDoItem(row.id, function(){
+        if (typeof window._perguntarCoresDoItem === 'function') {
+          window._perguntarCoresDoItem(row.id);
+        }
+      });
+    } else if (typeof window._perguntarCoresDoItem === 'function') {
       setTimeout(function(){ window._perguntarCoresDoItem(row.id); }, 250);
     }
   }
@@ -15472,6 +15483,179 @@ else appLockInit();
     closeModal('modal-cores-item');
     if (typeof calcularGastoReal === 'function') calcularGastoReal();
     toast(n ? (n === 1 ? '1 cor aplicada' : (n + ' cores aplicadas')) : 'Nenhuma cor coube');
+  };
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     A RECEITA VEM DO QUE ELA JÁ FEZ
+     22/10/2026 (noite, 2ª volta). *"Não puxou os balões."*
+
+     O QUE EU TINHA ENTENDIDO ERRADO
+     De manhã liguei a ficha do produto ao pedido, e isso está certo — mas
+     no app DELA a ficha está **vazia**: conferido no catálogo real, o
+     `ARRANJO DE BALÕES BUBBLE 18" BASE SIMPLES` tem `materiais: []`. E a
+     montagem do aparelho tinha só os três materiais de nome fixo.
+     Resultado: desceram bubble, confete e vinil; os balões, não.
+     ⚠️ Pedir que ela cadastre a ficha à mão é justamente o trabalho que ela
+     quer evitar. A receita tem de sair sozinha de algum lugar.
+
+     DE ONDE SAI
+     Dos PEDIDOS que ela já fez — que sincronizam entre o celular e o
+     computador. No histórico dela, o mesmo arranjo aparece 3 vezes, sempre
+     com bubble + balão 9" + balão 5" + fita + confete + vinil.
+
+     ⚠️ O balão e a fita entram pelo GENÉRICO (o campo `size` que o pedido
+     guarda), nunca pela cor daquele pedido: a cor é escolhida a cada vez.
+     ⚠️ O que é item próprio do pedido (taxa de entrega, Uber, correios) não
+     é material e fica de fora.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  function chave(s){
+    s = String(s || '').toLowerCase().trim()
+      .replace(/[“”″]/g, '"').replace(/[‘’]/g, "'");
+    s = s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s;
+    return s.replace(/\s+/g, ' ');
+  }
+  /* serviço cobrado no pedido não é material do arranjo */
+  function ehServico(nome){
+    return /taxa de entrega|^uber$|correio|frete|motoboy/i.test(String(nome || '').trim());
+  }
+
+  /* a receita tirada do ÚLTIMO pedido que teve este item */
+  window._fichaDoHistorico = function(nome){
+    var k = chave(nome);
+    if (!k) return null;
+    var lista = (typeof pedidos !== 'undefined' ? pedidos : []).filter(function(p){
+      if (!p || !p.materiais || !p.materiais.length) return false;
+      return (p.itens || []).some(function(it){ return chave(it && it.nome) === k; });
+    }).sort(function(a, b){
+      return String(b.criadoEm || '').localeCompare(String(a.criadoEm || ''));
+    });
+    if (!lista.length) return null;
+
+    var p = lista[0];
+    /* os outros itens do mesmo pedido não entram como material deste */
+    var outros = {};
+    (p.itens || []).forEach(function(it){
+      var ck = chave(it && it.nome);
+      if (ck && ck !== k) outros[ck] = 1;
+    });
+
+    var out = [], visto = {};
+    (p.materiais || []).forEach(function(m){
+      if (!m || !m.nome) return;
+      if (ehServico(m.nome)) return;
+      if (outros[chave(m.nome)]) return;
+      /* balão e fita voltam no GENÉRICO: a cor se escolhe a cada pedido */
+      var n = (m.size && String(m.size).trim()) ? String(m.size).trim() : String(m.nome).trim();
+      var ck = chave(n);
+      if (!ck || visto[ck]) return;
+      visto[ck] = 1;
+      out.push({ n: n, q: parseFloat(m.qtd) || 1, v: parseFloat(m.valor) || 0 });
+    });
+    if (!out.length) return null;
+    return { mats: out, quando: p.criadoEm || '', cliente: p.cliente || '' };
+  };
+
+  /* a ficha do produto no catálogo, preenchida a partir do histórico.
+     Vai para o `catalogo`, que SINCRONIZA — então da próxima vez já está
+     lá, no celular e no computador. */
+  window._gravarFichaDoHistorico = function(nome, mats){
+    var k = chave(nome);
+    var p = (typeof catalogo !== 'undefined' ? catalogo : []).filter(function(x){
+      return x && chave(x.nome) === k;
+    })[0];
+    if (!p) return false;
+    if (p.materiais && p.materiais.length) return false;   // já tem ficha: não mexe
+    p.materiais = mats.map(function(m){
+      return { nome: m.n, qtd: m.q, valor: m.v, tipo: 'normal' };
+    });
+    p.updatedAt = Date.now();
+    save();
+    return true;
+  };
+
+  /* entra na ordem de busca, depois da montagem e da ficha */
+  var receitaOrig = window._receitaDoItem;
+  window._receitaDoItem = function(nome){
+    var r = receitaOrig ? receitaOrig(nome) : null;
+    if (r && r.mats && r.mats.length) return r;
+    var h = window._fichaDoHistorico(nome);
+    if (!h) return null;
+    /* deixa gravado na ficha do produto, para não precisar olhar o
+       histórico de novo — e para valer no outro aparelho */
+    try { window._gravarFichaDoHistorico(nome, h.mats); } catch(e){}
+    return { mats: h.mats, de: 'histórico', quando: h.quando };
+  };
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     CONVERTER OS GENÉRICOS UM DE CADA VEZ
+     22/10/2026. *"Não puxou os balões."*
+
+     A conversão de um material genérico em seletor de cor REFAZ a linha e
+     acha a nova pelo `:last-child` da lista de materiais. Quando a receita
+     lança 6 materiais em sequência, duas conversões disputam a mesma
+     última linha e uma delas se perde — o balão fica como texto, ou some.
+
+     Por isso: lançar tudo primeiro, converter depois, UM DE CADA VEZ,
+     esperando a linha ser refeita antes da próxima.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  function chave(s){
+    s = String(s || '').toLowerCase().trim()
+      .replace(/[\u201C\u201D\u2033]/g, '"').replace(/[\u2018\u2019]/g, "'");
+    s = s.normalize ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : s;
+    return s.replace(/\s+/g, ' ');
+  }
+
+  /* tem cor cadastrada com esse nome por prefixo? então é genérico */
+  function temCores(nome){
+    var base = chave(nome);
+    if (!base) return false;
+    var todos = [];
+    try { todos = window._todosOsMateriais() || []; } catch(e){ return false; }
+    return todos.some(function(m){
+      var k = chave(m.nome);
+      return k !== base && k.indexOf(base) === 0;
+    });
+  }
+
+  window._converterGenericosDoItem = function(rowId, pronto){
+    var painel = document.querySelector('.linha-painel[data-for="' + rowId + '"]');
+    if (!painel) { if (pronto) pronto(); return; }
+    /* os ids das linhas que ainda são texto e têm cor cadastrada */
+    var alvos = [].slice.call(painel.querySelectorAll('.material-row')).filter(function(m){
+      if (m.querySelector('.mat-sel')) return false;
+      var inp = m.querySelector('.mat-nome');
+      var nm = inp ? String(inp.value || '').trim() : '';
+      return nm && temCores(nm);
+    }).map(function(m){ return m.id; });
+
+    if (!alvos.length) { if (pronto) pronto(); return; }
+
+    var i = 0;
+    (function proxima(){
+      if (i >= alvos.length) {
+        try { if (window.calcularGastoReal) calcularGastoReal(); } catch(e){}
+        if (pronto) pronto();
+        return;
+      }
+      var id = alvos[i++];
+      var el = document.getElementById(id);
+      if (!el) { proxima(); return; }
+      try { window._maybeConvertColor(id); } catch(e){}
+      /* espera a linha ser refeita antes de mexer na próxima */
+      setTimeout(proxima, 180);
+    })();
   };
 })();
 </script>
