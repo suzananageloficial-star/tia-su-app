@@ -10288,7 +10288,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v21/10-c94';
+  var ver='v22/10-c95';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -14739,6 +14739,268 @@ else appLockInit();
     /* redesenha a lista: os marcados saem dela */
     window._quemMeAchou();
     try { if (currentScreen === 'trafego') renderTrafego(); } catch(e){}
+  };
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     ESCOLHER DO CATÁLOGO — a lista do que está cadastrado, no pedido
+     22/10/2026. Palavras dela: *"na lista de produtos, em pedido, não
+     aparece lista... tem que abrir uma lista para eu ver o que tem
+     cadastrado"*.
+
+     DOIS PROBLEMAS, NÃO UM
+     (1) O campo do item usava só `datalist`, que **não abre sozinho**: ela
+         teria de adivinhar as primeiras letras. No celular quase não
+         funciona. Não havia nenhum caminho para VER a lista.
+     (2) 🔴 O MAIS GRAVE: `_nomesDeItem` montava a lista com as montagens
+         que ela já digitou + as LINHAS ANTIGAS (Festa na Caixa, Kit
+         Canecas, Kit Xícaras — desligadas em 12/09) + os AVULSOS, que são
+         MATERIAL. **Os produtos que ela cadastra na Precificação nunca
+         entravam.** Em 14/10 ela disse: *"esse catálogo de produtos é para
+         buscar nos pedidos"* — e era justamente o que não acontecia.
+
+     ⚠️ A ORDEM IMPORTA: produto do catálogo primeiro. É o que ela cadastra
+     de propósito, com preço e materiais conferidos.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  function escH(s){
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function chave(s){
+    s = String(s || '').toLowerCase().trim();
+    return s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s;
+  }
+  function dinheiro(v){
+    return 'R$ ' + (parseFloat(v) || 0).toFixed(2).replace('.', ',');
+  }
+
+  /* ── 1. A LISTA, com de onde cada um vem ────────────────────────────
+     Três origens, nesta ordem:
+       catálogo  — produto cadastrado na Precificação (tem preço de venda)
+       usado     — montagem que ela já fez num pedido
+       antigo    — as linhas de produto antigas, que ainda existem         */
+  window._itensParaPedido = function(){
+    var out = [], visto = {};
+    function add(nome, origem, preco){
+      var k = chave(nome);
+      if (!k || visto[k]) return;
+      visto[k] = 1;
+      out.push({ nome: String(nome).trim(), origem: origem, preco: parseFloat(preco) || 0 });
+    }
+
+    /* produto do catálogo: o que ela cadastra na Precificação */
+    try {
+      (window._produtosDoCatalogo() || []).forEach(function(p){
+        add(p.nome, 'catálogo', p.preco);
+      });
+    } catch(e){}
+
+    /* montagens: o que ela já montou em pedido antes */
+    try {
+      var m = (typeof window._montagens === 'function') ? window._montagens() : {};
+      Object.keys(m).forEach(function(k){ add(m[k] && m[k].nome, 'você já usou', 0); });
+    } catch(e){}
+
+    /* linhas antigas (Festa na Caixa, Kits) — ficam no fim */
+    try {
+      (typeof catalogo !== 'undefined' ? catalogo : []).forEach(function(p){
+        if (p && p.linha) add(p.nome, 'cadastro antigo', p.preco);
+      });
+    } catch(e){}
+
+    return out;
+  };
+
+  /* o datalist continua existindo (quem digita rápido usa), mas agora
+     com os produtos do catálogo dentro */
+  var listaOrig = window._nomesDeItem;
+  window._nomesDeItem = function(){
+    var nomes = window._itensParaPedido().map(function(x){ return x.nome; });
+    var antigos = [];
+    try { antigos = listaOrig ? listaOrig() : []; } catch(e){}
+    var visto = {};
+    nomes.concat(antigos).forEach(function(n){
+      var k = chave(n); if (k && !visto[k]) visto[k] = n;
+    });
+    return Object.keys(visto).map(function(k){ return visto[k]; })
+      .sort(function(a, b){ return a.localeCompare(b, 'pt'); });
+  };
+
+  /* ── 2. A JANELA ────────────────────────────────────────────────────
+     `destino` é o id da linha do pedido a preencher. Sem ele, a escolha
+     cria uma linha nova — é o caminho do botão "Escolher do catálogo". */
+  window._abrirListaProdutos = function(destino){
+    window._listaProdDestino = destino || '';
+    var mod = document.getElementById('modal-escolher-item');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-escolher-item';
+      document.body.appendChild(mod);
+    }
+    var lista = window._itensParaPedido();
+    window._listaProdItens = lista;
+
+    if (!lista.length) {
+      mod.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
+        '<div class="modal-title">Escolher do catálogo</div>' +
+        '<div class="modal-body"><div style="padding:18px;text-align:center;color:var(--gray-d);font-size:13px;line-height:1.5">' +
+        'Nenhum produto cadastrado ainda.<br>' +
+        '<span style="font-size:12px">Cadastre em <b>Precificação</b> — depois ele aparece aqui.</span></div></div>' +
+        '<div class="form-actions"><button class="btn btn-pink" style="flex:1" ' +
+          'onclick="closeModal(\'modal-escolher-item\')">Fechar</button></div></div>';
+      openModal('modal-escolher-item');
+      return;
+    }
+
+    mod.innerHTML = '<div class="modal" style="max-height:88vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Escolher do catálogo</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+        '<input type="text" id="lp-busca" placeholder="Buscar pelo nome…" autocomplete="off" ' +
+          'oninput="_filtrarListaProdutos()" ' +
+          'style="width:100%;padding:11px;border:1.5px solid #e9e9ef;border-radius:10px;font-size:14px;margin-bottom:10px">' +
+        '<div id="lp-lista"></div>' +
+      '</div>' +
+      '<div class="form-actions"><button class="btn btn-outline" style="flex:1" ' +
+        'onclick="closeModal(\'modal-escolher-item\')">Fechar</button></div></div>';
+    openModal('modal-escolher-item');
+    _filtrarListaProdutos();
+    /* no computador o teclado já serve; no celular não abrimos sozinho
+       para a lista aparecer inteira na primeira olhada */
+    if (window.innerWidth >= 900) {
+      var b = document.getElementById('lp-busca'); if (b) b.focus();
+    }
+  };
+
+  window._filtrarListaProdutos = function(){
+    var el = document.getElementById('lp-lista'); if (!el) return;
+    var q = chave((document.getElementById('lp-busca') || {}).value || '');
+    var lista = (window._listaProdItens || []).filter(function(x){
+      return !q || chave(x.nome).indexOf(q) >= 0;
+    });
+    if (!lista.length) {
+      el.innerHTML = '<div style="padding:16px;text-align:center;color:var(--gray-d);font-size:12.5px">' +
+        'Nada com esse nome.<br><span style="font-size:11.5px">Feche e escreva direto na descrição ' +
+        '— o item não precisa estar cadastrado.</span></div>';
+      return;
+    }
+    var grupos = [
+      { ch: 'catálogo',      rot: 'DO CATÁLOGO',      cor: 'var(--pink)' },
+      { ch: 'você já usou',  rot: 'VOCÊ JÁ USOU',     cor: 'var(--cyan-d)' },
+      { ch: 'cadastro antigo', rot: 'CADASTRO ANTIGO', cor: 'var(--gray-d)' }
+    ];
+    var html = '';
+    grupos.forEach(function(g){
+      var doGrupo = lista.filter(function(x){ return x.origem === g.ch; });
+      if (!doGrupo.length) return;
+      /* ⚠️ o "cadastro antigo" (Festa na Caixa, Kits) nasce RECOLHIDO:
+         ela desligou essas linhas em 12/09 e elas empurravam o catálogo
+         para fora da tela. Recolher, não apagar — pedido antigo ainda as
+         usa, e tirar o que ela não mandou tirar já deu errado antes. */
+      var antigo = (g.ch === 'cadastro antigo');
+      var aberto = !antigo || window._lpVerAntigos || !!q;
+      html += '<div onclick="' + (antigo ? '_lpAlternarAntigos()' : '') + '" ' +
+        'style="font-size:9.5px;font-weight:800;color:' + g.cor +
+        ';letter-spacing:.04em;margin:10px 0 4px' + (antigo ? ';cursor:pointer' : '') + '">' +
+        g.rot + ' (' + doGrupo.length + ')' +
+        (antigo && !q ? ('<span style="font-weight:700;text-transform:none;letter-spacing:0"> · ' +
+          (aberto ? 'esconder' : 'mostrar') + '</span>') : '') + '</div>';
+      if (!aberto) return;
+      html += doGrupo.map(function(x){
+        var i = (window._listaProdItens || []).indexOf(x);
+        return '<div class="lp-item" data-i="' + i + '" onclick="_escolherItemDaLista(' + i + ')" ' +
+          'style="display:flex;gap:9px;align-items:center;padding:11px 8px;border-bottom:1px solid #f4f4f6;cursor:pointer">' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:13px;font-weight:700;color:var(--brown);line-height:1.3;word-break:break-word">' +
+              escH(x.nome) + '</div>' +
+          '</div>' +
+          (x.preco > 0
+            ? '<div style="font-size:13px;font-weight:800;color:var(--pink);white-space:nowrap">' + dinheiro(x.preco) + '</div>'
+            : '<div style="font-size:11px;color:var(--gray-d);white-space:nowrap">sem preço</div>') +
+        '</div>';
+      }).join('');
+    });
+    el.innerHTML = html;
+  };
+
+  window._lpVerAntigos = false;
+  window._lpAlternarAntigos = function(){
+    window._lpVerAntigos = !window._lpVerAntigos;
+    _filtrarListaProdutos();
+  };
+  window._escolherItemDaLista = function(i){
+    var x = (window._listaProdItens || [])[i];
+    if (!x) return;
+    var destino = window._listaProdDestino;
+    closeModal('modal-escolher-item');
+
+    var row = destino ? document.getElementById(destino) : null;
+    if (!row) {
+      /* sem linha de destino: nasce uma, já com nome e preço */
+      adicionarItemPedido(x.nome, 1, x.preco > 0 ? x.preco : '');
+      var todas = document.querySelectorAll('#p-itens-lista .item-pedido-row');
+      row = todas[todas.length - 1];
+    } else {
+      var campo = row.querySelector('.pi-desc') || row.querySelector('input[type=text]');
+      if (campo) campo.value = x.nome;
+      var pr = row.querySelector('.pi-preco');
+      if (pr && x.preco > 0 && !parseFloat(pr.value)) pr.value = x.preco;
+    }
+    if (!row) return;
+
+    /* dispara o mesmo caminho de quando ela digita e sai do campo:
+       puxa a montagem salva, o preço de venda e monta o painel */
+    var campo2 = row.querySelector('.pi-desc') || row.querySelector('input[type=text]');
+    if (campo2) {
+      campo2.dispatchEvent(new Event('input',  { bubbles: true }));
+      campo2.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    if (typeof recalcularTotal === 'function') recalcularTotal();
+    toast(x.nome);
+  };
+
+  /* ── 3. OS CAMINHOS ATÉ ELA ─────────────────────────────────────────
+     (a) botão ao lado do "+ Adicionar item";
+     (b) tocar na descrição de uma linha que ainda está vazia.            */
+  function porBotao(){
+    var add = document.querySelector('[onclick="adicionarItemPedido()"]');
+    if (!add || document.getElementById('bt-escolher-cat')) return;
+    var bt = document.createElement('button');
+    bt.type = 'button';
+    bt.id = 'bt-escolher-cat';
+    bt.textContent = 'Ver catálogo';
+    bt.setAttribute('onclick', '_abrirListaProdutos()');
+    bt.style.cssText = 'font-size:11px;font-weight:700;padding:4px 10px;margin-right:6px;' +
+      'background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:20px;cursor:pointer;white-space:nowrap';
+    add.parentNode.insertBefore(bt, add);
+  }
+
+  /* tocar na descrição VAZIA abre a lista; com texto dentro, deixa ela
+     editar à vontade (senão a janela atrapalharia a correção) */
+  document.addEventListener('focusin', function(ev){
+    var campo = ev.target;
+    if (!campo || campo.tagName !== 'INPUT') return;
+    var row = campo.closest && campo.closest('.item-pedido-row');
+    if (!row) return;
+    if (campo !== (row.querySelector('.pi-desc') || row.querySelector('input[type=text]'))) return;
+    if (String(campo.value || '').trim()) return;          // já tem texto
+    if (!document.getElementById('modal-pedido')) return;
+    if (!window._itensParaPedido().length) return;
+    campo.blur();
+    window._abrirListaProdutos(row.id);
+  });
+
+  var abrirOrig = window.openModal;
+  window.openModal = function(id, limpar){
+    var r = abrirOrig.apply(this, arguments);
+    if (id === 'modal-pedido') { try { porBotao(); } catch(e){} }
+    return r;
   };
 })();
 </script>
