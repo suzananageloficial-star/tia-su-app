@@ -10288,7 +10288,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v22/10-c95';
+  var ver='v22/10-c96';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -14943,6 +14943,8 @@ else appLockInit();
     var row = destino ? document.getElementById(destino) : null;
     if (!row) {
       /* sem linha de destino: nasce uma, já com nome e preço */
+      /* o `adicionarItemPedido` já formata, mas deixa explícito de onde
+         vem o valor — é o mesmo número, nunca texto com ponto */
       adicionarItemPedido(x.nome, 1, x.preco > 0 ? x.preco : '');
       var todas = document.querySelectorAll('#p-itens-lista .item-pedido-row');
       row = todas[todas.length - 1];
@@ -14950,7 +14952,17 @@ else appLockInit();
       var campo = row.querySelector('.pi-desc') || row.querySelector('input[type=text]');
       if (campo) campo.value = x.nome;
       var pr = row.querySelector('.pi-preco');
-      if (pr && x.preco > 0 && !parseFloat(pr.value)) pr.value = x.preco;
+      /* ⚠️ 22/10/2026 — NÚMERO CRU NUM CAMPO DE DINHEIRO VIRA OUTRO NÚMERO.
+         Aqui estava `pr.value = x.preco`: o 54.9 entrava com PONTO, e o app
+         lê dinheiro no padrão brasileiro, onde o ponto é separador de
+         MILHAR (`_parseMoeda` apaga os pontos). R$ 54,90 virava R$ 549,00 e
+         o pedido dela fechou em R$ 564,00 no lugar de R$ 69,90.
+         ⚠️ Campo de dinheiro se preenche SEMPRE por `_moedaBR`. */
+      if (pr && x.preco > 0 && !window._parseMoeda(pr.value)) {
+        pr.value = (typeof window._moedaBR === 'function')
+          ? window._moedaBR(x.preco)
+          : String(x.preco).replace('.', ',');
+      }
     }
     if (!row) return;
 
@@ -15002,6 +15014,196 @@ else appLockInit();
     if (id === 'modal-pedido') { try { porBotao(); } catch(e){} }
     return r;
   };
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     CORRIGIR O PREÇO DE PACOTE NA HORA DO PEDIDO
+     22/10/2026. Palavras dela: *"de novo valor cheio no rosa bb liso...
+     considerar 50 unidade"*.
+
+     POR QUE AQUI, SE A VARREDURA JÁ EXISTE
+     A varredura (Materiais → Conferir preços) acha e corrige, e desde
+     21/10 ela até aponta quem parece pacote. Mas fica em OUTRA TELA: a
+     Suzana esbarra no preço errado **montando o pedido**, e para corrigir
+     teria de sair do pedido, ir em Materiais, voltar e refazer. Ela
+     reclamou do mesmo balão duas vezes em dois dias.
+     Agora o app pergunta no lugar onde ela vê o problema.
+
+     ⚠️ Só aparece para material SUSPEITO (a mesma regra da varredura:
+     cinco vezes acima do preço do meio dos irmãos, com pelo menos quatro
+     irmãos). Falso alarme faria ela parar de olhar o aviso.
+     ⚠️ Só pergunta UMA vez por material por sessão: se ela fechar, não
+     insiste.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  var jaPerguntei = {};
+
+  function chave(s){
+    s = String(s || '').toLowerCase().trim()
+      .replace(/[“”″]/g, '"').replace(/[‘’]/g, "'");
+    return s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s;
+  }
+  function dinheiro(v){
+    v = parseFloat(v) || 0;
+    return 'R$ ' + (v < 0.01 && v > 0 ? v.toFixed(4) : v.toFixed(2)).replace('.', ',');
+  }
+
+  /* o mesmo agrupamento da varredura: primeira palavra + primeiro número */
+  function grupoDe(nome){
+    var n = String(nome || '').toUpperCase()
+      .replace(/[“”″]/g, '"').replace(/[‘’]/g, "'");
+    n = n.normalize ? n.normalize('NFD').replace(/[̀-ͯ]/g, '') : n;
+    var palavra = (n.match(/[A-Z]{3,}/) || [''])[0];
+    if (!palavra) return '';
+    var num = (n.match(/(\d+)\s*(?:"|POLEGADA|MM|CM)/) || n.match(/(\d+)/) || [])[1];
+    return palavra + '|' + (num || '');
+  }
+
+  /* devolve {valor, exemplo} quando o preço parece o do pacote */
+  window._pareceDePacote = function(nome, custo){
+    custo = parseFloat(custo) || 0;
+    if (!(custo >= 1)) return null;
+    var g = grupoDe(nome);
+    if (!g) return null;
+    var todos = [];
+    try { todos = window._todosOsMateriais() || []; } catch(e){ return null; }
+    var irmaos = todos.filter(function(m){
+      return m.custo > 0 && grupoDe(m.nome) === g && chave(m.nome) !== chave(nome);
+    }).sort(function(a, b){ return a.custo - b.custo; });
+    if (irmaos.length < 4) return null;
+    var i = Math.floor(irmaos.length / 2);
+    var med = irmaos.length % 2 ? irmaos[i].custo : (irmaos[i-1].custo + irmaos[i].custo) / 2;
+    if (!(med > 0) || custo < med * 5) return null;
+    return { valor: med, exemplo: irmaos[i].nome };
+  };
+
+  window._perguntarPacote = function(rowId, nome, custo){
+    var cmp = window._pareceDePacote(nome, custo);
+    if (!cmp) return false;
+    var k = chave(nome);
+    if (jaPerguntei[k]) return false;
+    jaPerguntei[k] = 1;
+
+    window._pacoteAlvo = { rowId: rowId, nome: nome, custo: parseFloat(custo) || 0 };
+    var mod = document.getElementById('modal-pacote-pedido');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-pacote-pedido';
+      document.body.appendChild(mod);
+    }
+    mod.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Esse preço é do pacote?</div>' +
+      '<div class="modal-body">' +
+        '<div style="background:#FFF8F0;border:1.5px solid var(--orange);border-radius:10px;padding:11px;font-size:12.5px;color:var(--brown);line-height:1.5;margin-bottom:12px">' +
+          '<b>' + (nome || '') + '</b> está cadastrado a <b>' + dinheiro(cmp.valor * 0 + (parseFloat(custo)||0)) + '</b> a unidade.' +
+          '<br><span style="color:var(--gray-d)">' + (cmp.exemplo || 'Material parecido') +
+          ' custa ' + dinheiro(cmp.valor) + '. Parece que entrou o preço do pacote inteiro.</span>' +
+        '</div>' +
+        '<label class="form-label">Quantos vêm no pacote?</label>' +
+        '<input type="number" id="pac-vem" inputmode="numeric" min="2" step="1" placeholder="ex.: 50" ' +
+          'oninput="_pacotePrevia()" ' +
+          'style="width:100%;padding:12px;border:1.5px solid var(--orange);border-radius:10px;font-size:16px;font-weight:700">' +
+        '<div id="pac-previa" style="font-size:13px;font-weight:700;color:var(--green);margin-top:9px;min-height:20px"></div>' +
+        '<div style="font-size:11px;color:var(--gray-d);margin-top:6px;line-height:1.45">' +
+          'Corrige no cadastro do material e nos kits que usam ele. ' +
+          'Os pedidos já salvos não mudam.</div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-pacote-pedido\')">Está certo assim</button>' +
+        '<button class="btn btn-pink" style="flex:1" onclick="_pacoteCorrigir()">Corrigir</button>' +
+      '</div></div>';
+    openModal('modal-pacote-pedido');
+    setTimeout(function(){ var c = document.getElementById('pac-vem'); if (c) c.focus(); }, 150);
+    return true;
+  };
+
+  window._pacotePrevia = function(){
+    var alvo = window._pacoteAlvo || {};
+    var d = parseFloat((document.getElementById('pac-vem') || {}).value) || 0;
+    var el = document.getElementById('pac-previa');
+    if (!el) return;
+    if (!(d > 1)) { el.textContent = ''; return; }
+    var novo = window._arredPreco ? window._arredPreco(alvo.custo / d) : (alvo.custo / d);
+    el.textContent = 'Fica ' + dinheiro(novo) + ' cada.';
+  };
+
+  window._pacoteCorrigir = function(){
+    var alvo = window._pacoteAlvo || {};
+    var d = parseFloat((document.getElementById('pac-vem') || {}).value) || 0;
+    if (!(d > 1)) { toast('Escreva quantos vêm no pacote'); return; }
+    var novo = window._arredPreco ? window._arredPreco(alvo.custo / d) : (alvo.custo / d);
+    if (!(novo > 0)) { toast('Não deu para calcular'); return; }
+
+    /* o mesmo caminho da varredura: grava nos dois lugares e refaz os kits */
+    var n = window._aplicarPrecoMaterial(alvo.nome, novo);
+    var kits = [];
+    try { kits = window._recalcularProdutos([alvo.nome]) || []; } catch(e){}
+    save();
+
+    /* e conserta a linha que está aberta no pedido */
+    var row = alvo.rowId ? document.getElementById(alvo.rowId) : null;
+    if (row) {
+      row.dataset.matUnit = String(novo);
+      var q = parseFloat((row.querySelector('.mat-qtd') || {}).value) || 1;
+      var v = row.querySelector('.mat-valor');
+      if (v) v.value = window._moedaBR(novo * q);
+      /* o nome no seletor de cor mostra o preço: redesenha */
+      try { if (window._recarregarCores) window._recarregarCores(row); } catch(e){}
+    }
+    if (typeof calcularGastoReal === 'function') calcularGastoReal();
+    closeModal('modal-pacote-pedido');
+    toast(alvo.nome + ': ' + dinheiro(novo) + ' cada' +
+          (kits.length ? (' · ' + kits.length + (kits.length > 1 ? ' kits refeitos' : ' kit refeito')) : ''));
+  };
+
+  /* ── o gancho: depois de escolher o material na linha do pedido ────── */
+  function olhar(rowId){
+    var row = typeof rowId === 'string' ? document.getElementById(rowId) : rowId;
+    if (!row) return;
+    var nome = '';
+    var inp = row.querySelector('.mat-nome');
+    if (inp && String(inp.value || '').trim()) nome = inp.value.trim();
+    else {
+      var sel = row.querySelector('.mat-sel');
+      if (sel && sel.value && sel.value !== '__texto') nome = sel.value;
+    }
+    if (!nome) return;
+    var custo = parseFloat(row.dataset.matUnit);
+    if (!(custo > 0)) {
+      try { custo = window._precoTeto(nome) || 0; } catch(e){ custo = 0; }
+    }
+    setTimeout(function(){ window._perguntarPacote(row.id, nome, custo); }, 350);
+  }
+
+  var escolherNomeOrig = window._matEscolherNome;
+  if (escolherNomeOrig) {
+    window._matEscolherNome = function(rowId){
+      var r = escolherNomeOrig.apply(this, arguments);
+      try { olhar(rowId); } catch(e){}
+      return r;
+    };
+  }
+  var escolherOrig = window._matEscolher;
+  if (escolherOrig) {
+    window._matEscolher = function(rowId){
+      var r = escolherOrig.apply(this, arguments);
+      try { olhar(rowId); } catch(e){}
+      return r;
+    };
+  }
+  /* escolher a cor no seletor também passa por aqui */
+  document.addEventListener('change', function(ev){
+    var el = ev.target;
+    if (!el || !el.classList) return;
+    if (!el.classList.contains('mat-sel') && !el.classList.contains('mat-nome')) return;
+    var row = el.closest && el.closest('.material-row');
+    if (row) { try { olhar(row); } catch(e){} }
+  });
 })();
 </script>
 </body>
