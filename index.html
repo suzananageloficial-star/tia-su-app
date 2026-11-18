@@ -10343,7 +10343,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v18/11-c102';
+  var ver='v18/11-c103';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -16422,6 +16422,472 @@ else appLockInit();
 
   window._dtEscreverPreco = escreverPreco;   /* para a bateria de testes */
   window._dtChave = chave;
+})();
+</script>
+
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   DITAR O PRODUTO DO CATÁLOGO — 18/11/2026
+
+   Palavras dela: *"eu quero montar o catálogo usando o áudio também e
+   podendo corrigir ali o que pode ser usado ou não."*
+
+   POR QUE ISTO IMPORTA MAIS DO QUE PARECE
+   É o catálogo que faz a ditada do PEDIDO funcionar: produto cadastrado
+   traz nome, preço e a receita de material. Catálogo pequeno ou com nome
+   genérico = pedido lançado na mão, que é o que ela queria evitar.
+
+   COMO FUNCIONA
+   Ela fala "arranjo bubble 18 base simples, cinquenta e quatro e noventa,
+   leva um bubble transparente, quatro balões de 9, quatro de 5 e fita" e
+   o app abre uma REVISÃO: nome, preço e a lista de materiais, cada um com
+   caixinha. Ela desmarca o que não presta, ajusta quantidade e salva.
+   ⚠️ NADA é salvo sem ela marcar e confirmar.
+
+   AS REGRAS DA CASA QUE ESTE BLOCO OBEDECE
+   1. dinheiro mostra por `_dinheiro` e lê por `_lerValorDigitado` (18/11);
+   2. material que ela falou casa com o cadastro pela MESMA regra do
+      pedido (`_candidatosDoFalado`): toda palavra bate, número bate —
+      a IA não escolhe nada sozinha (18/11, o produto errado);
+   3. PRODUTO não é MATERIAL (08/10): o que nasce aqui é vitrine
+      (`material:false`); material novo nasce na despensa, separado;
+   4. balão e fita entram no GENÉRICO, com `tipo`, que é o que abre a
+      lista de cor no pedido (22/10).
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  function esc(s){ return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function chave(s){
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  function porId(id){ return document.getElementById(id); }
+
+  var _EH_IPHONE = /iP(hone|ad|od)/.test(navigator.userAgent || '') ||
+                   ((navigator.platform === 'MacIntel') && (navigator.maxTouchPoints > 1));
+  var RECONHECE = !_EH_IPHONE && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  var _rec = null, _gravando = false, _guarda = null;
+
+  function botaoNormal(){
+    _gravando = false;
+    if (_guarda) { clearTimeout(_guarda); _guarda = null; }
+    var bt = porId('dp-gravar'), txt = porId('dp-gravar-txt');
+    if (bt) bt.style.background = 'var(--pink)';
+    if (txt) txt.textContent = 'Falar agora';
+  }
+
+  /* ── A JANELA ────────────────────────────────────────────────────── */
+  window._abrirDitadoProduto = function(){
+    var mod = porId('modal-ditar-produto');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-ditar-produto';
+      document.body.appendChild(mod);
+    }
+    mod.innerHTML =
+      '<div class="modal" style="max-height:90vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Ditar um produto</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+        '<div style="font-size:12px;color:var(--gray-d);line-height:1.5;margin-bottom:8px">' +
+          'Diga o nome, quanto cobra e o que leva. Você confere tudo antes de salvar.' +
+        '</div>' +
+        (RECONHECE
+          ? '<button type="button" id="dp-gravar" onclick="_dpGravar()" ' +
+            'style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;' +
+            'background:var(--pink);color:#fff;border:none;border-radius:12px;padding:13px;' +
+            'font-size:14px;font-weight:800;cursor:pointer;margin-bottom:8px">' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>' +
+            '<span id="dp-gravar-txt">Falar agora</span></button>'
+          : '') +
+        '<div style="font-size:11px;color:var(--gray-d);margin-bottom:4px">' +
+          (RECONHECE ? 'Ou escreva aqui — no computador, a tecla Windows + H também dita:'
+                     : 'Toque no campo e use o <b>microfone do seu teclado</b> para falar:') +
+        '</div>' +
+        '<textarea id="dp-texto" class="form-textarea" style="min-height:120px;font-size:14px" ' +
+          'placeholder="Ex.: arranjo de balões bubble 18 base simples, cinquenta e quatro e noventa, ' +
+          'leva um bubble transparente de 18, quatro balões de 9, quatro balões de 5, uma fita de cetim e confete"></textarea>' +
+        '<div id="dp-status" style="display:none;font-size:12px;font-weight:700;color:var(--pink);margin-top:8px"></div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" onclick="_dpFechar()">Fechar</button>' +
+        '<button class="btn btn-pink" style="flex:1" id="dp-ler" onclick="_lerDitadoProduto()">Ler e revisar</button>' +
+      '</div></div>';
+    openModal('modal-ditar-produto');
+    setTimeout(function(){ var t = porId('dp-texto'); if (t && !RECONHECE) t.focus(); }, 250);
+  };
+
+  window._dpFechar = function(){
+    try { if (_rec && _gravando) _rec.abort(); } catch(e){}
+    botaoNormal();
+    closeModal('modal-ditar-produto');
+  };
+
+  window._dpGravar = function(){
+    var bt = porId('dp-gravar'), txt = porId('dp-gravar-txt');
+    if (_gravando) { try { if (_rec) _rec.stop(); } catch(e){} setTimeout(botaoNormal, 350); return; }
+    var R = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!R) { toast('Use o microfone do teclado'); return; }
+    try {
+      _rec = new R(); _rec.lang = 'pt-BR'; _rec.continuous = true; _rec.interimResults = true;
+      var jaTinha = String((porId('dp-texto') || {}).value || '').trim();
+      var fechado = '';
+      _rec.onresult = function(ev){
+        var novoFinal = '', provisorio = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) {
+          var t = (ev.results[i][0] || {}).transcript || '';
+          if (ev.results[i].isFinal) novoFinal += t; else provisorio += t;
+        }
+        novoFinal = novoFinal.trim();
+        if (novoFinal) fechado += (fechado ? ' ' : '') + novoFinal;
+        var campo = porId('dp-texto');
+        if (campo) campo.value = [jaTinha, fechado, provisorio.trim()]
+          .filter(function(s){ return !!s; }).join(' ').replace(/\s+/g,' ').trim();
+      };
+      _rec.onend = botaoNormal;
+      _rec.onerror = function(ev){
+        botaoNormal();
+        var cod = (ev && ev.error) || '';
+        if (cod === 'not-allowed' || cod === 'service-not-allowed') toast('Preciso da permissão do microfone');
+        else if (cod !== 'no-speech' && cod !== 'aborted') toast('Não consegui ouvir — use o microfone do teclado');
+      };
+      _rec.start();
+      _gravando = true;
+      if (bt) bt.style.background = 'var(--red)';
+      if (txt) txt.textContent = 'Parar de falar';
+      _guarda = setTimeout(function(){ try { if (_rec) _rec.stop(); } catch(e){} botaoNormal(); }, 180000);
+    } catch(e){ botaoNormal(); toast('Use o microfone do teclado'); }
+  };
+
+  /* ── A LEITURA ───────────────────────────────────────────────────── */
+  window._lerDitadoProduto = async function(){
+    var texto = String((porId('dp-texto') || {}).value || '').trim();
+    if (!texto) { toast('Fale ou escreva o produto primeiro'); return; }
+    var apiKey = (typeof getApiKey === 'function') ? getApiKey() : '';
+    if (!apiKey) {
+      toast('Configure sua chave de IA primeiro');
+      if (typeof mostrarConfigApiKey === 'function') setTimeout(mostrarConfigApiKey, 500);
+      return;
+    }
+    if (_gravando && _rec) { try { _rec.stop(); } catch(e){} }
+
+    var st = porId('dp-status'), bt = porId('dp-ler');
+    if (st) { st.style.display = 'block'; st.style.color = 'var(--pink)'; st.textContent = 'Lendo o que você falou...'; }
+    if (bt) { bt.disabled = true; bt.style.opacity = '.6'; }
+
+    var mats = [];
+    try { mats = window._todosOsMateriais() || []; } catch(e){}
+    var listaMat = mats.slice(0, 200).map(function(m){ return '- ' + m.nome; }).join('\n');
+    var cats = [];
+    try {
+      (window._produtosDoCatalogo() || []).forEach(function(p){
+        if (p.cat && cats.indexOf(p.cat) < 0) cats.push(p.cat);
+      });
+    } catch(e){}
+
+    var prompt =
+      'Você recebe o relato falado de uma dona de negócio cadastrando UM produto no catálogo dela. ' +
+      'Responda APENAS com JSON válido, sem texto em volta, neste formato exato:\n' +
+      '{"nome":"","preco":0,"categoria":"","tempoMin":0,' +
+      '"materiais":[{"nome":"","qtd":1,"comoFalou":""}]}\n\n' +
+      'REGRAS:\n' +
+      '- "nome" é o nome do produto, em MAIÚSCULAS, do jeito que ela falou. Não invente complemento.\n' +
+      '- "preco" é quanto ela cobra, em número com ponto decimal. Por extenso vira número: ' +
+      '"cinquenta e quatro e noventa" = 54.90. Se ela não disse, 0.\n' +
+      '- "tempoMin" é o tempo de trabalho em minutos, se ela disser. Senão 0.\n' +
+      '- "categoria": escolha uma destas, se servir: ' + (cats.join(' | ') || '(nenhuma ainda)') + '\n' +
+      '- "materiais" é o que o produto LEVA. Em "comoFalou" repita as palavras dela para aquele ' +
+      'material; em "nome" use o nome de um material da lista abaixo SOMENTE se for claramente o ' +
+      'mesmo (mesmo tipo, mesmo tamanho). ⚠️ Se ela não disse a cor ou o tamanho, ou se mais de um ' +
+      'serviria, NÃO escolha por ela: repita o que ela falou. Balão e fita costumam ficar no ' +
+      'genérico de propósito (a cor é escolhida no pedido).\n' +
+      (listaMat || '(nenhum material cadastrado ainda)') + '\n' +
+      '- "qtd" é quantas unidades daquele material entram em UM produto.\n' +
+      '- Não invente material que ela não falou.\n\n' +
+      'RELATO:\n' + texto;
+
+    try {
+      var resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey, 'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 900,
+                               messages: [{ role: 'user', content: prompt }] })
+      });
+      if (!resp.ok) {
+        var e1 = await resp.json().catch(function(){ return {}; });
+        throw new Error((e1.error && e1.error.message) || 'Erro na API');
+      }
+      var json = await resp.json();
+      var saida = (json.content && json.content[0] && json.content[0].text) || '';
+      var m = saida.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('Resposta inesperada da IA');
+      abrirRevisao(JSON.parse(m[0]));
+    } catch(err) {
+      if (st) { st.textContent = 'Não consegui ler: ' + (err.message || err); st.style.color = 'var(--red)'; }
+      toast('Não consegui ler o produto');
+    }
+    if (bt) { bt.disabled = false; bt.style.opacity = '1'; }
+  };
+
+  /* ── A REVISÃO: é aqui que ela corrige o que entra ───────────────── */
+  function abrirRevisao(d){
+    d = d || {};
+    var cadastrados = [];
+    try { cadastrados = (window._todosOsMateriais() || []).map(function(m){
+      return { nome: m.nome, preco: m.custo || 0, un: m.un || 'un' }; }); } catch(e){}
+
+    var linhas = (Array.isArray(d.materiais) ? d.materiais : []).map(function(it){
+      var falado = String(it.comoFalou || it.nome || '').trim();
+      var daIA   = String(it.nome || '').trim();
+      var achado = null, varios = 0;
+
+      /* ⚠️ 18/11 — AQUI A FALA VEM COM A QUANTIDADE DENTRO.
+         No pedido ela diz o nome do produto; aqui diz "quatro balões de 9".
+         A regra do pedido (toda palavra tem de bater) nunca casava — a
+         palavra "quatro" não existe em 'BALÃO 9" LISO' — e TODO material
+         virava "novo", sem preço e com o tipo errado. A bateria pegou.
+         Então aqui vale primeiro o nome EXATO que a IA trouxe da lista
+         (ela só pode usar nomes de lá), e a regra do falado fica de
+         reforço. Ela vê e edita o nome na tela, antes de salvar. */
+      var kIA = chave(daIA);
+      if (kIA) achado = cadastrados.filter(function(m){ return chave(m.nome) === kIA; })[0] || null;
+      if (!achado) {
+        var cands = [];
+        try { cands = window._candidatosDoFalado(falado, cadastrados) || []; } catch(e){}
+        if (cands.length === 1) achado = cands[0];
+        else varios = cands.length;
+      }
+      return {
+        usar: true,
+        nome: achado ? achado.nome : (daIA || falado),
+        falado: falado,
+        qtd: parseFloat(it.qtd) || 1,
+        valor: achado ? (achado.preco || 0) : 0,
+        novo: !achado,
+        varios: varios,
+      };
+    }).filter(function(l){ return !!l.nome; });
+
+    window._dpDados = {
+      nome: String(d.nome || '').trim(),
+      preco: parseFloat(d.preco) || 0,
+      categoria: String(d.categoria || '').trim(),
+      tempoMin: parseFloat(d.tempoMin) || 0,
+      linhas: linhas,
+    };
+    desenharRevisao();
+  }
+
+  function desenharRevisao(){
+    var dd = window._dpDados || {}; var linhas = dd.linhas || [];
+    var mod = porId('modal-revisar-produto');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-revisar-produto';
+      document.body.appendChild(mod);
+    }
+    var cats = [];
+    try {
+      (window._produtosDoCatalogo() || []).forEach(function(p){
+        if (p.cat && cats.indexOf(p.cat) < 0) cats.push(p.cat);
+      });
+    } catch(e){}
+    if (dd.categoria && cats.indexOf(dd.categoria) < 0) cats.unshift(dd.categoria);
+    if (!cats.length) cats = ['Balões'];
+
+    var usados = linhas.filter(function(l){ return l.usar; });
+    var custo = 0;
+    usados.forEach(function(l){ custo += (l.qtd || 0) * (l.valor || 0); });
+    custo = Math.round(custo * 100) / 100;
+
+    mod.innerHTML =
+      '<div class="modal" style="max-height:90vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Confira antes de salvar</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+        '<div class="form-group"><label class="form-label">Nome do produto</label>' +
+          '<input class="form-input" id="dp-nome" value="' + esc(dd.nome) + '" ' +
+          'oninput="_dpCampo(\'nome\', this.value)"></div>' +
+        '<div class="form-row">' +
+          '<div class="form-group"><label class="form-label">Preço de venda</label>' +
+            '<input class="form-input" id="dp-preco" type="text" inputmode="decimal" ' +
+            'value="' + (dd.preco > 0 ? window._moedaBR(dd.preco) : '') + '" placeholder="0,00" ' +
+            'oninput="_dpCampo(\'preco\', this.value)"></div>' +
+          '<div class="form-group"><label class="form-label">Categoria</label>' +
+            '<select class="form-select" id="dp-cat" onchange="_dpCampo(\'categoria\', this.value)">' +
+            cats.map(function(c){
+              return '<option value="' + esc(c) + '"' + (c === dd.categoria ? ' selected' : '') + '>' + esc(c) + '</option>';
+            }).join('') + '</select></div>' +
+        '</div>' +
+
+        '<div class="section-title" style="margin-top:4px">O que este produto leva</div>' +
+        '<div style="font-size:11px;color:var(--gray-d);margin-bottom:6px">' +
+          'Desmarque o que não entra. <b>Novo</b> quer dizer que ainda não está na sua lista de materiais.' +
+        '</div>' +
+        (linhas.length ? '<div style="display:flex;flex-direction:column;gap:6px">' +
+          linhas.map(function(l, i){
+            return '<div style="display:flex;align-items:center;gap:8px;background:' +
+              (l.usar ? '#fff' : '#f4f4f6') + ';border:1.5px solid ' +
+              (l.usar ? '#e9e9ef' : '#e4e4ea') + ';border-radius:11px;padding:9px 10px;flex-wrap:wrap">' +
+              '<input type="checkbox" ' + (l.usar ? 'checked' : '') +
+                ' onchange="_dpUsar(' + i + ', this.checked)" style="width:19px;height:19px;flex-shrink:0">' +
+              '<div style="flex:1;min-width:130px">' +
+                '<input class="form-input" value="' + esc(l.nome) + '" ' +
+                  'oninput="_dpLinha(' + i + ', \'nome\', this.value)" ' +
+                  'style="font-size:13px;font-weight:700;margin:0;padding:6px 8px">' +
+                (l.novo ? '<span style="font-size:10px;font-weight:700;color:var(--orange)">novo — vai entrar na sua lista de materiais</span>'
+                        : '<span style="font-size:10px;color:var(--gray-d)">' +
+                          (l.valor > 0 ? (window._dinheiro(l.valor) + ' cada') : 'cadastrado, sem preço') + '</span>') +
+                (l.varios ? ('<span style="font-size:10px;color:var(--orange)"> · ' + l.varios +
+                             ' parecidos no cadastro, confira o nome</span>') : '') +
+              '</div>' +
+              '<input class="form-input" type="number" min="0" step="0.01" value="' + l.qtd + '" ' +
+                'oninput="_dpLinha(' + i + ', \'qtd\', this.value)" ' +
+                'style="width:62px;margin:0;padding:6px;text-align:center;font-size:13px">' +
+            '</div>';
+          }).join('') + '</div>'
+         : '<div style="font-size:12px;color:var(--gray-d)">Nenhum material entendido — dá para salvar só com o nome e o preço.</div>') +
+
+        '<div style="background:var(--cyan-l);border-radius:10px;padding:10px 12px;margin-top:10px;font-size:12.5px;color:var(--brown)">' +
+          'Material deste produto: <b>' + window._dinheiro(custo) + '</b>' +
+          (dd.preco > 0 ? ('<br>Preço de venda: <b>' + window._dinheiro(dd.preco) + '</b>' +
+            (dd.preco > custo ? (' · sobra ' + window._dinheiro(dd.preco - custo) + ' para mão de obra e lucro')
+                              : ' · <span style="color:var(--red)">abaixo do material</span>')) : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-revisar-produto\')">Cancelar</button>' +
+        '<button class="btn btn-pink" style="flex:1" onclick="_dpSalvar()">Salvar no catálogo</button>' +
+      '</div></div>';
+    openModal('modal-revisar-produto');
+  }
+
+  window._dpCampo = function(campo, valor){
+    var dd = window._dpDados; if (!dd) return;
+    if (campo === 'preco') dd.preco = window._lerValorDigitado(valor);
+    else dd[campo] = valor;
+  };
+  window._dpLinha = function(i, campo, valor){
+    var dd = window._dpDados; if (!dd || !dd.linhas[i]) return;
+    if (campo === 'qtd') dd.linhas[i].qtd = parseFloat(valor) || 0;
+    else dd.linhas[i].nome = valor;
+  };
+  window._dpUsar = function(i, marcado){
+    var dd = window._dpDados; if (!dd || !dd.linhas[i]) return;
+    dd.linhas[i].usar = !!marcado;
+    desenharRevisao();
+  };
+
+  /* ── SALVAR ──────────────────────────────────────────────────────── */
+  window._dpSalvar = function(){
+    var dd = window._dpDados; if (!dd) return;
+    var nome = String(dd.nome || '').trim();
+    if (!nome) { toast('O produto precisa de um nome'); return; }
+
+    var usados = (dd.linhas || []).filter(function(l){ return l.usar && String(l.nome||'').trim(); });
+
+    /* material novo nasce na DESPENSA, nunca na vitrine (regra de 08/10) */
+    var criados = 0;
+    usados.forEach(function(l){
+      if (!l.novo) return;
+      var k = chave(l.nome);
+      var existe = (typeof estoque !== 'undefined' ? estoque : [])
+        .filter(function(e){ return e && chave(e.nome) === k; })[0];
+      if (existe) return;
+      if (typeof estoque === 'undefined') return;
+      estoque.push({ id: uid(), nome: String(l.nome).trim(), cat: 'Material/Insumos',
+                     un: 'un', qtd: 0, min: 0, preco: 0, updatedAt: Date.now() });
+      criados++;
+    });
+
+    /* a ficha, no formato que o pedido lê: nome/qtd/valor/tipo.
+       ⚠️ o `tipo` é o que abre a lista de cor no pedido (22/10) */
+    var itens = usados.map(function(l){
+      var tipo = 'normal';
+      try {
+        var ehBal = (typeof _ehBalao === 'function') && _ehBalao(l.nome) &&
+                    !((typeof _naoEBalao === 'function') && _naoEBalao(l.nome));
+        var ehFita = (typeof _ehFita === 'function') && _ehFita(l.nome);
+        if (ehBal) tipo = 'balao'; else if (ehFita) tipo = 'fita';
+      } catch(e){}
+      return { nome: String(l.nome).trim(), qtd: parseFloat(l.qtd) || 0,
+               valor: parseFloat(l.valor) || 0, tipo: tipo };
+    });
+
+    var mat = 0;
+    itens.forEach(function(it){ mat += (it.qtd || 0) * (it.valor || 0); });
+    mat = Math.round(mat * 100) / 100;
+
+    var tempoMin = parseFloat(dd.tempoMin) || 0;
+    var rateH = 0, mo = 0, custoFixo = 0, lucroPct = 25, taxaPct = 4;
+    try {
+      var moTab = _cfgMO();
+      rateH = (moTab[_nivelCMV] != null ? moTab[_nivelCMV] : moTab.medio) || 0;
+      mo = Math.round(rateH * (tempoMin / 60) * 100) / 100;
+      custoFixo = Math.round(_custoFixoHora() * (tempoMin / 60) * 100) / 100;
+      lucroPct = _cfgLucro(); taxaPct = _cfgTaxa();
+    } catch(e){}
+
+    var custo = Math.round((mat + mo + custoFixo) * 100) / 100;
+    var preco = parseFloat(dd.preco) || 0;
+    if (!(preco > 0)) preco = Math.round(custo * (1 + lucroPct / 100) * 100) / 100;
+    preco = Math.round(preco * 100) / 100;
+    var precoCartao = (taxaPct < 100) ? Math.round(preco / (1 - taxaPct / 100) * 100) / 100 : preco;
+    var lucro = Math.round((preco - custo) * 100) / 100;
+
+    var prod = {
+      id: uid(), nome: nome, cat: dd.categoria || 'Balões', descricao: '',
+      nivel: (typeof _nivelCMV !== 'undefined' ? _nivelCMV : 'medio'),
+      tempoMin: tempoMin, custo: custo, matCusto: mat, mo: mo, custoFixo: custoFixo,
+      preco: preco, precoCartao: precoCartao, lucro: lucro, lucroPct: lucroPct,
+      taxaPct: taxaPct, mg: (preco > 0 ? Math.round(lucro / preco * 1000) / 10 : 0),
+      material: false,              /* ⚠️ VITRINE, não despensa (08/10) */
+      temFoto: false, materiais: itens, updatedAt: Date.now(),
+    };
+    catalogo.push(prod);
+    save();
+
+    closeModal('modal-revisar-produto');
+    try { closeModal('modal-ditar-produto'); } catch(e){}
+    if (typeof renderCatalogo === 'function') renderCatalogo();
+    toast('"' + nome + '" salvo · ' + window._dinheiro(preco) +
+          (criados ? (' · ' + criados + (criados === 1 ? ' material novo' : ' materiais novos')) : ''));
+  };
+
+  /* ── O CAMINHO ATÉ ELA: barra no alto da Precificação ────────────── */
+  function porBarra(){
+    var tela = porId('screen-preco');
+    if (!tela || porId('bt-ditar-produto')) return;
+    var bt = document.createElement('button');
+    bt.type = 'button';
+    bt.id = 'bt-ditar-produto';
+    bt.setAttribute('onclick', '_abrirDitadoProduto()');
+    bt.style.cssText = 'width:100%;display:flex;align-items:center;justify-content:center;gap:8px;' +
+      'background:var(--pink);color:#fff;border:none;border-radius:12px;padding:13px;' +
+      'font-size:14px;font-weight:800;cursor:pointer;margin-bottom:12px;box-shadow:var(--shadow-s)';
+    bt.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" ' +
+      'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>' +
+      '<span>Ditar um produto</span>';
+    tela.insertBefore(bt, tela.firstElementChild);
+  }
+
+  var navOrig = window.navigate;
+  if (typeof navOrig === 'function') {
+    window.navigate = function(tela){
+      var r = navOrig.apply(this, arguments);
+      if (tela === 'preco') { try { porBarra(); } catch(e){} }
+      return r;
+    };
+  }
+  document.addEventListener('DOMContentLoaded', function(){ try { porBarra(); } catch(e){} });
+  try { porBarra(); } catch(e){}
 })();
 </script>
 
