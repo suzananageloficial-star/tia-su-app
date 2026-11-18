@@ -10288,7 +10288,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v22/10-c98';
+  var ver='v17/11-c99';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -15659,5 +15659,494 @@ else appLockInit();
   };
 })();
 </script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   DITAR O PEDIDO — 17/11/2026
+   Palavras dela: *"eu te mando um áudio ali com o pedido, as informações,
+   e tu faz as anotações"* e, antes, *"na hora de cadastrar o pedido demora
+   e é chato"*.
+
+   O QUE ESTE BLOCO FAZ
+   Ela abre o Novo Pedido, toca na barra "Ditar o pedido", fala (ou dita
+   pelo microfone do teclado) e a IA preenche cliente, WhatsApp, produto,
+   data, itens, valor pago, origem e observações. Depois ela CONFERE e
+   salva — o app nunca salva sozinho.
+
+   POR QUE DENTRO DO APP, E NÃO NUMA CONVERSA
+   Pedido tem de somar, filtrar, virar comanda, recibo, planilha e ROAS.
+   Conversa não faz isso. O que era chato era a digitação, então é a
+   digitação que saiu.
+
+   ⚠️ TRÊS REGRAS QUE ESTE BLOCO OBEDECE (cada uma custou um dia)
+   1. DINHEIRO: campo de preço nunca recebe número cru (22/10, o pedido de
+      R$ 69,90 que fechou em R$ 564,00). Aqui todo valor passa por
+      `escreverPreco`, que olha o tipo do campo antes de escrever.
+   2. UM CAMINHO SÓ: o item entra pelo MESMO `_escolherItemDaLista` do
+      botão "Ver catálogo" — então ganha de graça a receita do produto, a
+      conversão dos balões genéricos e a janela de cores. Nada de um
+      segundo caminho de lançar item (foi o estrago das duas telas de
+      material, 13/10).
+   3. UMA COR POR VEZ: `_perguntarCoresDoItem` guarda o alvo em
+      `window._coresAlvo`, que é UM só. Chamar duas vezes seguidas perde a
+      primeira. Durante a ditada as perguntas de cor entram numa FILA e
+      saem uma a uma, esperando a janela anterior fechar.
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  function esc(s){ return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  /* chave de comparação: sem acento, sem maiúscula, sem pontuação */
+  function chave(s){
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+
+  /* ── DINHEIRO ────────────────────────────────────────────────────────
+     ⚠️ 22/10/2026 — o campo do preço NASCE `type="number"` (ponto) e o
+     `arrumarCampoPreco` o converte depois para texto com máscara
+     brasileira (vírgula). Escrever sem olhar o tipo é o defeito que fez
+     54.9 virar 549. Esta é a única porta de escrita de valor do bloco. */
+  function escreverPreco(row, valor){
+    if (!row) return;
+    var el = row.querySelector('.pi-preco'); if (!el) return;
+    var v = parseFloat(valor); if (isNaN(v) || v <= 0) return;
+    if (el.type === 'number') el.value = String(v);
+    else el.value = (typeof window._moedaBR === 'function')
+      ? window._moedaBR(v) : String(v.toFixed(2)).replace('.', ',');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function porId(id){ return document.getElementById(id); }
+
+  /* escreve num campo comum só se ele estiver vazio, para a ditada nunca
+     apagar o que ela já tinha digitado à mão */
+  function preencher(id, valor, forcar){
+    var el = porId(id); if (!el) return false;
+    var v = String(valor == null ? '' : valor).trim();
+    if (!v) return false;
+    if (!forcar && String(el.value || '').trim()) return false;
+    el.value = v;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+
+  /* ── AS ORIGENS SAEM DO PRÓPRIO SELETOR ─────────────────────────────
+     ⚠️ 16/10/2026: origem escrita à mão aqui faria o relatório contar a
+     mesma coisa com dois nomes. Lê-se do `p-origem` e pronto. */
+  function origensDoApp(){
+    var sel = porId('p-origem'); if (!sel) return [];
+    return [].slice.call(sel.options)
+      .map(function(o){ return String(o.value || '').trim(); })
+      .filter(function(v){ return !!v; });
+  }
+
+  /* ── A JANELA ────────────────────────────────────────────────────────  */
+  var RECONHECE = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  var _rec = null, _gravando = false;
+
+  window._abrirDitado = function(){
+    var mod = porId('modal-ditar-pedido');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-ditar-pedido';
+      document.body.appendChild(mod);
+    }
+    mod.innerHTML =
+      '<div class="modal" style="max-height:90vh">' +
+      '<div class="modal-handle"></div>' +
+      '<div class="modal-title">Ditar o pedido</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+        '<div style="font-size:12px;color:var(--gray-d);line-height:1.5;margin-bottom:8px">' +
+          'Fale do jeito que você falaria para uma pessoa: quem é a cliente, o que ela quer, ' +
+          'quanto ficou, quando entrega e como ela te achou.' +
+        '</div>' +
+        (RECONHECE
+          ? '<button type="button" id="dt-gravar" onclick="_dtGravar()" ' +
+            'style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;' +
+            'background:var(--pink);color:#fff;border:none;border-radius:12px;padding:13px;' +
+            'font-size:14px;font-weight:800;cursor:pointer;margin-bottom:8px">' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>' +
+            '<span id="dt-gravar-txt">Falar agora</span></button>'
+          : '') +
+        '<div style="font-size:11px;color:var(--gray-d);margin-bottom:4px">' +
+          (RECONHECE ? 'Ou escreva/dite aqui pelo microfone do seu teclado:'
+                     : 'Toque no campo e use o <b>microfone do seu teclado</b> para falar:') +
+        '</div>' +
+        '<textarea id="dt-texto" class="form-textarea" style="min-height:130px;font-size:14px" ' +
+          'placeholder="Ex.: pedido da Michele, um arranjo bubble 18 base simples, cento e oitenta reais, ' +
+          'entrega sábado dia 22 de manhã, ela pagou cinquenta de sinal, veio do Instagram, cores rosa e dourado"></textarea>' +
+        '<div id="dt-status" style="display:none;font-size:12px;font-weight:700;color:var(--pink);margin-top:8px"></div>' +
+        '<div id="dt-resumo" style="display:none;background:var(--cyan-l);border-radius:10px;padding:10px 12px;' +
+          'margin-top:8px;font-size:12px;line-height:1.6;color:var(--brown)"></div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-ditar-pedido\')">Fechar</button>' +
+        '<button class="btn btn-pink" style="flex:1" id="dt-ler" onclick="_lerDitado()">Ler e preencher</button>' +
+      '</div></div>';
+    openModal('modal-ditar-pedido');
+    setTimeout(function(){ var t = porId('dt-texto'); if (t && !RECONHECE) t.focus(); }, 250);
+  };
+
+  /* ── FALAR AGORA (onde o navegador transcreve sozinho) ───────────────
+     No iPhone/Safari isto não existe — por isso o campo de texto com a
+     dica do microfone do teclado é o caminho principal, não o reserva. */
+  window._dtGravar = function(){
+    var bt = porId('dt-gravar'), txt = porId('dt-gravar-txt');
+    if (_gravando && _rec) { try { _rec.stop(); } catch(e){} return; }
+    var R = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!R) { toast('Use o microfone do teclado'); return; }
+    try {
+      _rec = new R();
+      _rec.lang = 'pt-BR';
+      _rec.continuous = true;
+      _rec.interimResults = true;
+      var base = String((porId('dt-texto') || {}).value || '');
+      _rec.onresult = function(ev){
+        var novo = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) novo += ev.results[i][0].transcript;
+        var campo = porId('dt-texto'); if (campo) campo.value = (base + ' ' + novo).trim();
+      };
+      _rec.onend = function(){
+        _gravando = false;
+        if (bt) bt.style.background = 'var(--pink)';
+        if (txt) txt.textContent = 'Falar agora';
+      };
+      _rec.onerror = function(){ toast('Não consegui ouvir — use o microfone do teclado'); };
+      _rec.start();
+      _gravando = true;
+      if (bt) bt.style.background = 'var(--red)';
+      if (txt) txt.textContent = 'Parar de falar';
+    } catch(e){ toast('Use o microfone do teclado'); }
+  };
+
+  /* ── A LEITURA ───────────────────────────────────────────────────────  */
+  window._lerDitado = async function(){
+    var texto = String((porId('dt-texto') || {}).value || '').trim();
+    if (!texto) { toast('Fale ou escreva o pedido primeiro'); return; }
+
+    var apiKey = (typeof getApiKey === 'function') ? getApiKey() : '';
+    if (!apiKey) {
+      toast('Configure sua chave de IA primeiro');
+      if (typeof mostrarConfigApiKey === 'function') setTimeout(mostrarConfigApiKey, 500);
+      return;
+    }
+    if (_gravando && _rec) { try { _rec.stop(); } catch(e){} }
+
+    var st = porId('dt-status'), bt = porId('dt-ler');
+    if (st) { st.style.display = 'block'; st.textContent = 'Lendo o que você falou...'; }
+    if (bt) { bt.disabled = true; bt.style.opacity = '.6'; }
+
+    /* o catálogo dela vai no pedido para a IA casar o nome falado com o
+       produto cadastrado — é o que traz o preço e a receita certos */
+    var itens = [];
+    try { itens = window._itensParaPedido() || []; } catch(e){}
+    var listaTxt = itens.slice(0, 120).map(function(x){
+      return '- ' + x.nome + (x.preco > 0 ? (' (R$ ' + x.preco.toFixed(2).replace('.', ',') + ')') : '');
+    }).join('\n');
+
+    var hoje = new Date();
+    var iso = hoje.getFullYear() + '-' +
+      String(hoje.getMonth() + 1).padStart(2, '0') + '-' + String(hoje.getDate()).padStart(2, '0');
+    var semana = ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'][hoje.getDay()];
+
+    var prompt =
+      'Você recebe o relato falado de uma dona de negócio registrando um pedido de cliente. ' +
+      'Extraia os dados e responda APENAS com JSON válido, sem nenhum texto em volta, neste formato exato:\n' +
+      '{"cliente":"","whats":"","produto":"","data":"YYYY-MM-DD","itens":[{"nome":"","qtd":1,"valor":0}],' +
+      '"pago":0,"origem":"","obs":"","cores":[]}\n\n' +
+      'REGRAS:\n' +
+      '- Hoje é ' + iso + ' (' + semana + '). Resolva "sábado", "amanhã", "dia 22" em data real no futuro.\n' +
+      '- "valor" é o preço de UMA unidade, em número (use ponto decimal). "pago" é o que a cliente já pagou (sinal ou total).\n' +
+      '- Valores falados por extenso viram número: "cento e oitenta" = 180.\n' +
+      '- "produto" é um resumo curto do evento/pedido (ex.: "Arranjo bubble 18 base simples").\n' +
+      '- Em "itens" liste o que ela vai entregar. Se o nome falado corresponder a um produto da lista abaixo, ' +
+      'use o NOME EXATO da lista (é o que traz a receita de material cadastrada):\n' +
+      (listaTxt || '(nenhum produto cadastrado ainda)') + '\n' +
+      '- "origem" (como a cliente achou o negócio) só pode ser um destes valores, ou vazio: ' +
+      origensDoApp().join(' | ') + '\n' +
+      '- "cores" são as cores dos balões/arranjo que ela citou, em minúsculas, na ordem em que falou. Se não citou, [].\n' +
+      '- "obs" recebe o que sobrou e importa na produção: tema, horário, endereço, recados.\n' +
+      '- Campo que ela não falou fica vazio ("") ou 0. Nunca invente nome, valor nem data.\n\n' +
+      'RELATO:\n' + texto;
+
+    try {
+      var resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 900,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      if (!resp.ok) {
+        var e1 = await resp.json().catch(function(){ return {}; });
+        throw new Error((e1.error && e1.error.message) || 'Erro na API');
+      }
+      var json = await resp.json();
+      var saida = (json.content && json.content[0] && json.content[0].text) || '';
+      var m = saida.match(/\{[\s\S]*\}/);
+      if (!m) throw new Error('Resposta inesperada da IA');
+      aplicarDitado(JSON.parse(m[0]));
+    } catch(err) {
+      if (st) { st.textContent = 'Não consegui ler: ' + (err.message || err); st.style.color = 'var(--red)'; }
+      toast('Não consegui ler o pedido');
+    }
+    if (bt) { bt.disabled = false; bt.style.opacity = '1'; }
+  };
+
+  /* ── PREENCHER O FORMULÁRIO ──────────────────────────────────────────  */
+  function aplicarDitado(d){
+    d = d || {};
+    var feito = [];
+
+    if (preencher('p-cliente', d.cliente)) feito.push('cliente: <b>' + esc(d.cliente) + '</b>');
+    if (preencher('p-whats', d.whats))     feito.push('WhatsApp: ' + esc(d.whats));
+    if (preencher('p-produto', d.produto)) feito.push('produto: ' + esc(d.produto));
+    /* ⚠️ 17/11 — A DATA FORÇA. O `resetModal` já nasce com a data de
+       HOJE no campo (ele preenche todo `type=date` com `today()`), então a
+       regra de "não sobrescrever" bloqueava justo a entrega — o campo que
+       mais importa. A bateria pegou: veio 17/11 no lugar de 22/11. */
+    if (d.data && /^\d{4}-\d{2}-\d{2}$/.test(d.data) && preencher('p-data', d.data, true)) {
+      var p = d.data.split('-');
+      feito.push('entrega: <b>' + p[2] + '/' + p[1] + '</b>');
+    }
+
+    /* origem: só vale o que existe no seletor */
+    if (d.origem) {
+      var ok = origensDoApp().filter(function(o){ return chave(o) === chave(d.origem); })[0];
+      if (ok && preencher('p-origem', ok)) feito.push('como me achou: ' + esc(ok));
+    }
+
+    /* valor pago: `p-sinal` é type="number" — aqui parseFloat é o certo */
+    var pago = parseFloat(d.pago);
+    if (!isNaN(pago) && pago > 0) {
+      var sin = porId('p-sinal');
+      if (sin && !parseFloat(sin.value)) {
+        sin.value = String(pago);
+        sin.dispatchEvent(new Event('input', { bubbles: true }));
+        feito.push('pago: <b>R$ ' + pago.toFixed(2).replace('.', ',') + '</b>');
+      }
+    }
+
+    if (d.obs) {
+      var obs = porId('p-obs');
+      if (obs) {
+        var antes = String(obs.value || '').trim();
+        obs.value = antes ? (antes + '\n' + d.obs) : d.obs;
+        feito.push('observações');
+      }
+    }
+
+    var lista = Array.isArray(d.itens) ? d.itens.filter(function(i){ return i && String(i.nome || '').trim(); }) : [];
+    mostrarResumo(feito, lista);
+    if (lista.length) lancarItens(lista, Array.isArray(d.cores) ? d.cores : []);
+    else {
+      var st = porId('dt-status');
+      if (st) { st.textContent = 'Pronto — confira os dados e salve.'; st.style.color = 'var(--green)'; }
+    }
+  }
+
+  function mostrarResumo(feito, itens){
+    var el = porId('dt-resumo'); if (!el) return;
+    var linhas = feito.slice();
+    itens.forEach(function(i){
+      var v = parseFloat(i.valor) || 0;
+      linhas.push('item: <b>' + esc(i.nome) + '</b>' +
+        ((parseFloat(i.qtd) || 1) > 1 ? (' ×' + (parseFloat(i.qtd) || 1)) : '') +
+        (v > 0 ? (' — R$ ' + v.toFixed(2).replace('.', ',')) : ''));
+    });
+    if (!linhas.length) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+    el.innerHTML = '<b>Entendi isto:</b><br>' + linhas.join('<br>') +
+      '<div style="margin-top:7px;color:var(--gray-d)">Confira na tela do pedido antes de salvar.</div>';
+  }
+
+  /* ── OS ITENS, UM DE CADA VEZ ────────────────────────────────────────
+     ⚠️ Lançar em laço foi o defeito de 22/10 que comia um balão: a
+     conversão em seletor de cor REFAZ a linha. Aqui cada item só começa
+     quando o anterior terminou, e as cores entram depois de todos. */
+  function lancarItens(itens, cores){
+    var doCatalogo = [];
+    try { doCatalogo = window._itensParaPedido() || []; } catch(e){}
+
+    /* as perguntas de cor ficam na fila enquanto os itens entram */
+    var filaCor = [];
+    var perguntaOrig = window._perguntarCoresDoItem;
+    if (typeof perguntaOrig === 'function') {
+      window._perguntarCoresDoItem = function(rowId){ filaCor.push(rowId); return false; };
+    }
+
+    var i = 0;
+    (function proximo(){
+      if (i >= itens.length) {
+        if (typeof perguntaOrig === 'function') window._perguntarCoresDoItem = perguntaOrig;
+        if (typeof recalcularTotal === 'function') recalcularTotal();
+        var st = porId('dt-status');
+        if (st) {
+          st.textContent = itens.length === 1 ? 'Pronto — 1 item entrou no pedido.'
+                                              : ('Pronto — ' + itens.length + ' itens entraram no pedido.');
+          st.style.color = 'var(--green)';
+        }
+        closeModal('modal-ditar-pedido');
+        toast('Confira o pedido e salve');
+        setTimeout(function(){ rodarFilaDeCor(filaCor, cores); }, 400);
+        return;
+      }
+      var it = itens[i++];
+      try { umItem(it, doCatalogo); } catch(e){}
+      /* espera a receita descer e a linha ser refeita antes do próximo */
+      setTimeout(proximo, 650);
+    })();
+  }
+
+  function umItem(it, doCatalogo){
+    var nome = String(it.nome || '').trim();
+    var qtd  = parseFloat(it.qtd) || 1;
+    var val  = parseFloat(it.valor) || 0;
+    var k    = chave(nome);
+
+    /* ⚠️ UM CAMINHO SÓ: casando com o catálogo, entra pelo mesmo
+       `_escolherItemDaLista` do botão "Ver catálogo" — e ganha a receita
+       do produto, os genéricos convertidos e a cor. */
+    var idx = -1;
+    for (var j = 0; j < doCatalogo.length; j++) {
+      if (chave(doCatalogo[j].nome) === k) { idx = j; break; }
+    }
+    var row = null;
+    if (idx >= 0 && typeof window._escolherItemDaLista === 'function') {
+      window._listaProdItens = doCatalogo;
+      window._listaProdDestino = '';
+      /* ⚠️ 17/11 — O ITEM DO CATÁLOGO NÃO ENTRAVA.
+         `_escolherItemDaLista` começa fechando a janela da lista, e o
+         `closeModal` do app faz `getElementById(id).classList` SEM checar
+         se o elemento existe. Pela ditada essa janela nunca foi aberta:
+         estourava, o `try` engolia e o pedido ficava só com a taxa de
+         entrega. A bateria pegou ("nasceram as 2 linhas" veio 1).
+         Aqui ela nasce vazia e fechada, só para haver o que fechar. */
+      if (!porId('modal-escolher-item')) {
+        var vazio = document.createElement('div');
+        vazio.className = 'modal-overlay';
+        vazio.id = 'modal-escolher-item';
+        document.body.appendChild(vazio);
+      }
+      window._escolherItemDaLista(idx);
+      var todas = document.querySelectorAll('#p-itens-lista .item-pedido-row');
+      row = todas[todas.length - 1];
+    } else {
+      /* fora do catálogo: o preço vai na CRIAÇÃO da linha, que é onde o
+         campo ainda é `type="number"` — nunca escrito por fora depois */
+      adicionarItemPedido(nome, qtd, val > 0 ? val : '');
+      var t2 = document.querySelectorAll('#p-itens-lista .item-pedido-row');
+      row = t2[t2.length - 1];
+      var campo = row && (row.querySelector('.pi-desc') || row.querySelector('input[type=text]'));
+      if (campo) {
+        campo.dispatchEvent(new Event('input',  { bubbles: true }));
+        campo.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    }
+    if (!row) return;
+
+    if (qtd > 1) {
+      var q = row.querySelector('.pi-qtd');
+      if (q) { q.value = String(qtd); q.dispatchEvent(new Event('input', { bubbles: true })); }
+    }
+    /* o valor que ELA falou vale mais que o do catálogo */
+    if (val > 0) escreverPreco(row, val);
+    if (typeof recalcularTotal === 'function') recalcularTotal();
+  }
+
+  /* ── AS CORES, UMA JANELA POR VEZ ────────────────────────────────────
+     `window._coresAlvo` é um só: duas perguntas ao mesmo tempo perdem a
+     primeira. Espera a janela fechar para abrir a seguinte, e já marca as
+     cores que ela falou — ela só confere a prévia e confirma. */
+  function rodarFilaDeCor(fila, cores){
+    if (!fila || !fila.length) return;
+    var pergunta = window._perguntarCoresDoItem;
+    if (typeof pergunta !== 'function') return;
+    var i = 0;
+    (function proxima(){
+      if (i >= fila.length) return;
+      var rowId = fila[i++];
+      var abriu = false;
+      try { abriu = pergunta(rowId) !== false; } catch(e){}
+      if (!abriu) { proxima(); return; }
+      marcarCoresFaladas(cores);
+      var esperar = setInterval(function(){
+        var mod = porId('modal-cores-item');
+        var aberto = mod && (mod.classList.contains('active') || mod.style.display === 'flex');
+        if (!aberto) { clearInterval(esperar); setTimeout(proxima, 250); }
+      }, 350);
+    })();
+  }
+
+  function marcarCoresFaladas(cores){
+    if (!cores || !cores.length) return;
+    var alvo = window._coresAlvo;
+    if (!alvo || !alvo.cores || !alvo.cores.length) return;
+    if (typeof window._togglarCor !== 'function') return;
+    cores.forEach(function(nome){
+      var kc = chave(nome); if (!kc) return;
+      var idx = -1;
+      for (var j = 0; j < alvo.cores.length; j++) {
+        var kk = chave(alvo.cores[j].nome || '');
+        if (kk === kc) { idx = j; break; }
+      }
+      if (idx < 0) {                                  /* "rosa" casa "ROSA BEBÊ" */
+        for (var j2 = 0; j2 < alvo.cores.length; j2++) {
+          var k2 = chave(alvo.cores[j2].nome || '');
+          if (k2.indexOf(kc) >= 0 || kc.indexOf(k2) >= 0) { idx = j2; break; }
+        }
+      }
+      if (idx < 0) return;
+      if ((alvo.escolhidas || []).indexOf(alvo.cores[idx].k) >= 0) return;
+      try { window._togglarCor(idx); } catch(e){}
+    });
+  }
+
+  /* ── O CAMINHO ATÉ ELA ───────────────────────────────────────────────
+     ⚠️ 13/10/2026: função importante não mora em letra de 10 pixels. É
+     uma barra de largura inteira, no alto do Novo Pedido. */
+  function porBarra(){
+    var corpo = document.querySelector('#modal-pedido .modal-body');
+    if (!corpo || porId('bt-ditar-pedido')) return;
+    var bt = document.createElement('button');
+    bt.type = 'button';
+    bt.id = 'bt-ditar-pedido';
+    bt.setAttribute('onclick', '_abrirDitado()');
+    bt.style.cssText = 'width:100%;display:flex;align-items:center;justify-content:center;gap:8px;' +
+      'background:var(--pink);color:#fff;border:none;border-radius:12px;padding:13px;' +
+      'font-size:14px;font-weight:800;cursor:pointer;margin-bottom:12px;box-shadow:var(--shadow-s)';
+    bt.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" ' +
+      'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+      '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>' +
+      '<span>Ditar o pedido</span>';
+    var primeiro = corpo.firstElementChild;
+    if (primeiro && primeiro.id === 'p-id') corpo.insertBefore(bt, primeiro.nextSibling);
+    else corpo.insertBefore(bt, primeiro);
+  }
+
+  var abrirOrig = window.openModal;
+  window.openModal = function(id){
+    var r = abrirOrig.apply(this, arguments);
+    if (id === 'modal-pedido') { try { porBarra(); } catch(e){} }
+    return r;
+  };
+  if (document.getElementById('modal-pedido')) { try { porBarra(); } catch(e){} }
+
+  window._dtEscreverPreco = escreverPreco;   /* para a bateria de testes */
+  window._dtChave = chave;
+})();
+</script>
+
 </body>
 </html>
