@@ -10343,7 +10343,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v18/11-c103';
+  var ver='v18/11-c104';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -16888,6 +16888,138 @@ else appLockInit();
   }
   document.addEventListener('DOMContentLoaded', function(){ try { porBarra(); } catch(e){} });
   try { porBarra(); } catch(e){}
+})();
+</script>
+
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   A LISTA DO CATÁLOGO NA PRECIFICAÇÃO — 18/11/2026
+
+   Palavras dela: *"eu acabei de salvar o arco orgânico de 2 metros ali
+   pela precificação, só que não aparece lá. Tem que arrumar a precificação
+   por ordem alfabética também, que não tá. E aí eu não consigo nem filtrar
+   ali pelo nome para ver se o arco aparece ou não."*
+
+   🔴 AS TRÊS COISAS ERAM A MESMA FUNÇÃO
+   `_catVisiveis()` devolvia os produtos na ORDEM DO ARRAY, que é a ordem
+   em que foram cadastrados. Produto novo entra por `push`: vai para o FIM.
+   Ela salvou, olhou o começo da lista e não viu — o arco estava lá embaixo.
+   E o único filtro era por CATEGORIA: com o filtro em outra categoria, o
+   produto some de vez, sem nenhum aviso.
+
+   O QUE MUDOU
+   1. ordem alfabética, sempre (pt-BR, ignorando acento e maiúscula);
+   2. campo de busca por NOME, do lado do filtro de categoria;
+   3. 🔴 ao salvar um produto, os filtros se limpam sozinhos e a linha nova
+      pisca em amarelo — ela salvou, ela VÊ. Era disto que faltava.
+   ⚠️ Nada foi tirado: o filtro de categoria, as caixinhas de marcar e o
+   "Marcar todos" continuam (ela pediu essas caixinhas de volta em 14/10).
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  function chave(s){
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .toLowerCase().replace(/\s+/g,' ').trim();
+  }
+
+  /* ── 1 e 2. ORDEM ALFABÉTICA + BUSCA POR NOME ───────────────────── */
+  var visiveisOrig = window._catVisiveis;
+  window._catVisiveis = function(){
+    var lista = [];
+    try { lista = visiveisOrig.apply(this, arguments) || []; } catch(e){ lista = []; }
+
+    /* busca por nome (e por categoria, que ajuda quem digita "balão") */
+    var campo = document.getElementById('cat-busca');
+    var termo = campo ? chave(campo.value) : '';
+    if (termo) {
+      lista = lista.filter(function(p){
+        return chave(p && p.nome).indexOf(termo) >= 0 ||
+               chave(p && p.cat).indexOf(termo) >= 0;
+      });
+    }
+    /* ⚠️ slice: ordenar a lista devolvida não pode mexer no `catalogo` */
+    return lista.slice().sort(function(a, b){
+      return String((a && a.nome) || '').localeCompare(String((b && b.nome) || ''), 'pt-BR',
+                                                       { sensitivity: 'base' });
+    });
+  };
+
+  /* o campo de busca nasce ao lado do filtro de categoria */
+  function porBusca(){
+    var sel = document.getElementById('cat-filtro');
+    if (!sel || document.getElementById('cat-busca')) return;
+    var box = document.createElement('input');
+    box.type = 'search';
+    box.id = 'cat-busca';
+    box.className = 'form-input';
+    box.placeholder = '🔎 Buscar produto pelo nome';
+    box.setAttribute('oninput', 'renderCatalogo()');
+    box.style.cssText = 'font-size:13px;margin-bottom:6px';
+    sel.parentNode.insertBefore(box, sel);
+  }
+
+  /* ── 3. SALVOU, APARECE ──────────────────────────────────────────── */
+  window._catMostrar = function(nome){
+    /* limpa o que pode estar escondendo o produto novo */
+    var busca = document.getElementById('cat-busca');
+    if (busca) busca.value = '';
+    var sel = document.getElementById('cat-filtro');
+    if (sel) sel.value = '__todas__';
+    if (typeof renderCatalogo === 'function') renderCatalogo();
+
+    if (!nome) return;
+    setTimeout(function(){
+      var k = chave(nome);
+      var campos = document.querySelectorAll('#catalogo-list .cat-nome');
+      for (var i = 0; i < campos.length; i++) {
+        if (chave(campos[i].value) !== k) continue;
+        var linha = campos[i].closest ? campos[i].closest('.list-item') : null;
+        if (!linha) return;
+        try { linha.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch(e){ linha.scrollIntoView(); }
+        var antes = linha.style.background;
+        linha.style.transition = 'background .4s';
+        linha.style.background = '#fff6d8';
+        setTimeout(function(){ linha.style.background = antes || ''; }, 2200);
+        return;
+      }
+    }, 120);
+  };
+
+  /* depois de salvar pela tela da Precificação */
+  var salvarOrig = window.salvarProduto;
+  if (typeof salvarOrig === 'function') {
+    window.salvarProduto = function(){
+      var nome = '';
+      try { nome = (document.getElementById('pr-nome') || {}).value || ''; } catch(e){}
+      var r = salvarOrig.apply(this, arguments);
+      setTimeout(function(){ try { window._catMostrar(nome); } catch(e){} }, 220);
+      return r;
+    };
+  }
+
+  /* e depois de salvar pela ditada do produto */
+  var dpOrig = window._dpSalvar;
+  if (typeof dpOrig === 'function') {
+    window._dpSalvar = function(){
+      var nome = '';
+      try { nome = ((window._dpDados || {}).nome || ''); } catch(e){}
+      var r = dpOrig.apply(this, arguments);
+      setTimeout(function(){ try { window._catMostrar(nome); } catch(e){} }, 260);
+      return r;
+    };
+  }
+
+  var navOrig = window.navigate;
+  if (typeof navOrig === 'function') {
+    window.navigate = function(tela){
+      var r = navOrig.apply(this, arguments);
+      if (tela === 'preco') { try { porBusca(); } catch(e){} }
+      return r;
+    };
+  }
+  document.addEventListener('DOMContentLoaded', function(){ try { porBusca(); } catch(e){} });
+  try { porBusca(); } catch(e){}
 })();
 </script>
 
