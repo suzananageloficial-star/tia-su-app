@@ -10343,7 +10343,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v18/11-c100';
+  var ver='v18/11-c101';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -15799,8 +15799,27 @@ else appLockInit();
   }
 
   /* ── A JANELA ────────────────────────────────────────────────────────  */
-  var RECONHECE = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-  var _rec = null, _gravando = false;
+  /* ⚠️ 18/11/2026 — O BOTÃO DE FALAR NÃO APARECE NO IPHONE.
+     Relato dela: *"coloquei parar de falar e ele travou, não ditou nada
+     (...) tive que fechar todo o aplicativo"*.
+     O Safari do iPhone TEM `webkitSpeechRecognition`, então o botão
+     nascia lá — mas ali o `continuous` não vale, o `onend` muitas vezes
+     não vem depois do `stop()` e, em app instalado na tela de início,
+     costuma nem gravar. Lá o caminho bom é o microfone do TECLADO, que é
+     do sistema e sempre funciona. */
+  var _EH_IPHONE = /iP(hone|ad|od)/.test(navigator.userAgent || '') ||
+                   ((navigator.platform === 'MacIntel') && (navigator.maxTouchPoints > 1));
+  var RECONHECE = !_EH_IPHONE && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  var _rec = null, _gravando = false, _recGuarda = null;
+
+  /* devolve o botão ao normal — chamada de TODO caminho de saída */
+  function _dtBotaoNormal(){
+    _gravando = false;
+    if (_recGuarda) { clearTimeout(_recGuarda); _recGuarda = null; }
+    var bt = porId('dt-gravar'), txt = porId('dt-gravar-txt');
+    if (bt) bt.style.background = 'var(--pink)';
+    if (txt) txt.textContent = 'Falar agora';
+  }
 
   window._abrirDitado = function(){
     var mod = porId('modal-ditar-pedido');
@@ -15828,8 +15847,8 @@ else appLockInit();
             '<span id="dt-gravar-txt">Falar agora</span></button>'
           : '') +
         '<div style="font-size:11px;color:var(--gray-d);margin-bottom:4px">' +
-          (RECONHECE ? 'Ou escreva/dite aqui pelo microfone do seu teclado:'
-                     : 'Toque no campo e use o <b>microfone do seu teclado</b> para falar:') +
+          (RECONHECE ? 'Ou escreva aqui — no computador, a tecla Windows + H também dita:'
+                     : 'Toque no campo e use o <b>microfone do seu teclado</b> para falar — é o próprio teclado do celular que escreve:') +
         '</div>' +
         '<textarea id="dt-texto" class="form-textarea" style="min-height:130px;font-size:14px" ' +
           'placeholder="Ex.: pedido da Michele, um arranjo bubble 18 base simples, cento e oitenta reais, ' +
@@ -15839,7 +15858,7 @@ else appLockInit();
           'margin-top:8px;font-size:12px;line-height:1.6;color:var(--brown)"></div>' +
       '</div>' +
       '<div class="form-actions">' +
-        '<button class="btn btn-outline" onclick="closeModal(\'modal-ditar-pedido\')">Fechar</button>' +
+        '<button class="btn btn-outline" onclick="_dtFechar()">Fechar</button>' +
         '<button class="btn btn-pink" style="flex:1" id="dt-ler" onclick="_lerDitado()">Ler e preencher</button>' +
       '</div></div>';
     openModal('modal-ditar-pedido');
@@ -15851,7 +15870,17 @@ else appLockInit();
      dica do microfone do teclado é o caminho principal, não o reserva. */
   window._dtGravar = function(){
     var bt = porId('dt-gravar'), txt = porId('dt-gravar-txt');
-    if (_gravando && _rec) { try { _rec.stop(); } catch(e){} return; }
+
+    /* PARAR. ⚠️ 18/11: só `stop()` não basta — quando o `onend` não vem,
+       `_gravando` ficava `true` para sempre, o botão seguia vermelho e
+       tocar nele de novo não fazia nada. Era o "travou" dela. Agora o
+       botão volta ao normal mesmo que o navegador não avise. */
+    if (_gravando) {
+      try { if (_rec) _rec.stop(); } catch(e){}
+      setTimeout(_dtBotaoNormal, 350);
+      return;
+    }
+
     var R = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!R) { toast('Use o microfone do teclado'); return; }
     try {
@@ -15859,23 +15888,67 @@ else appLockInit();
       _rec.lang = 'pt-BR';
       _rec.continuous = true;
       _rec.interimResults = true;
-      var base = String((porId('dt-texto') || {}).value || '');
+
+      /* ⚠️ 18/11 — O DEFEITO QUE COMEU A FALA DELA.
+         `base` era lido UMA vez e o campo virava `base + o trecho de
+         agora`. Com `continuous`, cada frase fechada faz o `resultIndex`
+         pular para a frase NOVA — então cada frase APAGAVA a anterior.
+         Ela falou o pedido inteiro e sobrou nada.
+         Agora o que o reconhecimento fecha (`isFinal`) vai se somando em
+         `fechado`, e só o pedaço provisório é trocado a cada evento. */
+      var jaTinha = String((porId('dt-texto') || {}).value || '').trim();
+      var fechado = '';
+
       _rec.onresult = function(ev){
-        var novo = '';
-        for (var i = ev.resultIndex; i < ev.results.length; i++) novo += ev.results[i][0].transcript;
-        var campo = porId('dt-texto'); if (campo) campo.value = (base + ' ' + novo).trim();
+        var novoFinal = '', provisorio = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) {
+          var t = (ev.results[i][0] || {}).transcript || '';
+          if (ev.results[i].isFinal) novoFinal += t; else provisorio += t;
+        }
+        novoFinal = novoFinal.trim();
+        if (novoFinal) fechado += (fechado ? ' ' : '') + novoFinal;
+        var campo = porId('dt-texto');
+        if (campo) {
+          campo.value = [jaTinha, fechado, provisorio.trim()]
+            .filter(function(s){ return !!s; }).join(' ').replace(/\s+/g, ' ').trim();
+        }
       };
+
       _rec.onend = function(){
-        _gravando = false;
-        if (bt) bt.style.background = 'var(--pink)';
-        if (txt) txt.textContent = 'Falar agora';
+        /* guarda o que ficou provisório: o campo já o mostra, e o texto
+           dela não se perde ao parar */
+        _dtBotaoNormal();
       };
-      _rec.onerror = function(){ toast('Não consegui ouvir — use o microfone do teclado'); };
+
+      _rec.onerror = function(ev){
+        _dtBotaoNormal();
+        var cod = (ev && ev.error) || '';
+        if (cod === 'not-allowed' || cod === 'service-not-allowed')
+          toast('Preciso da permissão do microfone — ou use o do teclado');
+        else if (cod !== 'no-speech' && cod !== 'aborted')
+          toast('Não consegui ouvir — use o microfone do teclado');
+      };
+
       _rec.start();
       _gravando = true;
       if (bt) bt.style.background = 'var(--red)';
       if (txt) txt.textContent = 'Parar de falar';
-    } catch(e){ toast('Use o microfone do teclado'); }
+
+      /* ⚠️ rede de segurança: se nada devolver o botão em 3 minutos, ele
+         volta sozinho e o microfone é solto. Nada nesta janela fica preso. */
+      _recGuarda = setTimeout(function(){
+        try { if (_rec) _rec.stop(); } catch(e){}
+        _dtBotaoNormal();
+      }, 180000);
+
+    } catch(e){ _dtBotaoNormal(); toast('Use o microfone do teclado'); }
+  };
+
+  /* fechar a janela solta o microfone — nunca deixar gravando por trás */
+  window._dtFechar = function(){
+    try { if (_rec && _gravando) _rec.abort(); } catch(e){}
+    _dtBotaoNormal();
+    closeModal('modal-ditar-pedido');
   };
 
   /* ── A LEITURA ───────────────────────────────────────────────────────  */
