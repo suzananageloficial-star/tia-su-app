@@ -10343,7 +10343,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v18/11-c101';
+  var ver='v18/11-c102';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -15984,15 +15984,20 @@ else appLockInit();
     var prompt =
       'Você recebe o relato falado de uma dona de negócio registrando um pedido de cliente. ' +
       'Extraia os dados e responda APENAS com JSON válido, sem nenhum texto em volta, neste formato exato:\n' +
-      '{"cliente":"","whats":"","produto":"","data":"YYYY-MM-DD","itens":[{"nome":"","qtd":1,"valor":0}],' +
+      '{"cliente":"","whats":"","produto":"","data":"YYYY-MM-DD",' +
+      '"itens":[{"nome":"","comoFalou":"","qtd":1,"valor":0}],' +
       '"pago":0,"origem":"","obs":"","cores":[]}\n\n' +
       'REGRAS:\n' +
       '- Hoje é ' + iso + ' (' + semana + '). Resolva "sábado", "amanhã", "dia 22" em data real no futuro.\n' +
       '- "valor" é o preço de UMA unidade, em número (use ponto decimal). "pago" é o que a cliente já pagou (sinal ou total).\n' +
       '- Valores falados por extenso viram número: "cento e oitenta" = 180.\n' +
       '- "produto" é um resumo curto do evento/pedido (ex.: "Arranjo bubble 18 base simples").\n' +
-      '- Em "itens" liste o que ela vai entregar. Se o nome falado corresponder a um produto da lista abaixo, ' +
-      'use o NOME EXATO da lista (é o que traz a receita de material cadastrada):\n' +
+      '- Em "itens" liste o que ela vai entregar. Em "comoFalou" escreva as palavras DELA para aquele ' +
+      'item, sem completar nada.\n' +
+      '⚠️ REGRA DO NOME: só use um nome da lista abaixo quando for CLARAMENTE o mesmo produto — ' +
+      'mesmo tipo, mesmo tamanho e mesma variação. Se ela não disse o tamanho ou a variação, ou se ' +
+      'mais de um item da lista poderia servir, NUNCA escolha por ela: repita em "nome" exatamente o ' +
+      'que ela falou. É melhor deixar o nome incompleto do que trazer o produto errado.\n' +
       (listaTxt || '(nenhum produto cadastrado ainda)') + '\n' +
       '- "origem" (como a cliente achou o negócio) só pode ser um destes valores, ou vazio: ' +
       origensDoApp().join(' | ') + '\n' +
@@ -16031,6 +16036,135 @@ else appLockInit();
     }
     if (bt) { bt.disabled = false; bt.style.opacity = '1'; }
   };
+
+  /* ══ QUAL PRODUTO ELA FALOU — 18/11/2026 ═══════════════════════════
+     Relato dela: *"eu disse o que era e ele puxou o arranjo de balões
+     TOTALMENTE DIFERENTE. Puxou até as cores certas, mas não puxou o
+     pedido certo."*
+
+     🔴 A CULPA ERA DO PROMPT. Eu mandava a IA usar "o NOME EXATO da
+     lista" — e o catálogo dela tem nomes longos e quase iguais
+     (BUBBLE 18" BASE ORGÂNICA, BUBBLE 18" BASE SIMPLES, BUBBLE 24"
+     ENCAPSULADO...). Dizendo só "um arranjo bubble", a IA casava à força
+     e escolhia um. A receita e as cores vinham certas — do produto
+     errado, que é pior do que não vir nada.
+
+     AGORA QUEM DECIDE É O APP, com uma regra que não chuta: toda palavra
+     que ela falou tem de aparecer no nome do produto, e número tem de
+     bater com número (18 nunca é 24). Sobrou UM: usa. Sobrou mais de um:
+     PERGUNTA, mostrando os nomes. Nenhum: fica o que ela falou, e ela
+     escolhe pelo "Ver catálogo".
+     ⚠️ Nunca voltar a deixar a IA escolher o produto sozinha.          */
+
+  var _VAZIAS = ['de','da','do','das','dos','um','uma','uns','umas','o','a','os','as',
+                 'com','para','pra','e','em','no','na','pro'];
+
+  function palavrasUteis(s){
+    return chave(s).split(' ').filter(function(p){
+      return p && p.length > 1 && _VAZIAS.indexOf(p) < 0;
+    });
+  }
+
+  window._candidatosDoFalado = function(falado, lista){
+    var pal = palavrasUteis(falado);
+    if (!pal.length) return [];
+    var numFalados = pal.filter(function(p){ return /^\d+$/.test(p); });
+    return (lista || []).filter(function(x){
+      if (!x || !x.nome) return false;
+      var kProd = chave(x.nome);
+      var palProd = palavrasUteis(x.nome);
+      /* toda palavra dela tem de estar no nome do produto */
+      var todas = pal.every(function(p){
+        return palProd.indexOf(p) >= 0 || kProd.indexOf(p) >= 0;
+      });
+      if (!todas) return false;
+      /* ⚠️ número tem de bater: "bubble 18" nunca casa com "bubble 24" */
+      var numProd = palProd.filter(function(p){ return /^\d+$/.test(p); });
+      if (numFalados.length && numProd.length) {
+        return numFalados.every(function(n){ return numProd.indexOf(n) >= 0; });
+      }
+      return true;
+    });
+  };
+
+  /* decide o nome de UM item; devolve {nome, duvida:[...] } */
+  function nomeDoItemFalado(it, doCatalogo){
+    var falado = String((it && it.comoFalou) || (it && it.nome) || '').trim();
+    var daIA   = String((it && it.nome) || '').trim();
+    var cands  = window._candidatosDoFalado(falado, doCatalogo);
+
+    if (cands.length === 1) return { nome: cands[0].nome, duvida: null };
+    if (cands.length > 1)   return { nome: falado, duvida: cands, falado: falado };
+
+    /* nenhum casou: se a IA escreveu um nome do catálogo que NÃO bate com
+       o que ela falou, esse nome não vale — foi exatamente o erro dela */
+    var kIA = chave(daIA);
+    var noCatalogo = (doCatalogo || []).filter(function(x){ return chave(x.nome) === kIA; })[0];
+    if (noCatalogo && falado && !window._candidatosDoFalado(falado, [noCatalogo]).length) {
+      return { nome: falado, duvida: null };
+    }
+    return { nome: daIA || falado, duvida: null };
+  }
+
+  /* a janela da dúvida: os nomes, o preço e "nenhum desses" */
+  function perguntarQualProduto(falado, cands, escolheu){
+    var mod = porId('modal-qual-produto');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-qual-produto';
+      document.body.appendChild(mod);
+    }
+    window._qpCands = cands;
+    window._qpEscolheu = function(i){
+      closeModal('modal-qual-produto');
+      var x = (window._qpCands || [])[i];
+      setTimeout(function(){ escolheu(x ? x.nome : falado); }, 180);
+    };
+    mod.innerHTML =
+      '<div class="modal" style="max-height:88vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Qual destes você falou?</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+        '<div style="background:var(--cyan-l);border-radius:10px;padding:10px 12px;' +
+          'font-size:13px;color:var(--brown);margin-bottom:10px">' +
+          'Você falou <b>"' + esc(falado) + '"</b> e tenho ' + cands.length +
+          ' produtos parecidos. Toque no certo — é ele que traz a receita e o preço.' +
+        '</div>' +
+        '<div style="display:flex;flex-direction:column;gap:7px">' +
+        cands.map(function(x, i){
+          return '<button type="button" onclick="_qpEscolheu(' + i + ')" ' +
+            'style="display:flex;justify-content:space-between;align-items:center;gap:10px;' +
+            'text-align:left;background:#fff;border:1.5px solid #e9e9ef;border-radius:12px;' +
+            'padding:12px 13px;font-size:13.5px;font-weight:700;color:var(--brown);cursor:pointer">' +
+            '<span>' + esc(x.nome) + '</span>' +
+            (x.preco > 0 ? ('<span style="color:var(--pink);white-space:nowrap">' +
+              window._dinheiro(x.preco) + '</span>') : '') +
+            '</button>';
+        }).join('') +
+        '</div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" style="flex:1" onclick="_qpEscolheu(-1)">' +
+          'Nenhum — deixar como eu falei</button>' +
+      '</div></div>';
+    openModal('modal-qual-produto');
+  }
+
+  /* resolve a dúvida de TODOS os itens antes de lançar qualquer um */
+  function resolverProdutos(itens, doCatalogo, pronto){
+    var i = 0;
+    (function proximo(){
+      if (i >= itens.length) { pronto(); return; }
+      var it = itens[i++];
+      var r = nomeDoItemFalado(it, doCatalogo);
+      if (!r.duvida) { it.nome = r.nome; proximo(); return; }
+      perguntarQualProduto(r.falado, r.duvida, function(nome){
+        it.nome = nome;
+        setTimeout(proximo, 150);
+      });
+    })();
+  }
+  window._resolverProdutos = resolverProdutos;
 
   /* ── PREENCHER O FORMULÁRIO ──────────────────────────────────────────  */
   function aplicarDitado(d){
@@ -16075,13 +16209,28 @@ else appLockInit();
       }
     }
 
-    var lista = Array.isArray(d.itens) ? d.itens.filter(function(i){ return i && String(i.nome || '').trim(); }) : [];
-    mostrarResumo(feito, lista);
-    if (lista.length) lancarItens(lista, Array.isArray(d.cores) ? d.cores : []);
-    else {
-      var st = porId('dt-status');
-      if (st) { st.textContent = 'Pronto — confira os dados e salve.'; st.style.color = 'var(--green)'; }
+    var lista = Array.isArray(d.itens) ? d.itens.filter(function(i){
+      return i && (String(i.nome || '').trim() || String(i.comoFalou || '').trim());
+    }) : [];
+
+    if (!lista.length) {
+      mostrarResumo(feito, lista);
+      var st0 = porId('dt-status');
+      if (st0) { st0.textContent = 'Pronto — confira os dados e salve.'; st0.style.color = 'var(--green)'; }
+      return;
     }
+
+    /* ⚠️ 18/11: a dúvida de QUAL produto se resolve ANTES de lançar —
+       lançar e corrigir depois traria a receita e as cores do errado, que
+       foi o que ela viu. O resumo só aparece com os nomes já decididos. */
+    var doCatalogo0 = [];
+    try { doCatalogo0 = window._itensParaPedido() || []; } catch(e){}
+    var st1 = porId('dt-status');
+    if (st1) { st1.textContent = 'Só confirme qual produto...'; st1.style.color = 'var(--pink)'; }
+    resolverProdutos(lista, doCatalogo0, function(){
+      mostrarResumo(feito, lista);
+      lancarItens(lista, Array.isArray(d.cores) ? d.cores : []);
+    });
   }
 
   function mostrarResumo(feito, itens){
