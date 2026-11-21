@@ -10343,7 +10343,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v18/11-c104';
+  var ver='v21/11-c106';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -15976,6 +15976,20 @@ else appLockInit();
       return '- ' + x.nome + (x.preco > 0 ? (' (R$ ' + x.preco.toFixed(2).replace('.', ',') + ')') : '');
     }).join('\n');
 
+    /* 🔴 21/11 — A LISTA DE MATERIAIS TAMBÉM VAI NO PEDIDO À IA.
+       Palavras dela: *"ao ditar o pedido, o item do pedido eu digo o nome,
+       depois digo o que vai em cada pedido e ele já adiciona ali os
+       materiais, puxando do estoque"*. Para casar o que ela fala com o que
+       está cadastrado — e o custo sair certo — a IA precisa ver a lista. */
+    var listaMateriais = '';
+    try {
+      var mats = window._todosOsMateriais() || [];
+      if (mats.length) {
+        listaMateriais = 'MATERIAIS CADASTRADOS:\n' +
+          mats.slice(0, 200).map(function(m){ return '- ' + m.nome; }).join('\n') + '\n';
+      }
+    } catch(e){}
+
     var hoje = new Date();
     var iso = hoje.getFullYear() + '-' +
       String(hoje.getMonth() + 1).padStart(2, '0') + '-' + String(hoje.getDate()).padStart(2, '0');
@@ -15985,7 +15999,8 @@ else appLockInit();
       'Você recebe o relato falado de uma dona de negócio registrando um pedido de cliente. ' +
       'Extraia os dados e responda APENAS com JSON válido, sem nenhum texto em volta, neste formato exato:\n' +
       '{"cliente":"","whats":"","produto":"","data":"YYYY-MM-DD",' +
-      '"itens":[{"nome":"","comoFalou":"","qtd":1,"valor":0}],' +
+      '"itens":[{"nome":"","comoFalou":"","qtd":1,"valor":0,' +
+      '"materiais":[{"nome":"","comoFalou":"","qtd":1}]}],' +
       '"pago":0,"origem":"","obs":"","cores":[]}\n\n' +
       'REGRAS:\n' +
       '- Hoje é ' + iso + ' (' + semana + '). Resolva "sábado", "amanhã", "dia 22" em data real no futuro.\n' +
@@ -15999,6 +16014,13 @@ else appLockInit();
       'mais de um item da lista poderia servir, NUNCA escolha por ela: repita em "nome" exatamente o ' +
       'que ela falou. É melhor deixar o nome incompleto do que trazer o produto errado.\n' +
       (listaTxt || '(nenhum produto cadastrado ainda)') + '\n' +
+      '🔴 "materiais" é O QUE VAI DENTRO daquele item, quando ela disser. SEPARE POR COR: ' +
+      '"24 balões de 5, doze rosa e doze branco" vira DOIS materiais — um BALÃO 5" ROSA com ' +
+      'qtd 12 e um BALÃO 5" BRANCO com qtd 12 — nunca um só de 24. Em "comoFalou" repita as ' +
+      'palavras dela para aquele material. Use o nome de um material da lista abaixo quando for ' +
+      'claramente o mesmo; se ela não disser a cor ou o tamanho, repita o que ela falou, sem ' +
+      'escolher por ela. Se ela não disser o que vai dentro, deixe "materiais" vazio.\n' +
+      (listaMateriais || '') +
       '- "origem" (como a cliente achou o negócio) só pode ser um destes valores, ou vazio: ' +
       origensDoApp().join(' | ') + '\n' +
       '- "cores" são as cores dos balões/arranjo que ela citou, em minúsculas, na ordem em que falou. Se não citou, [].\n' +
@@ -16059,9 +16081,25 @@ else appLockInit();
   var _VAZIAS = ['de','da','do','das','dos','um','uma','uns','umas','o','a','os','as',
                  'com','para','pra','e','em','no','na','pro'];
 
+  /* 🔴 21/11 — "2 METROS" TEM DE CASAR COM "2M".
+     A bateria pegou: ela fala "arco orgânico de 2 metros", o produto dela
+     chama-se "ARCO ORGÂNICO 2M", e a palavra "metros" não existia no nome —
+     então o app não achava o produto e o pedido saía sem a receita. Agora
+     a medida é escrita de um jeito só antes de comparar: o número descola
+     da letra ("2m" vira "2 m") e metro/polegada/centímetro viram a sigla. */
+  var _UNID = { metros:'m', metro:'m', mts:'m', mt:'m', m:'m',
+                polegadas:'pol', polegada:'pol', pol:'pol',
+                centimetros:'cm', centimetro:'cm', cm:'cm' };
+
   function palavrasUteis(s){
-    return chave(s).split(' ').filter(function(p){
-      return p && p.length > 1 && _VAZIAS.indexOf(p) < 0;
+    /* separa o número da letra: "2m" -> "2 m", "22mm" -> "22 mm" */
+    var t = chave(s).replace(/([0-9])([a-z])/g, '$1 $2').replace(/([a-z])([0-9])/g, '$1 $2');
+    return t.split(' ').filter(function(p){
+      return p && p.length > 0 && _VAZIAS.indexOf(p) < 0;
+    }).map(function(p){
+      return _UNID[p] || p;
+    }).filter(function(p){
+      return p.length > 1 || /^[0-9]$/.test(p) || p === 'm';   /* "m" e dígito valem */
     });
   }
 
@@ -16075,6 +16113,8 @@ else appLockInit();
       var palProd = palavrasUteis(x.nome);
       /* toda palavra dela tem de estar no nome do produto */
       var todas = pal.every(function(p){
+        /* ⚠️ a comparação é palavra a palavra na lista JÁ normalizada; o
+           `indexOf` no nome cru ficou como reforço para nome colado */
         return palProd.indexOf(p) >= 0 || kProd.indexOf(p) >= 0;
       });
       if (!todas) return false;
@@ -16337,9 +16377,85 @@ else appLockInit();
       var q = row.querySelector('.pi-qtd');
       if (q) { q.value = String(qtd); q.dispatchEvent(new Event('input', { bubbles: true })); }
     }
+
+    /* 🔴 21/11 — O QUE ELA DISSE QUE VAI DENTRO MANDA.
+       Quando ela dita os materiais, eles valem mais que a receita que o app
+       puxaria do catálogo ou do último pedido: ela está falando DESTE
+       arranjo, com as cores desta cliente. A receita automática já rodou no
+       `change` acima, então aqui as linhas dela entram no lugar.
+       ⚠️ Uma de cada vez, nunca em laço — a corrida de 22/10 comia um
+       balão. E a cor é marcada pelo NOME, senão a linha nasce em
+       "escolher cor" (o defeito de 18/11). */
+    var dita = Array.isArray(it.materiais)
+      ? it.materiais.filter(function(m){ return m && String(m.nome || m.comoFalou || '').trim(); })
+      : [];
+    if (dita.length) setTimeout(function(){ porMateriaisDitados(row, dita); }, 700);
     /* o valor que ELA falou vale mais que o do catálogo */
     if (val > 0) escreverPreco(row, val);
     if (typeof recalcularTotal === 'function') recalcularTotal();
+  }
+
+  /* ── O QUE ELA DISSE QUE VAI DENTRO DO ITEM (21/11) ──────────────── */
+  function porMateriaisDitados(row, dita){
+    var cadastrados = [];
+    try { cadastrados = (window._todosOsMateriais() || []).map(function(m){
+      return { nome: m.nome, preco: m.custo || 0, id: m.estoqueId || '' }; }); } catch(e){}
+
+    /* tira o que a receita automática tinha posto: quem manda é a fala */
+    var painel = document.querySelector('.linha-painel[data-for="' + row.id + '"]');
+    var caixa = painel ? painel.querySelector('.ln-mats') : null;
+    if (painel) {
+      [].slice.call(painel.querySelectorAll('.material-row')).forEach(function(r){ r.remove(); });
+    }
+
+    var itens = dita.map(function(m){
+      var falado = String(m.comoFalou || m.nome || '').trim();
+      var daIA   = String(m.nome || '').trim();
+      var achado = null;
+      var kIA = chave(daIA);
+      if (kIA) achado = cadastrados.filter(function(x){ return chave(x.nome) === kIA; })[0] || null;
+      if (!achado) {
+        var cands = [];
+        try { cands = window._candidatosDoFalado(falado, cadastrados) || []; } catch(e){}
+        if (cands.length === 1) achado = cands[0];
+      }
+      return { nome: achado ? achado.nome : (daIA || falado),
+               qtd: parseFloat(m.qtd) || 1,
+               valor: achado ? (achado.preco || 0) : 0,
+               itemId: achado ? (achado.id || '') : '' };
+    });
+
+    var i = 0;
+    (function proximo(){
+      if (i >= itens.length) {
+        try { if (typeof calcularGastoReal === 'function') calcularGastoReal(); } catch(e){}
+        try { if (typeof recalcularTotal === 'function') recalcularTotal(); } catch(e){}
+        toast(itens.length + (itens.length === 1 ? ' material entrou' : ' materiais entraram') + ' no item');
+        return;
+      }
+      var it2 = itens[i++];
+      try {
+        adicionarMaterialPedido(it2.nome, it2.qtd, 'pendente', '', 'normal', '', it2.itemId, it2.valor);
+        var nova = document.querySelector('#p-materiais-lista .material-row:last-child');
+        if (nova) {
+          nova.dataset.deLinha = row.id;
+          if (caixa) caixa.appendChild(nova);
+          var sel = nova.querySelector('.mat-sel');
+          if (sel && (!sel.value || sel.value === '__texto')) {
+            var alvo = chave(it2.nome);
+            for (var j = 0; j < sel.options.length; j++) {
+              var txt = chave((sel.options[j].text || '').split('·')[0]);
+              if (txt && (txt === alvo || txt.indexOf(alvo) === 0 || alvo.indexOf(txt) === 0)) {
+                sel.selectedIndex = j;
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+                break;
+              }
+            }
+          }
+        }
+      } catch(e){}
+      setTimeout(proximo, 180);
+    })();
   }
 
   /* ── AS CORES, UMA JANELA POR VEZ ────────────────────────────────────
@@ -16366,28 +16482,41 @@ else appLockInit();
     })();
   }
 
+  /* 🔴 21/11 — AS CORES FALADAS VOLTARAM A CHEGAR NA JANELA.
+     Em 18/11 a janela de cor foi refeita (ela pediu quantidade por cor) e
+     passou a guardar o alvo em `window._corAlvo`. Esta função continuou
+     falando com a janela ANTIGA (`_coresAlvo` e `_togglarCor`), que não
+     existe mais: quem falasse "rosa e dourado" no pedido abria a janela
+     com NADA marcado. A bateria pegou.
+     Agora ela escreve na janela nova e, melhor, já REPARTE o total entre
+     as cores faladas — "24 balões, rosa e dourado" vira 12 e 12. */
   function marcarCoresFaladas(cores){
     if (!cores || !cores.length) return;
-    var alvo = window._coresAlvo;
-    if (!alvo || !alvo.cores || !alvo.cores.length) return;
-    if (typeof window._togglarCor !== 'function') return;
+    var a = window._corAlvo;
+    if (!a || !a.opcoes || !a.opcoes.length) return;
+
+    var achadas = [];
     cores.forEach(function(nome){
       var kc = chave(nome); if (!kc) return;
-      var idx = -1;
-      for (var j = 0; j < alvo.cores.length; j++) {
-        var kk = chave(alvo.cores[j].nome || '');
-        if (kk === kc) { idx = j; break; }
-      }
-      if (idx < 0) {                                  /* "rosa" casa "ROSA BEBÊ" */
-        for (var j2 = 0; j2 < alvo.cores.length; j2++) {
-          var k2 = chave(alvo.cores[j2].nome || '');
-          if (k2.indexOf(kc) >= 0 || kc.indexOf(k2) >= 0) { idx = j2; break; }
-        }
-      }
-      if (idx < 0) return;
-      if ((alvo.escolhidas || []).indexOf(alvo.cores[idx].k) >= 0) return;
-      try { window._togglarCor(idx); } catch(e){}
+      var o = a.opcoes.filter(function(x){
+        var kn = chave(x.nome);
+        return kn === kc || kn.indexOf(kc) >= 0 || kc.indexOf(kn) >= 0;
+      })[0];
+      if (o && achadas.indexOf(o) < 0) achadas.push(o);
     });
+    if (!achadas.length) return;
+
+    var total = parseFloat(a.total) || 0;
+    if (total > 0) {
+      var base = Math.floor(total / achadas.length);
+      var sobra = total - base * achadas.length;
+      achadas.forEach(function(o, i){
+        a.escolhas[chave(o.nome)] = base + (i < sobra ? 1 : 0);
+      });
+    } else {
+      achadas.forEach(function(o){ a.escolhas[chave(o.nome)] = 1; });
+    }
+    if (typeof window._corRedesenhar === 'function') window._corRedesenhar();
   }
 
   /* ── O CAMINHO ATÉ ELA ───────────────────────────────────────────────
@@ -17020,6 +17149,600 @@ else appLockInit();
   }
   document.addEventListener('DOMContentLoaded', function(){ try { porBusca(); } catch(e){} });
   try { porBusca(); } catch(e){}
+})();
+</script>
+
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   AS CORES COM QUANTIDADE — 18/11/2026
+
+   Palavras dela: *"quando eu escolho o arco ali, ele abre uma tela para eu
+   escolher a cor dos balões. Só que eu não consigo filtrar. Aí algumas
+   cores não estão aparecendo. Eu tinha que ter a opção de digitar também e
+   colocar a quantidade de cada balão ali dentro. Porque, por exemplo, no
+   arco de 2 metros vai 24 balões de 5 polegadas. Só que esses 24 balões são
+   nas cores que a cliente escolheu. Podem ser 2, 3, 4 cores."*
+
+   🔴 O DESENHO ANTIGO NÃO CABIA O TRABALHO DELA
+   A janela de 22/10 escolhia UMA cor para a linha INTEIRA e revezava as
+   cores entre as LINHAS de material. Mas um arco não é assim: é UMA linha
+   de 24 balões de 5" REPARTIDA entre as cores da cliente — 8 rosa, 8
+   branco, 8 dourado. Não havia como dizer isso.
+
+   O QUE MUDOU
+   - uma linha de material por vez, dizendo o TOTAL a repartir;
+   - cada cor com seu CAMPO DE QUANTIDADE;
+   - contador ao vivo: quanto já foi repartido e quanto falta;
+   - "dividir igual" reparte o total entre as cores que ela tocou;
+   - BUSCA para achar a cor na lista;
+   - 🔴 e campo para DIGITAR uma cor que não está cadastrada — era o que
+     faltava quando "algumas cores não aparecem": `coresDoCadastro` monta a
+     lista pelos materiais do mesmo tamanho, então cor com nome fora do
+     padrão ficava de fora e ela não tinha saída.
+   - ao confirmar, a linha genérica é SUBSTITUÍDA por uma linha por cor,
+     com a quantidade de cada uma.
+
+   ⚠️ Cor que ela digita entra com o nome composto a partir do genérico
+   (BALÃO 5" LISO + VERDE), para casar com o cadastro depois.
+   ⚠️ As linhas nascem UMA DE CADA VEZ (180 ms), nunca em laço: foi a
+   corrida de 22/10 que comia um balão.
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  function esc(s){ return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function chave(s){
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  function porId(id){ return document.getElementById(id); }
+
+  /* as linhas de material do item que ainda esperam cor */
+  function linhasDeCor(itemRowId){
+    var painel = document.querySelector('.linha-painel[data-for="' + itemRowId + '"]');
+    if (!painel) return [];
+    return [].slice.call(painel.querySelectorAll('.material-row')).filter(function(r){
+      var sel = r.querySelector('.mat-sel');
+      if (!sel || !sel.options || sel.options.length <= 2) return false;
+      return !sel.value || sel.value === '__texto';        /* já escolhida: não atrapalha */
+    });
+  }
+
+  /* o que o seletor oferece, com o preço que o material tem no cadastro */
+  function opcoesDaLinha(matRow){
+    var sel = matRow.querySelector('.mat-sel');
+    var precos = {};
+    try {
+      (window._todosOsMateriais() || []).forEach(function(m){ precos[chave(m.nome)] = m.custo || 0; });
+    } catch(e){}
+    return [].slice.call(sel.options).filter(function(o){
+      return o.value && o.value !== '__texto';
+    }).map(function(o){
+      var nome = o.textContent.split('·')[0].trim() || o.value;
+      return { nome: nome, valor: o.value, preco: precos[chave(nome)] || 0 };
+    });
+  }
+
+  function generico(matRow){
+    return matRow.dataset.balaoSize ||
+           ((matRow.querySelector('.mat-nome') || {}).value) || 'material';
+  }
+  function totalDaLinha(matRow){
+    return parseFloat((matRow.querySelector('.mat-qtd') || {}).value) || 0;
+  }
+
+  /* ── A PERGUNTA ──────────────────────────────────────────────────── */
+  window._perguntarCoresDoItem = function(itemRowId){
+    var linhas = linhasDeCor(itemRowId);
+    if (!linhas.length) return false;
+    abrirLinha(itemRowId, linhas, 0);
+    return true;
+  };
+
+  function abrirLinha(itemRowId, linhas, i){
+    if (i >= linhas.length) return;
+    var matRow = linhas[i];
+    if (!matRow || !matRow.parentNode) { abrirLinha(itemRowId, linhas, i + 1); return; }
+
+    window._corAlvo = {
+      itemRowId: itemRowId, linhas: linhas, i: i,
+      matRowId: matRow.id,
+      generico: generico(matRow),
+      total: totalDaLinha(matRow),
+      opcoes: opcoesDaLinha(matRow),
+      escolhas: {},            /* chave do nome -> quantidade */
+      busca: '',
+    };
+    desenhar();
+  }
+
+  function somaEscolhida(){
+    var a = window._corAlvo || {}; var s = 0;
+    Object.keys(a.escolhas || {}).forEach(function(k){ s += parseFloat(a.escolhas[k]) || 0; });
+    return Math.round(s * 100) / 100;
+  }
+
+  function desenhar(){
+    var a = window._corAlvo; if (!a) return;
+    var mod = porId('modal-cores-item');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-cores-item';
+      document.body.appendChild(mod);
+    }
+    var termo = chave(a.busca);
+    var lista = a.opcoes.filter(function(o){ return !termo || chave(o.nome).indexOf(termo) >= 0; });
+    /* o que ela já escolheu fica sempre visível, mesmo filtrando */
+    a.opcoes.forEach(function(o){
+      var k = chave(o.nome);
+      if (a.escolhas[k] && lista.indexOf(o) < 0) lista.unshift(o);
+    });
+
+    var soma = somaEscolhida();
+    var falta = Math.round((a.total - soma) * 100) / 100;
+    var quantas = Object.keys(a.escolhas).filter(function(k){ return (a.escolhas[k] || 0) > 0; }).length;
+
+    mod.innerHTML =
+      '<div class="modal" style="max-height:90vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Cores de ' + esc(a.generico) + '</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+
+        '<div style="background:var(--cyan-l);border-radius:10px;padding:10px 12px;font-size:12.5px;' +
+          'color:var(--brown);margin-bottom:9px">' +
+          'São <b>' + a.total + '</b> no total. Escreva quantos de cada cor — pode ser ' +
+          '2, 3, 4 cores, como a cliente pediu.' +
+        '</div>' +
+
+        /* 🔴 18/11 — ELA DIZ AS CORES NUMA FRASE.
+           Palavras dela: *"é muito difícil colocar a cor do balão, ter que ficar
+           dividindo ali (...) ou que eu tenha a possibilidade de DIZER quantos vai
+           ser de cada cor, ao invés de ter que ficar escolhendo"*.
+           Ela escreve (ou dita pelo microfone do teclado) "12 rosa e 12 branco" e
+           o app reparte. Sem IA: é só número + cor, instantâneo e de graça. */
+        '<div style="background:#fff;border:1.5px solid var(--pink);border-radius:11px;' +
+          'padding:9px 10px;margin-bottom:9px">' +
+          '<div style="font-size:11px;font-weight:700;color:var(--pink);margin-bottom:5px">' +
+            'Diga as cores de uma vez — use o microfone do teclado</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+            '<input type="text" id="cor-frase" class="form-input" ' +
+              'placeholder="ex.: 12 rosa e 12 branco" ' +
+              'style="flex:1;min-width:150px;margin:0;font-size:14px" ' +
+              'onkeydown="_corFraseTecla(event)">' +
+            '<button type="button" onclick="_corFrase()" ' +
+              'style="font-size:13px;font-weight:800;background:var(--pink);color:#fff;border:none;' +
+              'border-radius:9px;padding:10px 14px;cursor:pointer">Pôr</button>' +
+          '</div>' +
+        '</div>' +
+
+        '<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">' +
+          '<input type="search" id="cor-busca" class="form-input" placeholder="🔎 Buscar cor" ' +
+            'value="' + esc(a.busca) + '" oninput="_corBusca(this.value)" ' +
+            'style="flex:1;min-width:140px;font-size:13px;margin:0">' +
+          '<button type="button" onclick="_corDividir()" ' +
+            'style="font-size:12px;font-weight:700;background:var(--cyan-l);color:var(--cyan-d);' +
+            'border:none;border-radius:9px;padding:9px 12px;cursor:pointer;white-space:nowrap">Dividir igual</button>' +
+        '</div>' +
+
+        '<div style="display:flex;flex-direction:column;gap:6px">' +
+        (lista.length ? lista.map(function(o){
+          var k = chave(o.nome);
+          var q = a.escolhas[k] || '';
+          return '<div style="display:flex;align-items:center;gap:8px;background:' +
+            (q ? 'var(--pink-l)' : '#fff') + ';border:1.5px solid ' + (q ? 'var(--pink)' : '#e9e9ef') +
+            ';border-radius:11px;padding:8px 10px">' +
+            '<div style="flex:1;min-width:0">' +
+              '<div style="font-size:13px;font-weight:700;color:var(--brown)">' + esc(o.nome) + '</div>' +
+              (o.preco > 0 ? ('<div style="font-size:10px;color:var(--gray-d)">' +
+                 window._dinheiro(o.preco) + ' cada</div>') : '') +
+            '</div>' +
+            '<input type="number" min="0" step="1" value="' + q + '" placeholder="0" ' +
+              'onfocus="this.select()" oninput="_corQtd(\'' + esc(k) + '\', this.value)" ' +
+              'class="form-input" style="width:70px;margin:0;padding:7px;text-align:center;font-size:14px;font-weight:700">' +
+          '</div>';
+        }).join('')
+         : '<div style="font-size:12px;color:var(--gray-d);padding:4px 2px">Nenhuma cor com esse nome — escreva embaixo.</div>') +
+        '</div>' +
+
+        /* 🔴 digitar uma cor que não está cadastrada */
+        '<div style="margin-top:10px;border-top:1px dashed #e4e4ea;padding-top:9px">' +
+          '<div style="font-size:11px;color:var(--gray-d);margin-bottom:4px">' +
+            'Não achou a cor? Escreva aqui:</div>' +
+          '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+            '<input type="text" id="cor-outra" class="form-input" placeholder="ex.: verde limão" ' +
+              'style="flex:1;min-width:130px;margin:0;font-size:13px" ' +
+              'onkeydown="if(event.key===\'Enter\'){event.preventDefault();_corOutra();}">' +
+            '<input type="number" id="cor-outra-qtd" class="form-input" placeholder="qtd" min="0" ' +
+              'style="width:70px;margin:0;padding:7px;text-align:center;font-size:13px">' +
+            '<button type="button" onclick="_corOutra()" ' +
+              'style="font-size:12px;font-weight:700;background:var(--pink);color:#fff;border:none;' +
+              'border-radius:9px;padding:9px 13px;cursor:pointer">Pôr</button>' +
+          '</div>' +
+        '</div>' +
+
+        '<div style="margin-top:11px;font-size:13px;font-weight:700;color:' +
+          (falta === 0 ? 'var(--green)' : (falta < 0 ? 'var(--red)' : 'var(--orange)')) + '">' +
+          (quantas ? (soma + ' de ' + a.total + ' repartidos em ' + quantas +
+                      (quantas === 1 ? ' cor' : ' cores') +
+                      (falta > 0 ? (' · faltam ' + falta) : (falta < 0 ? (' · passou ' + (-falta)) : ' · certo')))
+                   : 'Nenhuma cor escolhida ainda') +
+        '</div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" onclick="_corPular()">Escolho na linha</button>' +
+        '<button class="btn btn-pink" style="flex:1" onclick="_corAplicar()">Usar estas cores</button>' +
+      '</div></div>';
+    openModal('modal-cores-item');
+  }
+
+  /* números por extenso, do jeito que ela fala */
+  var NUM = { um:1, uma:1, dois:2, duas:2, tres:3, quatro:4, cinco:5, seis:6, sete:7, oito:8,
+              nove:9, dez:10, onze:11, doze:12, treze:13, quatorze:14, catorze:14, quinze:15,
+              dezesseis:16, dezessete:17, dezoito:18, dezenove:19, vinte:20, trinta:30,
+              quarenta:40, cinquenta:50, sessenta:60, setenta:70, oitenta:80, noventa:90, cem:100 };
+  var _IGNORA = ['e','de','da','do','balao','baloes','cor','cores','sao','fica','ficam','poe','bota'];
+
+  /* "12 rosa e 12 branco" -> [{qtd:12,cor:'rosa'},{qtd:12,cor:'branco'}] */
+  window._lerFraseDeCores = function(txt){
+    var toks = chave(txt).split(' ').filter(Boolean);
+    var out = [], atual = null;
+    for (var i = 0; i < toks.length; i++) {
+      var t = toks[i], n = null;
+      if (/^[0-9]+$/.test(t)) n = parseInt(t, 10);
+      else if (NUM[t] != null) {
+        n = NUM[t];
+        if (n >= 20 && toks[i+1] === 'e' && NUM[toks[i+2]] != null && NUM[toks[i+2]] < 10) {
+          n += NUM[toks[i+2]]; i += 2;                 /* "vinte e quatro" */
+        }
+      }
+      if (n != null) { if (atual && atual.cor) out.push(atual); atual = { qtd: n, cor: '' }; continue; }
+      if (_IGNORA.indexOf(t) >= 0) continue;
+      if (atual) atual.cor = (atual.cor ? atual.cor + ' ' : '') + t;
+    }
+    if (atual && atual.cor) out.push(atual);
+    return out;
+  };
+
+  window._corFraseTecla = function(ev){
+    if (ev && ev.key === 'Enter') { ev.preventDefault(); window._corFrase(); }
+  };
+
+  window._corFrase = function(){
+    var a = window._corAlvo; if (!a) return;
+    var txt = String((porId('cor-frase') || {}).value || '').trim();
+    if (!txt) { toast('Escreva ou dite as cores'); return; }
+    var pares = window._lerFraseDeCores(txt);
+    if (!pares.length) { toast('Não entendi — tente "12 rosa e 12 branco"'); return; }
+
+    var postas = 0;
+    pares.forEach(function(p){
+      var kc = chave(p.cor); if (!kc) return;
+      var achada = a.opcoes.filter(function(o){ return chave(o.nome).indexOf(kc) >= 0; })[0];
+      if (!achada) {
+        /* cor que ela falou e não existe no cadastro: entra com o nome composto */
+        var gen = String(a.generico || '').trim();
+        var nome = (gen + ' ' + p.cor).replace(/\s+/g, ' ').trim().toUpperCase();
+        achada = { nome: nome, valor: '__nova__' + chave(nome), preco: 0 };
+        a.opcoes.unshift(achada);
+      }
+      a.escolhas[chave(achada.nome)] = p.qtd;
+      postas++;
+    });
+    a.busca = '';
+    desenhar();
+    var c = porId('cor-frase'); if (c) c.value = '';
+    toast(postas + (postas === 1 ? ' cor posta' : ' cores postas'));
+  };
+
+  window._corRedesenhar = function(){ try { desenhar(); } catch(e){} };
+
+  window._corBusca = function(v){
+    var a = window._corAlvo; if (!a) return;
+    a.busca = v;
+    var foco = document.activeElement === porId('cor-busca');
+    desenhar();
+    if (foco) { var c = porId('cor-busca'); if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); } }
+  };
+
+  window._corQtd = function(k, v){
+    var a = window._corAlvo; if (!a) return;
+    var n = parseFloat(v) || 0;
+    if (n > 0) a.escolhas[k] = n; else delete a.escolhas[k];
+    /* só atualiza o contador: redesenhar aqui tiraria o foco do campo */
+    var el = document.querySelector('#modal-cores-item .modal-body > div:last-child');
+    var soma = somaEscolhida();
+    var falta = Math.round((a.total - soma) * 100) / 100;
+    var quantas = Object.keys(a.escolhas).length;
+    if (el) {
+      el.style.color = (falta === 0 ? 'var(--green)' : (falta < 0 ? 'var(--red)' : 'var(--orange)'));
+      el.textContent = quantas
+        ? (soma + ' de ' + a.total + ' repartidos em ' + quantas + (quantas === 1 ? ' cor' : ' cores') +
+           (falta > 0 ? (' · faltam ' + falta) : (falta < 0 ? (' · passou ' + (-falta)) : ' · certo')))
+        : 'Nenhuma cor escolhida ainda';
+    }
+  };
+
+  window._corDividir = function(){
+    var a = window._corAlvo; if (!a) return;
+    var ks = Object.keys(a.escolhas);
+    if (!ks.length) { toast('Escreva alguma quantidade primeiro, ou escolha as cores'); return; }
+    var base = Math.floor(a.total / ks.length);
+    var sobra = a.total - base * ks.length;
+    ks.forEach(function(k, i){ a.escolhas[k] = base + (i < sobra ? 1 : 0); });
+    desenhar();
+  };
+
+  /* 🔴 a cor digitada entra com o nome composto a partir do genérico */
+  window._corOutra = function(){
+    var a = window._corAlvo; if (!a) return;
+    var txt = String((porId('cor-outra') || {}).value || '').trim();
+    if (!txt) { toast('Escreva a cor'); return; }
+    var qtd = parseFloat((porId('cor-outra-qtd') || {}).value) || 0;
+    var gen = String(a.generico || '').trim();
+    var nome = (chave(txt).indexOf(chave(gen)) === 0) ? txt : (gen + ' ' + txt).replace(/\s+/g, ' ').trim();
+    var k = chave(nome);
+    if (!a.opcoes.some(function(o){ return chave(o.nome) === k; })) {
+      a.opcoes.unshift({ nome: nome.toUpperCase(), valor: '__nova__' + k, preco: 0 });
+    }
+    a.escolhas[k] = qtd > 0 ? qtd : (a.escolhas[k] || 1);
+    a.busca = '';
+    desenhar();
+  };
+
+  window._corPular = function(){
+    var a = window._corAlvo; if (!a) return;
+    closeModal('modal-cores-item');
+    setTimeout(function(){ abrirLinha(a.itemRowId, a.linhas, a.i + 1); }, 250);
+  };
+
+  /* ── APLICAR: a linha genérica vira uma linha por cor ────────────── */
+  window._corAplicar = function(){
+    var a = window._corAlvo; if (!a) return;
+    var escolhidas = Object.keys(a.escolhas).filter(function(k){ return (a.escolhas[k] || 0) > 0; });
+    if (!escolhidas.length) { toast('Escreva quantos de cada cor'); return; }
+
+    var matRow = porId(a.matRowId);
+    if (!matRow) { closeModal('modal-cores-item'); return; }
+    var donoId = matRow.dataset.deLinha || a.itemRowId;
+    var painel = document.querySelector('.linha-painel[data-for="' + donoId + '"]');
+    var caixa = painel ? painel.querySelector('.ln-mats') : null;
+
+    /* ⚠️ 18/11 — A COR SÓ FICA MARCADA COM O ID DO ESTOQUE.
+       A linha de balão/fita/cor nasce como SELETOR, e `adicionarMaterialPedido`
+       escolhe a opção pelo 7º parâmetro (`itemId`). Passando vazio, a linha
+       nascia em "escolher cor" de novo — a cor se perdia e a comanda sairia
+       com balão genérico. O id vem do próprio seletor da linha antiga.
+       Cor DIGITADA não tem id: essa entra como texto, com o nome composto. */
+    var tipoLinha = matRow.dataset.tipo || 'normal';
+    var sizeLinha = matRow.dataset.balaoSize || '';
+    var itens = escolhidas.map(function(k){
+      var o = a.opcoes.filter(function(x){ return chave(x.nome) === k; })[0] ||
+              { nome: k, preco: 0, valor: '' };
+      var nova = String(o.valor || '').indexOf('__nova__') === 0;
+      return { nome: o.nome, qtd: a.escolhas[k], valor: o.preco || 0,
+               itemId: nova ? '' : (o.valor || ''), nova: nova };
+    });
+
+    /* 🔴 18/11 — COR QUE ELA DIGITOU VIRA MATERIAL DE VERDADE.
+       Sem isso a linha nascia em "escolher cor": o app monta o seletor
+       pelos materiais cadastrados daquele tamanho, e a cor nova não
+       estava em lugar nenhum. Cadastrando (quantidade 0, sem preço) a
+       linha fica certa E a cor passa a aparecer nas próximas vezes —
+       que era a queixa "algumas cores não estão aparecendo". */
+    var criados = 0;
+    itens.forEach(function(it){
+      if (!it.nova) return;
+      try {
+        var k = chave(it.nome);
+        var existe = (typeof estoque !== 'undefined' ? estoque : [])
+          .filter(function(e){ return e && chave(e.nome) === k; })[0];
+        if (existe) { it.nova = false; it.itemId = existe.id; return; }
+        var novoMat = { id: uid(), nome: it.nome, cat: 'Material/Insumos',
+                        un: 'un', qtd: 0, min: 0, preco: 0, updatedAt: Date.now() };
+        estoque.push(novoMat);
+        it.itemId = novoMat.id; it.nova = false; criados++;
+      } catch(e){}
+    });
+    if (criados) { try { save(); } catch(e){} }
+
+    closeModal('modal-cores-item');
+    matRow.remove();                       /* a linha genérica sai */
+
+    /* ⚠️ uma de cada vez: lançar em laço foi o que comeu um balão em 22/10 */
+    var i = 0;
+    (function proxima(){
+      if (i >= itens.length) {
+        try { if (typeof calcularGastoReal === 'function') calcularGastoReal(); } catch(e){}
+        try { if (typeof recalcularTotal === 'function') recalcularTotal(); } catch(e){}
+        toast(itens.length + (itens.length === 1 ? ' cor posta' : ' cores postas') +
+              (criados ? (' · ' + criados + (criados === 1 ? ' cor nova cadastrada' : ' cores novas cadastradas')) : ''));
+        setTimeout(function(){ abrirLinha(a.itemRowId, a.linhas, a.i + 1); }, 320);
+        return;
+      }
+      var it = itens[i++];
+      try {
+        adicionarMaterialPedido(it.nome, it.qtd, 'pendente', '',
+                                it.nova ? 'normal' : tipoLinha,
+                                it.nova ? '' : sizeLinha,
+                                it.itemId, it.valor);
+        var nova = document.querySelector('#p-materiais-lista .material-row:last-child');
+        if (nova) {
+          nova.dataset.deLinha = donoId;
+          if (caixa) caixa.appendChild(nova);
+          /* ⚠️ 18/11 — A COR NÃO FICAVA MARCADA.
+             A linha de balão nasce como SELETOR. Eu tentei marcar a opção
+             passando o `itemId`, mas o `value` das opções nem sempre é o id
+             do estoque — num dos caminhos é o próprio NOME. Resultado: a
+             linha nascia em "escolher cor" e a cor se perdia, o que sairia
+             na comanda como balão genérico. O diagnóstico mostrou isso; a
+             suposição teria passado. Agora a opção é marcada pelo TEXTO,
+             que vale nos dois caminhos. */
+          var selN = nova.querySelector('.mat-sel');
+          if (selN) {
+            var alvoK = chave(it.nome);
+            for (var j = 0; j < selN.options.length; j++) {
+              var txt = chave((selN.options[j].text || '').split('·')[0]);
+              if (txt && (txt === alvoK || txt.indexOf(alvoK) === 0 || alvoK.indexOf(txt) === 0)) {
+                selN.selectedIndex = j;
+                selN.dispatchEvent(new Event('change', { bubbles: true }));
+                break;
+              }
+            }
+          }
+        }
+      } catch(e){}
+      setTimeout(proxima, 180);
+    })();
+  };
+})();
+</script>
+
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   QUANTOS VÊM NO PACOTE FICA GRAVADO — 18/11/2026
+
+   Palavras dela: *"mas tem que gravar, já digitei isso várias vezes"*, sobre
+   o preço que vem errado: *"tá vindo tudo errado, pacote, cada um, unidade
+   ali. Eu não sei em que momento se perdeu isso que não tá vindo certo."*
+
+   🔴 O MOMENTO EM QUE SE PERDIA
+   O "vem com" (campo `rende`) existe desde 06/10 na linha da compra, e o
+   salvar até grava no cadastro do material. MAS a linha de compra sempre
+   nasce com `rende:''` — toda compra nova começa vazia. Se ela não digitar
+   de novo, o preço do PACOTE entra como preço de UM. Era isto: o dado
+   existia, só não voltava.
+
+   O QUE MUDOU
+   1. a linha da compra nasce com o "vem com" que o material já tem, e
+      avisa que foi o app que preencheu;
+   2. a varredura "Conferir preços" agora GRAVA o que ela escreve em "Vem" —
+      antes ele servia só para calcular o preço daquela vez e se perdia;
+   3. o valor fica nos DOIS lugares onde o material mora (cadastro da
+      compra e estoque), como manda a regra de 12/10.
+   ⚠️ Material já cadastrado errado continua errado até ela passar a
+   varredura — mas agora passa UMA vez, não a cada compra.
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  function chave(s){
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+
+  /* quanto vem em cada embalagem deste material, se o app já souber */
+  window._rendeDoMaterial = function(nome){
+    var k = chave(nome); if (!k) return 0;
+    var r = 0;
+    try {
+      (typeof catalogo !== 'undefined' ? catalogo : []).forEach(function(c){
+        if (c && chave(c.nome) === k && parseFloat(c.rende) > 1) r = parseFloat(c.rende);
+      });
+    } catch(e){}
+    if (!r) {
+      try {
+        (typeof estoque !== 'undefined' ? estoque : []).forEach(function(e){
+          if (e && chave(e.nome) === k && parseFloat(e.rende) > 1) r = parseFloat(e.rende);
+        });
+      } catch(e){}
+    }
+    return r || 0;
+  };
+
+  /* grava nos DOIS lugares onde o material pode morar (regra de 12/10) */
+  window._gravarRende = function(nome, r){
+    r = parseFloat(r) || 0;
+    if (!(r > 1)) return 0;
+    var k = chave(nome), n = 0;
+    try {
+      (typeof catalogo !== 'undefined' ? catalogo : []).forEach(function(c){
+        if (c && chave(c.nome) === k) { c.rende = r; c.updatedAt = Date.now(); n++; }
+      });
+    } catch(e){}
+    try {
+      (typeof estoque !== 'undefined' ? estoque : []).forEach(function(e){
+        if (e && chave(e.nome) === k) { e.rende = r; e.updatedAt = Date.now(); n++; }
+      });
+    } catch(e){}
+    return n;
+  };
+
+  /* ── 1. A VARREDURA GRAVA O "VEM" ────────────────────────────────── */
+  var salvarOrig = window._salvarConfPrecos;
+  if (typeof salvarOrig === 'function') {
+    window._salvarConfPrecos = function(){
+      /* lê os "Vem" ANTES: o original fecha a janela */
+      var vems = [];
+      try {
+        (window._confPrecoLista || []).forEach(function(m, i){
+          var lin = document.querySelector('#modal-conf-precos .cp-lin[data-i="' + i + '"]');
+          if (!lin) return;
+          var d = parseFloat((lin.querySelector('.cp-div') || {}).value) || 0;
+          if (d > 1) vems.push({ nome: m.nome, rende: d });
+        });
+      } catch(e){}
+
+      var r = salvarOrig.apply(this, arguments);
+
+      /* 🔴 o que ela escreveu em "Vem" passa a FICAR no material */
+      var n = 0;
+      vems.forEach(function(v){ if (window._gravarRende(v.nome, v.rende)) n++; });
+      if (n) {
+        try { save(); } catch(e){}
+        setTimeout(function(){
+          toast('Guardei quantos vêm no pacote de ' + n +
+                (n === 1 ? ' material' : ' materiais') + ' — não precisa digitar de novo');
+        }, 900);
+      }
+      return r;
+    };
+  }
+
+  /* ── 2. A LINHA DA COMPRA JÁ NASCE SABENDO ───────────────────────── */
+  function preencherRende(i){
+    try {
+      var l = (typeof _estLinhas !== 'undefined' ? _estLinhas : [])[i];
+      if (!l || !l.nome) return false;
+      if (parseFloat(l.rende) > 0) return false;        /* ela já escreveu: não mexe */
+      var r = window._rendeDoMaterial(l.nome);
+      if (!(r > 1)) return false;
+      l.rende = r;
+      l.rendeAuto = true;                                /* para a tela avisar */
+      return true;
+    } catch(e){ return false; }
+  }
+
+  var updOrig = window._updEstLinhaFin;
+  if (typeof updOrig === 'function') {
+    window._updEstLinhaFin = function(i, campo, val){
+      var r = updOrig.apply(this, arguments);
+      if (campo === 'nome') {
+        if (preencherRende(i)) {
+          try {
+            if (typeof _renderEstLinhasFin === 'function') _renderEstLinhasFin();
+            var l = _estLinhas[i];
+            toast('Já sei: vem ' + l.rende + ' em cada ' + (l.un || 'un'));
+          } catch(e){}
+        }
+      }
+      return r;
+    };
+  }
+
+  var addOrig = window._addEstLinhaFin;
+  if (typeof addOrig === 'function') {
+    window._addEstLinhaFin = function(nome, qtd, un, valor){
+      var r = addOrig.apply(this, arguments);
+      try {
+        var i = (typeof _estLinhas !== 'undefined' ? _estLinhas.length : 0) - 1;
+        if (i >= 0 && preencherRende(i) && typeof _renderEstLinhasFin === 'function') {
+          _renderEstLinhasFin();
+        }
+      } catch(e){}
+      return r;
+    };
+  }
 })();
 </script>
 
