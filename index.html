@@ -10343,7 +10343,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v21/11-c106';
+  var ver='v22/11-c107';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -17743,6 +17743,169 @@ else appLockInit();
       return r;
     };
   }
+})();
+</script>
+
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+   VER OS MATERIAIS CADASTRADOS NA HORA DA COMPRA — 22/11/2026
+
+   Palavras dela: *"no financeiro, quando vou lançar uma despesa que é
+   material de estoque, não abre em formato de lista o que já está
+   cadastrado."*
+
+   🔴 É O MESMO DEFEITO DE 22/10, EM OUTRA TELA.
+   O campo do material tem só um `datalist` (`f-est-datalist`), que **não
+   abre sozinho**: ela teria de adivinhar as primeiras letras, e no celular
+   quase não funciona. No pedido isso foi resolvido em 22/10 com a janela
+   "Escolher do catálogo"; aqui ficou para trás.
+
+   O QUE MUDOU
+   - botão **"Ver materiais"** em cada linha da compra e **tocar no campo
+     vazio** também abre;
+   - a janela lista o que ela JÁ TEM, em ordem alfabética, com quanto tem em
+     estoque e o preço de hoje, com busca que ignora acento;
+   - escolher preenche nome e unidade — e o "vem com" entra sozinho, pela
+     regra de 21/11, então o preço por unidade sai certo.
+   ⚠️ O datalist continua, para quem digita rápido. Nada foi tirado.
+   ══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  function esc(s){ return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function chave(s){
+    return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  function porId(id){ return document.getElementById(id); }
+
+  function materiais(){
+    var lista = [];
+    try { lista = (window._todosOsMateriais() || []).slice(); } catch(e){}
+    return lista.sort(function(a, b){
+      return String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR', { sensitivity: 'base' });
+    });
+  }
+
+  window._lmBusca = '';
+
+  window._abrirListaMateriaisCompra = function(i){
+    window._lmLinha = i;
+    window._lmBusca = '';
+    window._lmItens = materiais();
+    desenhar();
+  };
+
+  function desenhar(){
+    var mod = porId('modal-mat-compra');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-mat-compra';
+      document.body.appendChild(mod);
+    }
+    var termo = chave(window._lmBusca);
+    var lista = (window._lmItens || []).filter(function(m){
+      return !termo || chave(m.nome).indexOf(termo) >= 0;
+    });
+
+    mod.innerHTML =
+      '<div class="modal" style="max-height:90vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Escolher material</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+        '<input type="search" id="lm-busca" class="form-input" placeholder="🔎 Buscar material" ' +
+          'value="' + esc(window._lmBusca) + '" oninput="_lmFiltrar(this.value)" ' +
+          'style="font-size:14px;margin-bottom:8px">' +
+        (lista.length
+          ? '<div style="display:flex;flex-direction:column;gap:6px">' +
+            lista.map(function(m, j){
+              var idx = (window._lmItens || []).indexOf(m);
+              return '<button type="button" onclick="_lmEscolher(' + idx + ')" ' +
+                'style="display:flex;justify-content:space-between;align-items:center;gap:10px;' +
+                'text-align:left;background:#fff;border:1.5px solid #e9e9ef;border-radius:11px;' +
+                'padding:10px 12px;cursor:pointer;width:100%">' +
+                '<div style="flex:1;min-width:0">' +
+                  '<div style="font-size:13.5px;font-weight:700;color:var(--brown)">' + esc(m.nome) + '</div>' +
+                  '<div style="font-size:10.5px;color:var(--gray-d)">tem ' +
+                    (m.qtd || 0) + ' ' + esc(m.un || 'un') +
+                    (m.custo > 0 ? (' · ' + window._dinheiro(m.custo) + ' cada') : ' · sem preço') +
+                  '</div>' +
+                '</div>' +
+              '</button>';
+            }).join('') + '</div>'
+          : '<div style="font-size:12.5px;color:var(--gray-d);padding:6px 2px">' +
+            'Nenhum material com esse nome. Feche e escreva o nome — ele é cadastrado ao salvar.</div>') +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button class="btn btn-outline" style="flex:1" onclick="closeModal(\'modal-mat-compra\')">' +
+          'Fechar — vou escrever um novo</button>' +
+      '</div></div>';
+    openModal('modal-mat-compra');
+  }
+
+  window._lmFiltrar = function(v){
+    window._lmBusca = v;
+    var foco = document.activeElement === porId('lm-busca');
+    desenhar();
+    if (foco) { var c = porId('lm-busca'); if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); } }
+  };
+
+  window._lmEscolher = function(idx){
+    var m = (window._lmItens || [])[idx];
+    var i = window._lmLinha;
+    closeModal('modal-mat-compra');
+    if (!m || i == null) return;
+    setTimeout(function(){
+      try {
+        /* o mesmo caminho de quando ela digita: o "vem com" entra sozinho
+           (regra de 21/11) e a unidade vem do cadastro */
+        window._updEstLinhaFin(i, 'nome', m.nome);
+        if (m.un) window._updEstLinhaFin(i, 'un', m.un);
+        if (typeof _renderEstLinhasFin === 'function') _renderEstLinhasFin();
+        toast(m.nome);
+      } catch(e){}
+    }, 160);
+  };
+
+  /* ── OS CAMINHOS ATÉ A LISTA ─────────────────────────────────────── */
+  var renderOrig = window._renderEstLinhasFin;
+  if (typeof renderOrig === 'function') {
+    window._renderEstLinhasFin = function(){
+      var r = renderOrig.apply(this, arguments);
+      try { porBotoes(); } catch(e){}
+      return r;
+    };
+  }
+
+  function porBotoes(){
+    var box = porId('f-est-linhas'); if (!box) return;
+    var campos = box.querySelectorAll('input[list="f-est-datalist"]');
+    [].slice.call(campos).forEach(function(campo, i){
+      if (campo.dataset.temLista) return;
+      campo.dataset.temLista = '1';
+
+      /* tocar no campo VAZIO abre a lista; com texto dentro, deixa editar */
+      campo.addEventListener('focus', function(){
+        if (String(campo.value || '').trim()) return;
+        if (!materiais().length) return;
+        campo.blur();
+        window._abrirListaMateriaisCompra(i);
+      });
+
+      var bt = document.createElement('button');
+      bt.type = 'button';
+      bt.textContent = 'Ver materiais';
+      bt.setAttribute('onclick', '_abrirListaMateriaisCompra(' + i + ')');
+      bt.style.cssText = 'font-size:11px;font-weight:700;padding:7px 10px;margin-left:6px;' +
+        'background:var(--cyan-l);color:var(--cyan-d);border:none;border-radius:9px;' +
+        'cursor:pointer;white-space:nowrap;flex-shrink:0';
+      if (campo.parentNode) campo.parentNode.insertBefore(bt, campo.nextSibling);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', function(){ try { porBotoes(); } catch(e){} });
+  try { porBotoes(); } catch(e){}
 })();
 </script>
 
