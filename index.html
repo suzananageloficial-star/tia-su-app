@@ -1140,6 +1140,14 @@ window._imgMarca = function(classe){
         <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 7h10"/><path d="m5 11 2-4 2 4a2 2 0 0 1-4 0Z"/><path d="m15 11 2-4 2 4a2 2 0 0 1-4 0Z"/></svg>
         Conferir preços dos materiais
       </button>
+      <button type="button" onclick="_abrirTabelaFestball()" id="btn-tabela-festball"
+        style="width:100%;display:flex;align-items:center;justify-content:center;gap:8px;
+               background:var(--pink);color:#fff;border:none;border-radius:12px;
+               padding:13px;font-size:14px;font-weight:800;cursor:pointer;
+               margin-bottom:12px;box-shadow:var(--shadow-s)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="9" rx="6" ry="7"/><path d="M12 16v2c0 2-2 2-2 4"/></svg>
+        Atualizar preços dos balões (Arriba)
+      </button>
       <div class="section-title">Todos os materiais</div>
       <div style="margin-bottom:8px"><input type="search" id="estoque-busca" placeholder="🔎 Buscar item pelo nome" oninput="_setBuscaEstoque(this.value)" class="form-input" style="font-size:13px"></div>
       <div style="margin-bottom:8px"><select class="form-select" id="estoque-filtro-cat" onchange="renderEstoque()" style="font-size:13px"><option value="">Todas as categorias</option></select></div>
@@ -17906,6 +17914,234 @@ else appLockInit();
 
   document.addEventListener('DOMContentLoaded', function(){ try { porBotoes(); } catch(e){} });
   try { porBotoes(); } catch(e){}
+})();
+</script>
+
+<script>
+/* ══ TABELA DO FORNECEDOR — BALÕES FESTBALL (26/11/2026) ═════════════
+
+   "Segue tabela de valores dos balões, já coloca 10% de aumento, consegue
+   ajustar em tudo o que tem no app, quantidades e valores para cada
+   tamanho" (Suzana, 26/11/2026).
+
+   Tabela da Arriba (Festball), preço do PACOTE, já com +10%. O app guarda
+   o preço de UM balão, então aqui ele divide pelo que vem no pacote e grava
+   também quantos vêm (rende) e o preço do pacote.
+
+   Seguro: (1) ela baixa o backup antes; (2) vê cada cor com o preço antigo
+   e o novo; (3) só grava o que ficar marcado. Não mexe no preço de VENDA
+   dos kits, só no custo (igual ao "Conferir preços").                     */
+(function(){
+  var AUMENTO = 1.10;
+  /* preço do fornecedor SEM o aumento — o +10% é aplicado embaixo */
+  var TABELA = {
+    liso:       { nome:'Liso / Candy', t:{ '5':[50,8.9], '9':[50,13.9], '12':[25,15.9], '16':[12,17.9], 'big':[1,8.9], '260':[25,6.9], '260b':[50,12.9] } },
+    cromado:    { nome:'Cromado',      t:{ '5':[25,8.9], '9':[25,22.9], '12':[25,34.9], '16':[12,34.9] } },
+    neon:       { nome:'Neon',         t:{ '5':[50,9.9], '9':[50,17.9], '12':[25,20.9], '16':[12,20.9], 'big':[1,9.9], '260':[25,7.9], '260b':[50,13.9] } },
+    perolizado: { nome:'Perolizado',   t:{ '5':[50,11.9], '9':[50,19.9], '12':[25,23.9], '16':[12,22.9] } }
+  };
+  var ORDEM_TAM = ['5','9','12','16','big','260'];
+  var ROT_TAM = { '5':'5"', '9':'9"', '12':'12"', '16':'16"', 'big':'Big', '260':'260' };
+  window._fbPac260 = window._fbPac260 || '25';   /* 260: pacote de 25 (mais caro por balão) */
+
+  function R2(v){ return Math.round((parseFloat(v)||0) * 100) / 100; }
+  function arred(v){ return window._arredPreco ? window._arredPreco(v) : R2(v); }
+  function norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim(); }
+  function h(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function rs(v){ return 'R$ ' + (parseFloat(v)||0).toFixed(2).replace('.', ','); }
+
+  /* pacote e preço (com +10%) de uma linha/tamanho */
+  function itemTabela(linha, tam){
+    var L = TABELA[linha]; if (!L) return null;
+    var k = (tam === '260' && window._fbPac260 === '50') ? '260b' : tam;
+    var r = L.t[k]; if (!r) return null;
+    var pac = R2(r[1] * AUMENTO);
+    return { emb: r[0], pacote: pac, unit: arred(pac / r[0]) };
+  }
+
+  /* lê o nome (e tipo/tamanho do cadastro, se houver) e diz linha + tamanho */
+  function classificar(nome, tipo, tam){
+    var n = norm(nome + ' ' + (tipo||'') + ' ' + (tam||''));
+    var nn = norm(nome);
+    if (!/bal[aã]o|\bbal\b|festball/.test(nn) && !/bal[aã]o/.test(norm(tipo))) return null;
+    if (window._naoEBalao && window._naoEBalao(nome)) return null;
+    /* o que não está na tabela da Festball */
+    if (/foil|bubble|confete|transparent|cristal|glitter|\bled\b|estampad|impress|personaliz|numero|letra|coracao|estrela|metalizado foil|orbz|esfera|cascata|mini ?balao/.test(n)) return null;
+
+    var t = null;
+    if (/\bbig\b|gigante/.test(n)) t = 'big';
+    else if (/(^|[^0-9])260([^0-9]|$)|canudo|palito de balao/.test(n)) t = '260';
+    else {
+      var achados = {};
+      (n.match(/(^|[^0-9,.])(5|9|12|16)(?=[^0-9,.]|$)/g) || []).forEach(function(x){ achados[x.replace(/[^0-9]/g,'')] = 1; });
+      var ks = Object.keys(achados);
+      if (ks.length !== 1) return null;
+      t = ks[0];
+    }
+
+    var linha, duvida = '';
+    if (/cromad|metaliz|chrome/.test(n)) linha = 'cromado';
+    else if (/neon/.test(n)) linha = 'neon';
+    else if (/perol|perliz|perola/.test(n)) linha = 'perolizado';
+    else {
+      linha = 'liso';
+      if (!/\blis[oa]\b|candy|macaron|pastel/.test(n)) {
+        /* sem dizer a linha: dourado/prata quase sempre é cromado */
+        if (/dourad|ouro|gold|prata|prateado|bronze|cobre/.test(n)) duvida = 'Não diz se é liso ou cromado';
+        else if (!(window._AT_CORES || []).some(function(c){ return new RegExp('(^| )' + c + '( |$)').test(n); }))
+          duvida = 'Sem cor no nome (parece o genérico)';
+      }
+    }
+    var it = itemTabela(linha, t);
+    if (!it) return null;
+    return { linha: linha, tam: t, emb: it.emb, pacote: it.pacote, unit: it.unit, duvida: duvida };
+  }
+
+  /* todos os balões cadastrados (materiais da compra + estoque), uma vez cada nome */
+  function montarLista(){
+    var out = [], visto = {};
+    function add(nome, custo, tipo, tam){
+      var k = norm(nome); if (!k || visto[k]) return; visto[k] = 1;
+      var c = classificar(nome, tipo, tam); if (!c) return;
+      c.nome = nome; c.antes = parseFloat(custo) || 0;
+      c.marcado = !c.duvida;
+      out.push(c);
+    }
+    (typeof catalogo !== 'undefined' ? catalogo : []).forEach(function(p){
+      if (!p || !p.avulso || !p.nome) return;
+      if (window._ehMaterial && !window._ehMaterial(p)) return;   /* produto da vitrine não é balão solto */
+      add(p.nome, p.custo, p.tipo, p.tam);
+    });
+    (typeof estoque !== 'undefined' ? estoque : []).forEach(function(e){
+      if (e && e.nome) add(e.nome, e.preco, e.tipo, e.tam);
+    });
+    var ordL = { liso:0, cromado:1, neon:2, perolizado:3 };
+    return out.sort(function(a,b){
+      return (a.duvida?1:0) - (b.duvida?1:0) || ordL[a.linha] - ordL[b.linha] ||
+             ORDEM_TAM.indexOf(a.tam) - ORDEM_TAM.indexOf(b.tam) || String(a.nome).localeCompare(String(b.nome), 'pt-BR');
+    });
+  }
+
+  function htmlTabela(){
+    var linhas = '';
+    Object.keys(TABELA).forEach(function(l){
+      linhas += '<tr><td colspan="4" style="background:var(--pink-l,#FDE7F0);font-weight:800;padding:5px 6px">' + h(TABELA[l].nome) + '</td></tr>';
+      ORDEM_TAM.forEach(function(t){
+        var it = itemTabela(l, t); if (!it) return;
+        linhas += '<tr><td style="padding:3px 6px">' + ROT_TAM[t] + '</td><td style="text-align:center">' + (it.emb > 1 ? it.emb + ' un' : 'unidade') +
+          '</td><td style="text-align:right">' + rs(it.pacote) + '</td><td style="text-align:right;font-weight:700">' + rs(it.unit) + '</td></tr>';
+      });
+    });
+    return '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+      '<tr style="color:var(--gray-d);font-size:10.5px"><th style="text-align:left;padding:3px 6px">Tam.</th><th>Pacote</th><th style="text-align:right">Preço +10%</th><th style="text-align:right">Cada</th></tr>' +
+      linhas + '</table>';
+  }
+
+  window._abrirTabelaFestball = function(){
+    var lista = window._fbLista = montarLista();
+    var mod = document.getElementById('modal-festball');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay'; mod.id = 'modal-festball';
+      document.body.appendChild(mod);
+    }
+    var cor = lista.map(function(m, i){
+      var sobe = m.unit > m.antes + 0.004, desce = m.unit < m.antes - 0.004;
+      return '<label style="display:flex;gap:8px;align-items:flex-start;padding:7px 4px;border-bottom:1px solid #f0f0f0;cursor:pointer">' +
+        '<input type="checkbox" class="fb-chk" data-i="' + i + '"' + (m.marcado ? ' checked' : '') + ' onchange="_fbContar()" style="width:18px;height:18px;margin-top:1px;flex-shrink:0;accent-color:#E91E63">' +
+        '<span style="flex:1;font-size:12.5px;line-height:1.35"><b>' + h(m.nome) + '</b><br>' +
+          '<span style="color:var(--gray-d);font-size:11px">' + TABELA[m.linha].nome + ' ' + ROT_TAM[m.tam] + ' · pacote ' + (m.emb > 1 ? m.emb + ' un' : 'unidade') + ' ' + rs(m.pacote) + '</span>' +
+          (m.duvida ? '<br><span style="color:var(--orange);font-size:11px;font-weight:700">' + h(m.duvida) + ' — confira antes de marcar</span>' : '') +
+        '</span>' +
+        '<span style="text-align:right;font-size:12px;white-space:nowrap">' +
+          '<span style="color:var(--gray-d);text-decoration:line-through">' + (m.antes > 0 ? rs(m.antes) : 'sem preço') + '</span><br>' +
+          '<b style="color:' + (sobe ? 'var(--red)' : desce ? 'var(--green)' : 'inherit') + '">' + rs(m.unit) + '</b>' +
+        '</span></label>';
+    }).join('');
+
+    mod.innerHTML = '<div class="modal"><div class="modal-handle"></div>' +
+      '<div class="modal-title">Preços dos balões — Arriba / Festball</div>' +
+      '<div class="modal-body">' +
+        '<div style="font-size:12px;color:var(--gray-d);margin-bottom:8px;line-height:1.45">Tabela do fornecedor já com <b>+10%</b>. "Cada" é o custo de um balão, que entra nos pedidos e kits.</div>' +
+        '<details style="margin-bottom:10px"><summary style="font-weight:800;font-size:13px;cursor:pointer;color:var(--cyan-d)">Ver a tabela</summary>' +
+          '<div style="margin-top:6px">' + htmlTabela() + '</div>' +
+          '<div style="font-size:11.5px;margin-top:8px">Balão 260: usar o pacote de ' +
+            '<select onchange="window._fbPac260=this.value;_abrirTabelaFestball()" style="font-size:12px;padding:2px 4px">' +
+              '<option value="25"' + (window._fbPac260 === '25' ? ' selected' : '') + '>25 un</option>' +
+              '<option value="50"' + (window._fbPac260 === '50' ? ' selected' : '') + '>50 un</option></select></div>' +
+        '</details>' +
+        '<div style="font-weight:800;font-size:13px;margin:4px 0">Seus balões que vão mudar</div>' +
+        (lista.length
+          ? '<div style="max-height:42dvh;overflow-y:auto;border:1px solid #eee;border-radius:10px;padding:0 6px">' + cor + '</div>'
+          : '<div style="padding:14px;text-align:center;color:var(--gray-d);font-size:13px">Não achei balão Liso, Cromado, Neon ou Perolizado (5", 9", 12", 16", Big ou 260) nos seus materiais.</div>') +
+        '<div style="font-size:11px;color:var(--gray-d);margin-top:8px;line-height:1.45">Os pedidos já salvos não mudam. Os kits que usam esses balões têm o custo refeito; o preço de venda continua o seu.</div>' +
+      '</div>' +
+      '<div class="form-actions" style="flex-wrap:wrap">' +
+        '<button class="btn btn-outline" onclick="closeModal(\'modal-festball\')">Fechar</button>' +
+        '<button class="btn btn-cyan" id="fb-bkp" onclick="_fbBackup()" style="flex:1">1. Baixar backup</button>' +
+        '<button class="btn btn-pink" id="fb-ok" onclick="_fbAplicar()" style="flex:1;opacity:.45" ' + (lista.length ? '' : 'disabled') + '>2. Atualizar</button>' +
+      '</div></div>';
+    openModal('modal-festball');
+    window._fbContar();
+  };
+
+  window._fbContar = function(){
+    var n = document.querySelectorAll('#modal-festball .fb-chk:checked').length;
+    var b = document.getElementById('fb-ok');
+    if (b) {
+      b.textContent = '2. Atualizar ' + n + (n === 1 ? ' preço' : ' preços');
+      b.style.opacity = window._fbBackupFeito ? '1' : '.45';
+    }
+  };
+
+  window._fbBackup = function(){
+    try { exportData(); window._fbBackupFeito = true; } catch(e){ toast('Não consegui baixar o backup: ' + e.message); return; }
+    var b = document.getElementById('fb-bkp'); if (b) b.textContent = '✓ Backup baixado';
+    window._fbContar();
+  };
+
+  window._fbAplicar = function(){
+    if (!window._fbBackupFeito) { toast('Primeiro baixe o backup (botão 1)'); return; }
+    var lista = window._fbLista || [];
+    var esc = [];
+    document.querySelectorAll('#modal-festball .fb-chk:checked').forEach(function(c){
+      var m = lista[parseInt(c.dataset.i, 10)]; if (m) esc.push(m);
+    });
+    if (!esc.length) { toast('Nenhum balão marcado'); return; }
+    if (!confirm('Atualizar o custo de ' + esc.length + (esc.length > 1 ? ' balões' : ' balão') + ' pela tabela Arriba/Festball (+10%)?')) return;
+
+    var agora = Date.now();
+    esc.forEach(function(m){
+      if (window._aplicarPrecoMaterial) window._aplicarPrecoMaterial(m.nome, m.unit);
+      var k = norm(m.nome);
+      (typeof catalogo !== 'undefined' ? catalogo : []).forEach(function(c){
+        if (c && c.avulso && norm(c.nome) === k) {
+          c.custo = m.unit; c.matCusto = m.unit; c.updatedAt = agora;
+          if (m.emb > 1) { c.rende = m.emb; c.un = 'un'; } else delete c.rende;
+          c.precoEmb = m.pacote; c.qtdEmb = m.emb; c.fornPreco = 'Arriba/Festball 26/11/2026 +10%';
+        }
+      });
+      (typeof estoque !== 'undefined' ? estoque : []).forEach(function(e){
+        if (e && norm(e.nome) === k) {
+          e.preco = m.unit; e.updatedAt = agora;
+          e.precoEmb = m.pacote; e.qtdEmb = m.emb;
+          if (!e.forn) e.forn = 'Arriba';
+        }
+      });
+    });
+    var kits = [];
+    try { kits = window._recalcularProdutos ? (window._recalcularProdutos(esc.map(function(m){ return m.nome; })) || []) : []; } catch(e){}
+    save();
+    closeModal('modal-festball');
+    try { if (typeof renderEstoque === 'function') renderEstoque(); } catch(e){}
+    try { if (typeof renderScreen === 'function' && typeof currentScreen !== 'undefined') renderScreen(currentScreen); } catch(e){}
+    toast('✅ ' + esc.length + (esc.length > 1 ? ' balões atualizados' : ' balão atualizado') +
+          (kits.length ? ' · ' + kits.length + (kits.length > 1 ? ' kits refeitos' : ' kit refeito') : ''));
+  };
+
+  /* para conferir sem abrir a tela (testes) */
+  window._fbClassificar = classificar;
+  window._fbItemTabela = itemTabela;
 })();
 </script>
 
