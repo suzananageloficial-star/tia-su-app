@@ -10351,7 +10351,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v22/11-c107';
+  var ver='v26/11-c109';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -16484,7 +16484,7 @@ else appLockInit();
       marcarCoresFaladas(cores);
       var esperar = setInterval(function(){
         var mod = porId('modal-cores-item');
-        var aberto = mod && (mod.classList.contains('active') || mod.style.display === 'flex');
+        var aberto = mod && (mod.classList.contains('open') || mod.classList.contains('active') || mod.style.display === 'flex');
         if (!aberto) { clearInterval(esperar); setTimeout(proxima, 250); }
       }, 350);
     })();
@@ -17294,7 +17294,16 @@ else appLockInit();
 
     mod.innerHTML =
       '<div class="modal" style="max-height:90vh"><div class="modal-handle"></div>' +
-      '<div class="modal-title">Cores de ' + esc(a.generico) + '</div>' +
+      /* 🔴 26/11 — A JANELA SEMPRE FECHA. Palavras dela: *"não consegui nem
+         fechar ela"*. Não havia X, e tocar fora não fecha janela com campo.
+         Agora: X no título, Esc, e tocar fora enquanto nada foi escrito. */
+      '<div class="modal-title" style="display:flex;align-items:center;gap:8px">' +
+        '<span style="flex:1;min-width:0">Cores de ' + esc(a.generico) + '</span>' +
+        '<button type="button" onclick="_corFechar()" aria-label="Fechar" title="Fechar" ' +
+          'style="flex-shrink:0;width:34px;height:34px;border-radius:50%;border:none;' +
+          'background:var(--gray);color:var(--brown);font-size:18px;font-weight:700;' +
+          'line-height:1;cursor:pointer">✕</button>' +
+      '</div>' +
       '<div class="modal-body" style="overflow:auto">' +
 
         '<div style="background:var(--cyan-l);border-radius:10px;padding:10px 12px;font-size:12.5px;' +
@@ -17382,7 +17391,29 @@ else appLockInit();
         '<button class="btn btn-pink" style="flex:1" onclick="_corAplicar()">Usar estas cores</button>' +
       '</div></div>';
     openModal('modal-cores-item');
+    /* tocar fora fecha, mas só se ela ainda não escreveu nenhuma quantidade
+       (para não perder o que já repartiu com um toque sem querer) */
+    mod.onclick = function(e){
+      if (e.target !== e.currentTarget) return;
+      var al = window._corAlvo;
+      if (al && Object.keys(al.escolhas || {}).length) {
+        toast('Para sair, toque no ✕ (as cores escritas não serão usadas)');
+        return;
+      }
+      window._corFechar();
+    };
   }
+
+  /* ✕ / Esc: fecha e NÃO abre a próxima linha — ela escolhe na linha depois */
+  window._corFechar = function(){
+    window._corAlvo = null;
+    try { closeModal('modal-cores-item'); } catch(e){}
+  };
+  document.addEventListener('keydown', function(e){
+    if (e.key !== 'Escape') return;
+    var m = porId('modal-cores-item');
+    if (m && m.classList.contains('open')) window._corFechar();
+  });
 
   /* números por extenso, do jeito que ela fala */
   var NUM = { um:1, uma:1, dois:2, duas:2, tres:3, quatro:4, cinco:5, seis:6, sete:7, oito:8,
@@ -18142,6 +18173,126 @@ else appLockInit();
   /* para conferir sem abrir a tela (testes) */
   window._fbClassificar = classificar;
   window._fbItemTabela = itemTabela;
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     TAXA NÃO TEM COR — 26/11/2026
+     Palavras dela: *"coloquei taxa uber e aparece essa tela (cores de balão
+     5"). Não consegui nem fechar ela. Isso tem que ser só para coisas que
+     tem cor."*
+
+     🔴 POR QUE ACONTECIA
+     `_fichaDoHistorico` (22/10) monta a receita de um item olhando o último
+     pedido que teve aquele item — mas pegava os materiais do PEDIDO INTEIRO,
+     não só os do item. A "Taxa Uber" estava num pedido junto com um arranjo,
+     então herdava os balões do arranjo, e a janela de cores abria. Pior:
+     `_gravarFichaDoHistorico` gravava essa receita errada na ficha da taxa,
+     e a montagem do aparelho também guardava — o erro se repetia.
+
+     O QUE MUDA
+     1. Item que é taxa/serviço (Uber, entrega, frete, motoboy, correios,
+        montagem, instalação, deslocamento) nunca puxa receita e nunca abre
+        a janela de cores — mesmo que a ficha antiga esteja suja.
+     2. A receita do histórico usa só os materiais DAQUELE item (o pedido
+        guarda isso em `it.mats`). Pedido antigo sem essa informação só vale
+        se tiver um único item de verdade.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  function chave(s){
+    s = String(s || '').toLowerCase().trim()
+      .replace(/[“”″]/g, '"').replace(/[‘’]/g, "'");
+    s = s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s;
+    return s.replace(/\s+/g, ' ');
+  }
+
+  /* item cobrado como serviço/taxa: não tem material nem cor */
+  window._itemEhTaxa = function(nome){
+    var k = chave(nome);
+    if (!k) return false;
+    if (/^taxa\b/.test(k)) return true;
+    if (/\b(uber|99 ?pop|frete|motoboy|correios?|sedex|deslocamento)\b/.test(k)) return true;
+    if (/\bentrega\b/.test(k)) return true;
+    /* montagem/instalação só quando o item É o serviço ("Montagem",
+       "Montagem e desmontagem"), não um produto com essa palavra */
+    return /^(taxa de )?(montagem|desmontagem|instalacao)( e (montagem|desmontagem|instalacao))?$/.test(k);
+  };
+
+  /* 1a. taxa não puxa receita */
+  var receitaOrig = window._receitaDoItem;
+  window._receitaDoItem = function(nome){
+    if (window._itemEhTaxa(nome)) return null;
+    return receitaOrig ? receitaOrig.apply(this, arguments) : null;
+  };
+
+  /* 1b. taxa não abre a janela de cores */
+  function nomeDaLinha(rowId){
+    var row = document.getElementById(rowId);
+    if (!row) return '';
+    var i = row.querySelector('.pi-desc') || row.querySelector('input[type=text]');
+    return i ? String(i.value || '').trim() : '';
+  }
+  var perguntaOrig = window._perguntarCoresDoItem;
+  window._perguntarCoresDoItem = function(rowId){
+    if (window._itemEhTaxa(nomeDaLinha(rowId))) return false;
+    return perguntaOrig ? perguntaOrig.apply(this, arguments) : false;
+  };
+
+  /* 1c. a montagem guardada no aparelho também não grava taxa */
+  var guardarOrig = window._guardarMontagem;
+  if (typeof guardarOrig === 'function') {
+    window._guardarMontagem = function(nome){
+      if (window._itemEhTaxa(nome)) return;
+      return guardarOrig.apply(this, arguments);
+    };
+  }
+
+  /* 2. receita do histórico: só os materiais do próprio item */
+  window._fichaDoHistorico = function(nome){
+    var k = chave(nome);
+    if (!k || window._itemEhTaxa(nome)) return null;
+    var lista = (typeof pedidos !== 'undefined' ? pedidos : []).filter(function(p){
+      if (!p || !p.materiais || !p.materiais.length) return false;
+      return (p.itens || []).some(function(it){ return chave(it && it.nome) === k; });
+    }).sort(function(a, b){
+      return String(b.criadoEm || '').localeCompare(String(a.criadoEm || ''));
+    });
+
+    for (var j = 0; j < lista.length; j++) {
+      var p = lista[j];
+      var item = (p.itens || []).filter(function(it){ return chave(it && it.nome) === k; })[0];
+      var meus = null;                         /* nomes dos materiais deste item */
+      if (item && Array.isArray(item.mats)) {
+        if (!item.mats.length) return null;    /* o item não tinha material */
+        meus = {};
+        item.mats.forEach(function(n){ var c = chave(n); if (c) meus[c] = 1; });
+      } else {
+        /* pedido antigo, sem saber de quem é cada material: só confia se
+           este for o único item de verdade do pedido */
+        var deVerdade = (p.itens || []).filter(function(it){
+          return it && chave(it.nome) && !window._itemEhTaxa(it.nome);
+        });
+        if (deVerdade.length !== 1) continue;
+      }
+
+      var out = [], visto = {};
+      (p.materiais || []).forEach(function(m){
+        if (!m || !m.nome) return;
+        if (meus && !meus[chave(m.nome)]) return;
+        if (window._itemEhTaxa(m.nome)) return;
+        var n = (m.size && String(m.size).trim()) ? String(m.size).trim() : String(m.nome).trim();
+        var ck = chave(n);
+        if (!ck || visto[ck]) return;
+        visto[ck] = 1;
+        out.push({ n: n, q: parseFloat(m.qtd) || 1, v: parseFloat(m.valor) || 0 });
+      });
+      if (out.length) return { mats: out, quando: p.criadoEm || '', cliente: p.cliente || '' };
+    }
+    return null;
+  };
 })();
 </script>
 
