@@ -2824,6 +2824,34 @@ function salvarPedido() {
   // Busca estado anterior (para comparar sinal)
   const anterior = pedidos.find(p=>p.id===id);
 
+  /* 26/11/2026 — EDITAR PEDIDO ENTREGUE DESCONTAVA O ESTOQUE DE NOVO.
+     O formulário monta o pedido do zero, e as anotações que o app guarda
+     nele (quanto de cada material já saiu do estoque, qual lançamento do
+     Financeiro é o recebimento da entrega) se perdiam. Resultado: abrir um
+     pedido entregue, mudar a observação e salvar tirava os materiais do
+     estoque outra vez; e voltar de "Entregue" não devolvia o estoque nem
+     tirava o recebimento do Financeiro. Agora o que o formulário não
+     conhece passa do pedido antigo para o novo. */
+  if (anterior) {
+    Object.keys(anterior).forEach(k => { if (!(k in obj)) obj[k] = anterior[k]; });
+    const _chM = s => String(s||'').toLowerCase().trim();
+    const _antMats = (anterior.materiais||[]).filter(Boolean);
+    const _usados = new Set();
+    obj.materiais.forEach(m => {
+      let a = _antMats.find(x => !_usados.has(x) && x.id && x.id === m.id);
+      if (!a) a = _antMats.find(x => !_usados.has(x) && _chM(x.nome) === _chM(m.nome));
+      if (!a) return;
+      _usados.add(a);
+      if (m.baixado == null && a.baixado != null) m.baixado = a.baixado;
+      if (m.itemId == null && a.itemId != null) m.itemId = a.itemId;
+    });
+    // material tirado de um pedido que já tinha dado baixa: volta para o estoque
+    const _tirados = _antMats.filter(x => !_usados.has(x) && (parseFloat(x.baixado)||0) > 0);
+    if (_tirados.length && typeof sincronizarBaixaPedido === 'function') {
+      try { sincronizarBaixaPedido({ status:'', materiais:_tirados.map(x => Object.assign({}, x)) }, { silent:true }); } catch(e){}
+    }
+  }
+
   // Auto-lança no financeiro — 3 regras:
   if (!id && obj.sinal > 0) {
     // Regra 1: NOVO pedido com sinal pago → lança sinal
@@ -2853,6 +2881,13 @@ function salvarPedido() {
   // (Removido: sinal pago NÃO muda mais o status — fica Pendente até a Suzana mover manualmente)
   // Se mudou para Entregue → abre modal de baixa de estoque
   const virarEntregue = id && obj.status==='Entregue' && anterior?.status!=='Entregue';
+
+  // 26/11/2026 — saiu de "Entregue" pelo formulário: tira o recebimento
+  // que a entrega lançou e devolve o valor pago de antes (igual ao Kanban)
+  if (id && anterior && anterior.status==='Entregue' && obj.status!=='Entregue'
+      && typeof aplicarRecebimentoEntrega === 'function') {
+    try { aplicarRecebimentoEntrega(obj); } catch(e){ console.warn('[pedido] estorno da entrega', e); }
+  }
 
   if(id) { const i=pedidos.findIndex(p=>p.id===id); if(i>=0) pedidos[i]=obj; }
   else pedidos.unshift(obj);
@@ -10351,7 +10386,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v26/11-c109';
+  var ver='v26/11-c110';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -14954,6 +14989,9 @@ else appLockInit();
         '<input type="text" id="lp-busca" placeholder="Buscar pelo nome…" autocomplete="off" ' +
           'oninput="_filtrarListaProdutos()" ' +
           'style="width:100%;padding:11px;border:1.5px solid #e9e9ef;border-radius:10px;font-size:14px;margin-bottom:10px">' +
+        '<button type="button" onclick="_escreverItemNovo()" ' +
+          'style="width:100%;padding:10px;margin-bottom:6px;background:var(--pink-l);color:var(--pink);border:1.5px dashed var(--pink);border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">' +
+          '✏️ Escrever um item que não está aqui</button>' +
         '<div id="lp-lista"></div>' +
       '</div>' +
       '<div class="form-actions"><button class="btn btn-outline" style="flex:1" ' +
@@ -15016,6 +15054,26 @@ else appLockInit();
       }).join('');
     });
     el.innerHTML = html;
+  };
+
+  /* fecha a lista e deixa o cursor na descrição, para digitar à vontade;
+     o que ela já digitou na busca vira o começo do nome */
+  window._escreverItemNovo = function(){
+    var busca = String((document.getElementById('lp-busca') || {}).value || '').trim();
+    var destino = window._listaProdDestino;
+    closeModal('modal-escolher-item');
+    var row = destino ? document.getElementById(destino) : null;
+    if (!row) {
+      adicionarItemPedido('', 1, '');
+      var todas = document.querySelectorAll('#p-itens-lista .item-pedido-row');
+      row = todas[todas.length - 1];
+    }
+    if (!row) return;
+    row.dataset.listaVista = '1';
+    var campo = row.querySelector('.pi-desc') || row.querySelector('input[type=text]');
+    if (!campo) return;
+    if (busca && !String(campo.value || '').trim()) campo.value = busca;
+    setTimeout(function(){ try { campo.focus(); } catch(e){} }, 60);
   };
 
   window._lpVerAntigos = false;
@@ -15093,6 +15151,12 @@ else appLockInit();
     if (String(campo.value || '').trim()) return;          // já tem texto
     if (!document.getElementById('modal-pedido')) return;
     if (!window._itensParaPedido().length) return;
+    /* 26/11/2026 — a lista abre UMA vez por item. Antes ela abria toda vez
+       que a Suzana tocava na descrição vazia: fechava a lista, tocava de
+       novo para escrever um item fora do catálogo e a lista voltava, sem
+       nunca deixar digitar. */
+    if (row.dataset.listaVista === '1') return;
+    row.dataset.listaVista = '1';
     campo.blur();
     window._abrirListaProdutos(row.id);
   });
