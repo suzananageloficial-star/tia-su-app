@@ -269,6 +269,8 @@ h1 em{font-style:normal;color:var(--pink)}
   *{animation:none !important;transition:none !important}
   .card:hover{transform:none}
 }
+.lb-quero{display:inline-flex;margin:12px auto 0}
+.lb-cap .lb-quero{position:relative;z-index:2}
 </style>
 
 </head>
@@ -491,7 +493,14 @@ function pintar(){
   lbImg.alt = desc;
   lbCap.innerHTML = "<b>" + KINDS[kind].label + "</b>" + desc
     + '<span class="lb-preco">' + (kind === "festa" ? "a partir de " : "")
-    + reais(preco) + "</span>";
+    + reais(preco) + "</span>"
+    + '<a class="btn btn-zap lb-quero" target="_blank" rel="noopener" href="' + linkZap(desc, preco, kind) + '">Quero este</a>';
+}
+/* 26/11/2026 — o WhatsApp já chega dizendo qual foto a cliente escolheu */
+function linkZap(desc, preco, kind){
+  const txt = "Olá, Tia Sú! Vi no catálogo e quero um orçamento deste: "
+    + desc + " (" + (kind === "festa" ? "a partir de " : "") + reais(preco) + ").";
+  return "https://wa.me/5551920000199?text=" + encodeURIComponent(txt);
 }
 function fechar(){
   lb.removeAttribute("open-state");
