@@ -10386,7 +10386,7 @@ window._tentarSyncAgora = function(){
 };
 
 window._textoSync = function(agora){
-  var ver='v26/11-c110';
+  var ver='v27/11-c111';
   var e=window._syncEstado||{}, t=0;
   try{ t=parseFloat(localStorage.getItem('ts_ultimaSync')||'0'); }catch(x){}
   agora = agora || Date.now();
@@ -18356,6 +18356,319 @@ else appLockInit();
       if (out.length) return { mats: out, quando: p.criadoEm || '', cliente: p.cliente || '' };
     }
     return null;
+  };
+})();
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     MATERIAL FALADO — 27/11/2026
+     Palavras dela: *"no adicionar item, adicionar material dentro daquele
+     item, ele não reconheceu quando eu fui fazer no ditado (...) ele não
+     puxa a coisa certa. Eu não consegui fechar também a aba."*
+
+     🔴 POR QUE ACONTECIA
+     A busca do campo de material procurava a frase INTEIRA, colada, dentro
+     do nome. Falando "balão 9 rosa" (ou "balão de 9 polegadas rosa.", com o
+     ponto que o ditado põe), nada casava com `BALÃO 9" LISO ROSA` — e a
+     lista nem aparecia. Quando aparecia, era estreita, sem botão de fechar,
+     e só sumia se o campo perdesse o foco — no celular ela ficava presa por
+     cima dos botões.
+
+     O QUE MUDA
+     1. A busca é palavra por palavra, em qualquer ordem: ignora "de", "com",
+        pontuação, acento, plural ("balões"), "polegadas" e entende número
+        falado por extenso ("nove", "vinte e quatro"). Número tem de bater:
+        9 nunca traz 5.
+     2. Quantidade no começo ("12 balões de 9 rosa") vai para a QTD.
+     3. Não achando tudo, mostra os "parecidos" — nunca escolhe sozinho.
+     4. A lista ocupa a largura do material, tem "✕ Fechar", e fecha ao
+        tocar fora dela.
+     5. O "Ditar o pedido" usa a mesma leitura das palavras.
+     ═══════════════════════════════════════════════════════════════════ -->
+<script>
+(function(){
+  'use strict';
+
+  var VAZIAS = { de:1, da:1, do:1, das:1, dos:1, um:1, uma:1, uns:1, umas:1, o:1, a:1,
+                 os:1, as:1, com:1, para:1, pra:1, e:1, em:1, no:1, na:1, pro:1,
+                 cor:1, cores:1, tamanho:1, tipo:1 };
+  var NUM = { dois:2, duas:2, tres:3, quatro:4, cinco:5, seis:6, sete:7, oito:8, nove:9,
+              dez:10, onze:11, doze:12, treze:13, quatorze:14, catorze:14, quinze:15,
+              dezesseis:16, dezessete:17, dezoito:18, dezenove:19, vinte:20, trinta:30,
+              quarenta:40, cinquenta:50, sessenta:60, setenta:70, oitenta:80, noventa:90,
+              cem:100, cento:100, duzentos:200, trezentos:300 };
+  var UNID = { polegadas:'', polegada:'', pol:'', metros:'m', metro:'m', mts:'m', mt:'m',
+               centimetros:'cm', centimetro:'cm', milimetros:'mm', milimetro:'mm' };
+
+  function singular(p){
+    if (/\d/.test(p) || p.length <= 3) return p;
+    if (/(oes|aes)$/.test(p)) return p.slice(0, -3) + 'ao';
+    if (/ais$/.test(p)) return p.slice(0, -3) + 'al';
+    if (/eis$/.test(p)) return p.slice(0, -3) + 'el';
+    if (/ns$/.test(p))  return p.slice(0, -2) + 'm';
+    if (/[^s]s$/.test(p)) return p.slice(0, -1);
+    return p;
+  }
+
+  /* "Balão de 9 polegadas, rosa." -> ["balao","9","rosa"] */
+  function palavras(s){
+    var t = String(s || '').toLowerCase();
+    t = t.normalize ? t.normalize('NFD').replace(/[̀-ͯ]/g, '') : t;
+    t = t.replace(/[^a-z0-9]+/g, ' ')
+         .replace(/([0-9])([a-z])/g, '$1 $2').replace(/([a-z])([0-9])/g, '$1 $2');
+    var cru = t.split(' ').filter(Boolean), out = [];
+    for (var i = 0; i < cru.length; i++) {
+      var p = cru[i];
+      if (NUM[p] != null) {                      /* "vinte e quatro" = 24 */
+        var soma = NUM[p];
+        while (cru[i + 1] === 'e' && NUM[cru[i + 2]] != null) { soma += NUM[cru[i + 2]]; i += 2; }
+        out.push(String(soma)); continue;
+      }
+      if (UNID[p] != null) { if (UNID[p]) out.push(UNID[p]); continue; }
+      if (VAZIAS[p]) continue;
+      out.push(singular(p));
+    }
+    return out;
+  }
+  window._palavrasDoMaterial = palavras;
+
+  function ehNum(p){ return /^\d+$/.test(p); }
+
+  /* uma palavra falada casa com uma do nome: igual, ou começo dela (digitando) */
+  function casa(falada, doNome, comecoVale){
+    for (var i = 0; i < doNome.length; i++) {
+      var n = doNome[i];
+      if (n === falada) return true;
+      if (comecoVale && !ehNum(falada) && falada.length >= 3 && n.indexOf(falada) === 0) return true;
+    }
+    return false;
+  }
+
+  /* nota de um nome para o que ela falou */
+  function nota(fal, nome){
+    var pn = palavras(nome);
+    var numsNome = pn.filter(ehNum);
+    var acertos = 0, numErrado = false;
+    fal.forEach(function(p){
+      if (casa(p, pn, true)) acertos++;
+      else if (ehNum(p) && numsNome.length) numErrado = true;
+    });
+    return { acertos: acertos, total: fal.length, sobra: pn.length - acertos, numErrado: numErrado };
+  }
+
+  /* procura na lista: completos primeiro (todas as palavras), depois parecidos */
+  function procurar(texto, lista){
+    var fal = palavras(texto);
+    var r = { completos: [], parecidos: [], qtd: 0 };
+    if (!fal.length) return r;
+
+    function rodar(f){
+      var comp = [], par = [];
+      (lista || []).forEach(function(x){
+        if (!x || !x.nome) return;
+        var n = nota(f, x.nome);
+        if (n.numErrado) return;
+        if (n.acertos === n.total) comp.push({ x: x, n: n });
+        else if (n.total >= 2 && n.acertos >= Math.ceil(n.total / 2) &&
+                 f.some(function(p){ return !ehNum(p) && casa(p, palavras(x.nome), true); }))
+          par.push({ x: x, n: n });
+      });
+      comp.sort(function(a, b){ return a.n.sobra - b.n.sobra || String(a.x.nome).localeCompare(String(b.x.nome), 'pt-BR'); });
+      par.sort(function(a, b){ return b.n.acertos - a.n.acertos || a.n.sobra - b.n.sobra; });
+      return { comp: comp.map(function(o){ return o.x; }), par: par.map(function(o){ return o.x; }) };
+    }
+
+    var a = rodar(fal);
+    /* "12 balões de 9 rosa": o primeiro número é a quantidade */
+    if (!a.comp.length && fal.length >= 2 && ehNum(fal[0])) {
+      var b = rodar(fal.slice(1));
+      if (b.comp.length) { r.qtd = parseFloat(fal[0]) || 0; a = b; }
+    }
+    r.completos = a.comp;
+    r.parecidos = a.par.filter(function(x){ return a.comp.indexOf(x) < 0; });
+    return r;
+  }
+  window._procurarMaterialFalado = procurar;
+
+  /* ── A LISTA DE SUGESTÕES ─────────────────────────────────────────── */
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function dinheiro(v){
+    return (typeof window._dinheiro === 'function') ? window._dinheiro(v)
+      : ('R$ ' + (parseFloat(v) || 0).toFixed(2).replace('.', ','));
+  }
+  function caixa(){
+    var box = document.getElementById('mat-sug-box');
+    if (!box) { box = document.createElement('div'); box.id = 'mat-sug-box'; }
+    box.style.cssText = 'position:absolute;left:0;right:0;background:#fff;border:1.5px solid #f3c2d6;' +
+      'border-radius:12px;box-shadow:0 10px 26px rgba(0,0,0,.18);z-index:99999;max-height:300px;' +
+      'overflow:auto;-webkit-overflow-scrolling:touch';
+    return box;
+  }
+  function fechar(){
+    var box = document.getElementById('mat-sug-box');
+    if (box) box.style.display = 'none';
+  }
+  window._matSugFecharJa = fechar;
+
+  /* o blur antigo escondia em 200ms — no celular o toque na lista às vezes
+     chega depois, e a escolha se perdia. Agora o toque fora é que fecha. */
+  window._matSugFechar = function(){
+    setTimeout(function(){
+      var box = document.getElementById('mat-sug-box');
+      if (!box || box.style.display === 'none') return;
+      if (box.dataset.tocando === '1') return;
+      var at = document.activeElement;
+      if (at && at.classList && at.classList.contains('mat-nome') && box.parentNode && box.parentNode.contains(at)) return;
+      fechar();
+    }, 350);
+  };
+
+  function linhaHtml(x, i){
+    var onde = x.estoqueId ? ((x.qtd || 0) + ' ' + (x.un || 'un') + ' em estoque')
+             : (x.custo > 0 ? (dinheiro(x.custo) + ' · ' + (x.origem || '')) : (x.origem || ''));
+    return '<div class="mat-sug-op" data-i="' + i + '" style="padding:11px 12px;font-size:13.5px;' +
+      'cursor:pointer;border-bottom:1px solid #f5eef1;line-height:1.35">' +
+      '<b style="color:var(--brown,#4a2b2b)">' + esc(x.nome) + '</b>' +
+      '<div style="font-size:11.5px;color:#9a8b90">' + esc(onde) + '</div></div>';
+  }
+
+  window._matSugerir = function(rowId){
+    var row = document.getElementById(rowId); if (!row) return;
+    var inp = row.querySelector('.mat-nome'); if (!inp) return;
+    var q = String(inp.value || '').trim();
+    var box = caixa();
+    if (q.length < 2) { box.style.display = 'none'; return; }
+
+    var todos = [];
+    try { todos = window._todosOsMateriais() || []; } catch(e){}
+    var r = procurar(q, todos);
+    var ops = r.completos.slice(0, 12);
+    /* parecidos só quando não há como escolher entre os completos */
+    var par = ops.length >= 2 ? [] : r.parecidos.slice(0, Math.max(0, 15 - ops.length));
+
+    /* "bal" ainda digitando: a palavra solta pode não ter dado nada ainda */
+    if (!ops.length && !par.length && q.length < 4) { box.style.display = 'none'; return; }
+
+    row.style.position = 'relative';
+    if (box.parentNode !== row) row.appendChild(box);
+    box.style.top = (inp.offsetTop + inp.offsetHeight + 4) + 'px';
+    box.style.display = 'block';
+    box._rowId = rowId;
+    box._ops = ops.concat(par);
+    box._qtd = r.qtd;
+
+    var cab = '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;' +
+      'padding:8px 8px 8px 12px;background:#fff5f9;border-bottom:1px solid #f3c2d6;position:sticky;top:0">' +
+      '<span style="font-size:11.5px;font-weight:800;color:var(--pink,#e91e63)">' +
+        (ops.length || par.length ? 'Toque no material certo' : 'Não achei esse material') + '</span>' +
+      '<button type="button" class="mat-sug-x" style="border:none;background:#fff;border:1px solid #f3c2d6;' +
+        'border-radius:9px;padding:6px 10px;font-size:12px;font-weight:800;color:var(--pink,#e91e63);cursor:pointer">✕ Fechar</button>' +
+      '</div>';
+    var corpo = '';
+    if (ops.length) corpo += ops.map(linhaHtml).join('');
+    if (par.length) {
+      corpo += '<div style="padding:7px 12px 4px;font-size:10.5px;font-weight:800;color:#9a8b90;letter-spacing:.04em">' +
+        (ops.length ? 'OUTROS PARECIDOS' : 'PARECIDOS — CONFIRA') + '</div>' +
+        par.map(function(x, j){ return linhaHtml(x, ops.length + j); }).join('');
+    }
+    if (!ops.length && !par.length) {
+      corpo = '<div style="padding:11px 12px;font-size:12.5px;color:#7a6a70;line-height:1.45">' +
+        'Nada cadastrado com <b>"' + esc(q) + '"</b>. Fale só o nome (ex.: <i>balão 9 rosa</i>) ' +
+        'ou deixe escrito assim mesmo.</div>';
+    }
+    if (r.qtd > 0 && ops.length) {
+      corpo = '<div style="padding:7px 12px;font-size:11.5px;color:#7a6a70">Quantidade: <b>' + r.qtd + '</b></div>' + corpo;
+    }
+    box.innerHTML = cab + corpo;
+  };
+
+  function escolher(box, i){
+    var x = (box._ops || [])[i];
+    var row = document.getElementById(box._rowId);
+    fechar();
+    if (!x || !row) return;
+    if (box._qtd > 0) {
+      var q = row.querySelector('.mat-qtd');
+      if (q) q.value = String(box._qtd);
+    }
+    if (x.estoqueId && typeof window._matEscolher === 'function') window._matEscolher(row.id, x.estoqueId);
+    else if (typeof window._matEscolherNome === 'function') window._matEscolherNome(row.id, x.nome, x.custo);
+    try { if (typeof calcularGastoReal === 'function') calcularGastoReal(); } catch(e){}
+  }
+
+  /* um toque só: escolhe; arrastar a lista não escolhe nada */
+  var ini = null;
+  document.addEventListener('pointerdown', function(ev){
+    var box = document.getElementById('mat-sug-box');
+    if (!box || box.style.display === 'none') return;
+    if (box.contains(ev.target)) {
+      box.dataset.tocando = '1';
+      ini = { x: ev.clientX, y: ev.clientY, alvo: ev.target };
+      return;
+    }
+    /* tocou fora (menos no próprio campo): fecha */
+    var campo = ev.target && ev.target.closest && ev.target.closest('.mat-nome');
+    if (campo && box.parentNode && box.parentNode.contains(campo)) return;
+    fechar();
+  }, true);
+  document.addEventListener('pointerup', function(ev){
+    var box = document.getElementById('mat-sug-box');
+    if (!box || !ini) return;
+    var moveu = Math.abs(ev.clientX - ini.x) > 10 || Math.abs(ev.clientY - ini.y) > 10;
+    var alvo = ini.alvo; ini = null;
+    setTimeout(function(){ box.dataset.tocando = ''; }, 400);
+    box._tapValido = !moveu && box.contains(alvo);
+  }, true);
+  /* ⚠️ a escolha é feita no CLICK, com a lista ainda na tela. Fechando no
+     `pointerup`, o clique que o celular manda logo depois caía no botão
+     que estava embaixo ("Pronto, recolher este item") e o item fechava. */
+  document.addEventListener('click', function(ev){
+    var box = document.getElementById('mat-sug-box');
+    if (!box || !box.contains(ev.target)) return;
+    ev.preventDefault(); ev.stopPropagation();
+    var valido = box._tapValido !== false;
+    box._tapValido = null;
+    if (!valido) return;
+    if (ev.target.closest('.mat-sug-x')) { fechar(); return; }
+    var op = ev.target.closest('.mat-sug-op');
+    if (op) escolher(box, parseInt(op.dataset.i, 10));
+  }, true);
+  document.addEventListener('pointercancel', function(){
+    ini = null;
+    var box = document.getElementById('mat-sug-box');
+    if (box) setTimeout(function(){ box.dataset.tocando = ''; }, 400);
+  }, true);
+  document.addEventListener('keydown', function(ev){
+    if (ev.key === 'Escape') fechar();
+  });
+  /* qualquer janela que fecha leva a lista junto */
+  var closeOrig = window.closeModal;
+  if (typeof closeOrig === 'function') {
+    window.closeModal = function(){ fechar(); return closeOrig.apply(this, arguments); };
+  }
+
+  /* ── O "DITAR O PEDIDO" LÊ AS PALAVRAS DO MESMO JEITO ─────────────
+     Mesma regra de antes (toda palavra dela no nome, número batendo),
+     só que agora "balões de 9 polegadas" bate com BALÃO 9". */
+  window._candidatosDoFalado = function(falado, lista){
+    var fal = palavras(falado);
+    if (!fal.length) return [];
+    return (lista || []).filter(function(x){
+      if (!x || !x.nome) return false;
+      var pn = palavras(x.nome);
+      var colado = pn.join('');
+      var todas = fal.every(function(p){
+        return pn.indexOf(p) >= 0 || (p.length >= 3 && colado.indexOf(p) >= 0);
+      });
+      if (!todas) return false;
+      var nf = fal.filter(ehNum), np = pn.filter(ehNum);
+      if (nf.length && np.length) return nf.every(function(n){ return np.indexOf(n) >= 0; });
+      return true;
+    });
   };
 })();
 </script>
