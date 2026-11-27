@@ -18673,5 +18673,211 @@ else appLockInit();
 })();
 </script>
 
+<!-- ═══════════════════════════════════════════════════════════════════
+     A COR ESCOLHIDA FICA — 27/11/2026
+     Palavras dela: *"falei as cores que vão no balão (...) ele puxa as
+     cores certas. Aí do nada ele volta para escolher a cor do balão e não
+     deixa mais eu digitar (...) ele não deixa eu botar um filtro da cor
+     (...) tenho que escolher numa baita lista. E aí eu escolhi, mas ele
+     não fica a cor escolhida."*
+
+     🔴 POR QUE A COR SUMIA
+     A linha de cor nasce com as opções valendo o ID do estoque; o painel do
+     item, quando se redesenha, refaz as opções valendo o NOME e marca a que
+     estiver em `dataset.matNome`. Só que, escolhendo pela janela de cores
+     (ou na linha antes de redesenhar), o `_balaoSelecionado` procurava o
+     produto pelo NOME — recebia um ID, não achava, e gravava `matNome`
+     vazio. No próximo toque no item (abrir, adicionar material, recolher),
+     a linha voltava para "escolher a cor". Reproduzido no teste.
+
+     O QUE MUDA
+     1. A escolha é lida pelo ID do estoque ou pelo nome da opção — sempre
+        fica gravada.
+     2. Tocar no "escolher a cor" abre uma janela com BUSCA (digitar ou
+        ditar: "rosa", "dourado") em vez da lista enorme do celular, e com
+        a saída "escrever na mão".
+     ═══════════════════════════════════════════════════════════════════ -->
+<style>
+#modal-pedido .material-row .mat-sel{pointer-events:none}
+#modal-pedido .material-row:has(.mat-sel){cursor:pointer}
+</style>
+<script>
+(function(){
+  'use strict';
+
+  function k(s){
+    s = String(s || '').trim().toLowerCase();
+    return s.normalize ? s.normalize('NFD').replace(/[̀-ͯ]/g, '') : s;
+  }
+  function esc(s){
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+      return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+    });
+  }
+  function nomeDaOpcao(o){ return String((o && o.text) || '').split('·')[0].trim(); }
+
+  /* 1. a cor escolhida fica gravada, venha a opção com ID ou com nome */
+  var balAntes = window._balaoSelecionado;
+  window._balaoSelecionado = function(rowId){
+    var r = balAntes ? balAntes.apply(this, arguments) : undefined;
+    var row = document.getElementById(rowId);
+    var sel = row && row.querySelector('.mat-sel');
+    if (!row || !sel || !row.parentNode) return r;
+    var v = sel.value;
+    if (!v || v === '__texto') return r;
+    var est = (typeof estoque !== 'undefined' ? estoque : []).filter(function(e){ return e && e.id === v; })[0];
+    var nome = est ? est.nome : (nomeDaOpcao(sel.options[sel.selectedIndex]) || v);
+    var prod = null;
+    try { prod = (window._todosOsMateriais() || []).filter(function(x){ return k(x.nome) === k(nome); })[0] || null; } catch(e){}
+    row.dataset.matNome = prod ? prod.nome : nome;
+    var id = est ? est.id : (prod && prod.estoqueId) || '';
+    if (id) row.dataset.itemId = id;
+    var custo = (prod && prod.custo > 0) ? prod.custo : (est && parseFloat(est.preco) > 0 ? parseFloat(est.preco) : 0);
+    if (custo > 0) {
+      row.dataset.matUnit = String(custo);
+      var q = parseFloat((row.querySelector('.mat-qtd') || {}).value) || 1;
+      var vv = row.querySelector('.mat-valor');
+      if (vv && typeof window._moedaBR === 'function') vv.value = window._moedaBR(custo * q);
+    }
+    try { if (typeof calcularGastoReal === 'function') calcularGastoReal(); } catch(e){}
+    return r;
+  };
+
+  /* 2. a janela de escolher a cor, com busca */
+  var alvoSel = null;
+
+  function opcoes(sel){
+    return [].slice.call(sel.options).map(function(o, i){
+      return { i: i, v: o.value, nome: nomeDaOpcao(o), txt: o.text };
+    }).filter(function(o){ return o.v && o.v !== '__texto'; });
+  }
+
+  function casaBusca(nome, termo){
+    var pal = (typeof window._palavrasDoMaterial === 'function') ? window._palavrasDoMaterial : function(s){ return k(s).split(/\s+/); };
+    var t = pal(termo); if (!t.length) return true;
+    var n = pal(nome);
+    return t.every(function(p){
+      return n.some(function(x){ return x === p || (!/^\d+$/.test(p) && x.indexOf(p) === 0); });
+    });
+  }
+
+  function desenharLista(){
+    var mod = document.getElementById('modal-cor-linha'); if (!mod || !alvoSel) return;
+    var termo = String((document.getElementById('cl-busca') || {}).value || '');
+    var ops = opcoes(alvoSel).filter(function(o){ return casaBusca(o.nome, termo); });
+    var atual = alvoSel.value;
+    var box = document.getElementById('cl-lista');
+    if (!box) return;
+    box.innerHTML = ops.length ? ops.map(function(o){
+      var marcado = o.v === atual;
+      var extra = o.txt.indexOf('·') >= 0 ? o.txt.split('·').slice(1).join('·').trim() : '';
+      return '<button type="button" class="cl-op" data-v="' + esc(o.v) + '" style="display:flex;justify-content:space-between;' +
+        'align-items:center;gap:10px;text-align:left;width:100%;background:' + (marcado ? 'var(--pink-l,#fde7f0)' : '#fff') +
+        ';border:1.5px solid ' + (marcado ? 'var(--pink,#e91e63)' : '#e9e9ef') + ';border-radius:12px;padding:12px 13px;' +
+        'font-size:14px;font-weight:700;color:var(--brown,#4a2b2b);cursor:pointer">' +
+        '<span>' + esc(o.nome) + '</span>' +
+        (extra ? '<span style="font-size:11.5px;color:#9a8b90;white-space:nowrap">' + esc(extra) + '</span>' : '') +
+        '</button>';
+    }).join('') : '<div style="font-size:12.5px;color:#7a6a70;padding:6px 2px">Nenhuma cor com esse nome. ' +
+        'Use "Escrever na mão" embaixo.</div>';
+  }
+
+  function abrir(sel){
+    alvoSel = sel;
+    var row = sel.closest('.material-row');
+    var gen = (row && row.dataset.balaoSize) || '';
+    var mod = document.getElementById('modal-cor-linha');
+    if (!mod) {
+      mod = document.createElement('div');
+      mod.className = 'modal-overlay';
+      mod.id = 'modal-cor-linha';
+      document.body.appendChild(mod);
+      mod.addEventListener('click', function(ev){
+        if (ev.target === mod) { fechar(); return; }
+        var b = ev.target.closest('.cl-op');
+        if (b) { escolher(b.dataset.v); return; }
+        if (ev.target.closest('.cl-x')) { fechar(); return; }
+        if (ev.target.closest('.cl-mao')) { aMao(); return; }
+      });
+      mod.addEventListener('input', function(ev){ if (ev.target.id === 'cl-busca') desenharLista(); });
+    }
+    mod.innerHTML =
+      '<div class="modal" style="max-height:88vh"><div class="modal-handle"></div>' +
+      '<div class="modal-title" style="display:flex;align-items:center;gap:8px">' +
+        '<span style="flex:1;min-width:0">Cor do ' + esc(gen || 'material') + '</span>' +
+        '<button type="button" class="cl-x" aria-label="Fechar" style="flex-shrink:0;width:34px;height:34px;' +
+          'border-radius:50%;border:none;background:var(--gray,#eee);color:var(--brown,#4a2b2b);font-size:18px;' +
+          'font-weight:700;cursor:pointer">✕</button>' +
+      '</div>' +
+      '<div class="modal-body" style="overflow:auto">' +
+        '<input type="search" id="cl-busca" class="form-input" autocomplete="off" ' +
+          'placeholder="🔎 Digite ou dite a cor (ex.: rosa)" style="margin:0 0 9px;font-size:15px">' +
+        '<div id="cl-lista" style="display:flex;flex-direction:column;gap:7px"></div>' +
+      '</div>' +
+      '<div class="form-actions">' +
+        '<button type="button" class="btn btn-outline cl-mao" style="flex:1">Escrever na mão</button>' +
+        '<button type="button" class="btn btn-pink cl-x">Fechar</button>' +
+      '</div></div>';
+    openModal('modal-cor-linha');
+    desenharLista();
+    setTimeout(function(){ var b = document.getElementById('cl-busca'); if (b) b.focus(); }, 250);
+  }
+
+  function fechar(){
+    alvoSel = null;
+    try { closeModal('modal-cor-linha'); } catch(e){}
+  }
+
+  function escolher(v){
+    var sel = alvoSel; fechar();
+    if (!sel) return;
+    sel.value = v;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  /* "escrever na mão": a linha vira campo de texto, com o que ela buscou */
+  function aMao(){
+    var sel = alvoSel;
+    var termo = String((document.getElementById('cl-busca') || {}).value || '').trim();
+    fechar();
+    if (!sel) return;
+    var row = sel.closest('.material-row');
+    var gen = (row && row.dataset.balaoSize) || '';
+    if (row && termo) row.dataset.matNome = (k(termo).indexOf(k(gen)) === 0 || !gen) ? termo : (gen + ' ' + termo).toUpperCase();
+    if (![].some.call(sel.options, function(o){ return o.value === '__texto'; })) {
+      var o = document.createElement('option'); o.value = '__texto'; o.text = 'escrever na mão'; sel.appendChild(o);
+    }
+    if (row && row.dataset.deLinha) {
+      sel.value = '__texto';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    } else if (row) {
+      /* linha solta: troca por uma linha de texto */
+      var q = parseFloat((row.querySelector('.mat-qtd') || {}).value) || 1;
+      var nome = row.dataset.matNome || gen;
+      window._forcarTexto = true;
+      try { row.remove(); adicionarMaterialPedido(nome, q, 'pendente', '', 'normal', '', '', ''); }
+      finally { window._forcarTexto = false; }
+    }
+    setTimeout(function(){
+      var campo = document.querySelector('#modal-pedido .material-row:last-child .mat-nome');
+      var todas = document.querySelectorAll('#modal-pedido .mat-nome');
+      var alvo = todas.length ? todas[todas.length - 1] : campo;
+      if (alvo) alvo.focus();
+    }, 300);
+  }
+
+  /* o toque no "escolher a cor" abre a janela (o seletor não recebe toque) */
+  document.addEventListener('click', function(ev){
+    var row = ev.target && ev.target.closest && ev.target.closest('#modal-pedido .material-row');
+    if (!row) return;
+    var sel = row.querySelector('.mat-sel'); if (!sel) return;
+    var r = sel.getBoundingClientRect();
+    if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return;
+    ev.preventDefault();
+    abrir(sel);
+  }, true);
+})();
+</script>
+
 </body>
 </html>
